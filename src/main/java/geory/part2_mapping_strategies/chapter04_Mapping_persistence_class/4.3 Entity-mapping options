@@ -1,0 +1,120 @@
+Bây giờ, bạn đã ánh xạ một lớp cố định với @Entity, sử dụng các giá trị mặc định cho tất cả các thiết lập khác,
+chẳng hạn như tên bảng SQL được ánh xạ. Phần tiếp theo sẽ khám phá một số tùy chọn cấp lớp và cách bạn kiểm soát chúng:
+- Các tùy chọn và chiến lược mặc định cho việc đặt tên.
+- Tạo SQL động.
+- Khả năng thay đổi thực thể.
+
+Đây là các tùy chọn; bạn có thể bỏ qua phần này và quay lại sau khi bạn phải xử lý một vấn đề cụ thể.
+4.3.1 Kiểm soát tên
+Đầu tiên, hãy nói về cách đặt tên cho các lớp thực thể và bảng cơ sở dữ liệu. Nếu bạn chỉ định @Entity trên lớp có
+persistence-capable (khả năng duy trì), tên bảng được ánh xạ theo mặc định sẽ giống với tên của lớp.
+Lưu ý rằng chúng tôi viết tên đối tượng SQL bằng CHỮ IN HOA để dễ phân biệt chúng - SQL thực sự không phân biệt
+chữ hoa chữ thường. Vì vậy, lớp thực thể Java Item ánh xạ thành bảng ITEM. Bạn có thể ghi đè tên bảng bằng chú thích
+JPA @Table, như được thể hiện bên dưới.
+
+PATH: /model/src/main/java/org/jpwh/model/simple/User.java
+
+@Entity
+@Table(name = "USERS")
+public class User implements Serializable {
+    // ...
+}
+Thực thể User sẽ ánh xạ thành bảng USER; đây là một từ khóa dự trữ trong hầu hết các hệ quản trị cơ sở dữ liệu SQL.
+Bạn không thể có một bảng với tên đó, vì vậy bạn sẽ ánh xạ nó thành USERS thay vì. Chú thích @javax.persistence.Table
+cũng có các tùy chọn catalog và schema, nếu cấu trúc cơ sở dữ liệu của bạn yêu cầu chúng như tiền tố tên.
+
+Nếu thực sự cần thiết, việc đặt tên cho phép bạn sử dụng tên SQL dự trữ và thậm chí làm việc với các tên phân
+biệt chữ hoa chữ thường.
+
+
+TRÍCH DẪN CÁC ĐỊNH DANH SQL
+
+Thỉnh thoảng, đặc biệt là trong cơ sở dữ liệu cổ điển, bạn sẽ gặp các định danh chứa các ký tự kỳ lạ hoặc khoảng trắng,
+hoặc muốn bắt buộc sự nhạy cảm với việc phân biệt chữ hoa chữ thường. Hoặc, như trong ví dụ trước, việc ánh xạ tự động
+của một lớp hoặc thuộc tính có thể đòi hỏi một tên bảng hoặc cột là một từ khóa được dự trữ.
+Hibernate 5 biết các từ khóa dự trữ của hệ quản trị cơ sở dữ liệu của bạn thông qua các cấu hình cơ sở dữ liệu đã được định.
+Hibernate 5 có thể tự động đặt trích dẫn xung quanh các chuỗi như vậy khi tạo SQL. Bạn có thể kích hoạt việc trích dẫn
+tự động này bằng cách đặt hibernate.auto_quote_keyword=true trong cấu hình persistence unit của bạn. Nếu bạn đang sử dụng
+một phiên bản cũ hơn của Hibernate, hoặc bạn thấy rằng thông tin về ngôn ngữ của bạn không đầy đủ, bạn vẫn phải áp dụng
+trích dẫn trên tên một cách thủ công trong ánh xạ của bạn nếu có xung đột với một từ khóa.
+
+Nếu bạn trích dẫn tên bảng hoặc cột trong ánh xạ của mình bằng dấu ngoặc đơn ngược, Hibernate luôn đặt trích dẫn này
+cho định danh trong SQL được tạo ra. Điều này vẫn hoạt động trong các phiên bản mới nhất của Hibernate, nhưng JPA 2.0
+đã chuẩn hóa chức năng này dưới dạng các định danh giới hạn bằng dấu ngoặc kép.
+
+Đây là trích dẫn duy nhất cho Hibernate bằng dấu ngoặc đơn ngược, sửa đổi ví dụ trước:
+@Table(name = "`USER`")
+
+Để tuân thủ JPA, bạn cũng phải thoát khỏi dấu ngoặc kép trong chuỗi:
+@Table(name = "\"USER\"")
+
+Cả hai cách đều hoạt động tốt với Hibernate. Nó biết ký tự trích dẫn native của ngôn ngữ của bạn và bây giờ tạo SQL tương ứng:
+[USER] cho MS SQL Server, 'USER' cho MySQL, "USER" cho H2, và còn nhiều loại khác.
+
+Nếu bạn phải trích dẫn tất cả các định danh SQL, hãy tạo tệp orm.xml và thêm thiết lập <delimited-identifiers/>
+vào phần <persistence-unit-defaults> của nó, như được hiển thị trong danh sách 3.8. Sau đó, Hibernate sẽ bắt buộc sử dụng
+định danh được trích dẫn ở mọi nơi.
+
+Bạn nên xem xét việc đổi tên các bảng hoặc cột có tên từ khóa đã được dự trữ khi có thể. Truy vấn SQL tùy ý khó viết
+trong một cửa sổ SQL nếu bạn phải trích dẫn và thoát mọi thứ một cách đúng cách bằng tay.
+
+Tiếp theo, bạn sẽ thấy cách Hibernate có thể giúp đỡ khi bạn gặp tổ chức có quy tắc nghiêm ngặt cho tên bảng và cột
+cơ sở dữ liệu.
+
+
+[Hibernate feature]
+Hibernate cung cấp một tính năng cho phép bạn tự động áp dụng các tiêu chuẩn đặt tên. Giả sử tất cả các tên bảng trong
+CaveatEmptor nên tuân theo mẫu CE_<tên bảng>. Một giải pháp là chỉ định chú thích @Table trên tất cả các lớp thực thể
+một cách thủ công. Cách tiếp cận này tốn thời gian và dễ bị quên. Thay vào đó, bạn có thể triển khai giao diện
+PhysicalNamingStrategy của Hibernate hoặc ghi đè lên một phiên bản hiện tại, như trong ví dụ dưới đây.
+
+PATH: /shared/src/main/java/org/jpwh/shared/CENamingStrategy.java
+
+public class CENamingStrategy extends PhysicalNamingStrategy {
+    @Override
+    public Identifier toPhysicalTableName(Identifier name, JdbcEnvironment jdbcEnvironment) {
+        new Identifier("CE_" + name.getText(), name.isQuoted());
+    }
+}
+
+Phương thức bị ghi đè toPhysicalTableName() thêm tiền tố CE_ vào tất cả các tên bảng được tạo ra trong cơ sở dữ liệu của bạn.
+Hãy xem Javadoc của giao diện PhysicalNamingStrategy; nó cung cấp các phương thức cho việc đặt tên tùy chỉnh cho các cột,
+chuỗi và các đối tượng khác.
+
+Bạn phải kích hoạt việc triển khai chiến lược đặt tên trong persistence.xml:
+
+<persistence-unit>name="CaveatEmptorPU">
+ ...
+ <properties>
+     <property name="hibernate.physical_naming_strategy"
+                            value="org.jpwh.shared.CENamingStrategy"/>
+ </properties>
+</persistence-unit>
+
+
+Tùy chọn thứ hai cho việc tùy chỉnh tên là ImplicitNamingStrategy. Trong khi chiến lược đặt tên vật lý hoạt động ở mức thấp nhất,
+khi tên các đối tượng lược đồ cuối cùng được tạo ra, chiến lược đặt tên ngầm định được gọi trước. Nếu bạn ánh xạ một lớp thực thể
+và không có chú thích @Table với tên rõ ràng, triển khai chiến lược đặt tên ngầm định sẽ được hỏi tên bảng nên là gì.
+Điều này dựa trên các yếu tố như tên thực thể và tên lớp. Hibernate đi kèm với nhiều chiến lược để triển khai các tên
+mặc định tuân theo tiêu chuẩn JPA hoặc tương thích với phiên bản trước.
+Chiến lược mặc định là ImplicitNamingStrategyJpaCompliantImpl.
+
+Hãy cùng nhìn vào một vấn đề liên quan khác nhanh chóng, đó là việc đặt tên cho các thực thể trong các truy vấn.
+
+Mặc định, tất cả các tên thực thể sẽ được tự động nhập vào không gian tên của bộ máy truy vấn. Nói cách khác, bạn có
+thể sử dụng tên lớp ngắn gọn mà không có tiền tố gói trong các chuỗi truy vấn JPA, điều này rất tiện lợi:
+List<Item> result = em.createQuery("select i from Item i", Item.class)
+                   .getResultList();
+Điều này chỉ hoạt động khi bạn chỉ có một lớp Item trong đơn vị duy trì của bạn. Nếu bạn thêm một lớp Item khác trong một gói khác,
+bạn nên đổi tên một trong số chúng cho JPA nếu bạn muốn tiếp tục sử dụng hình thức ngắn gọn trong các truy vấn:
+package my.other.model;
+
+@javax.persistence.Entity(name = "AuctionItem")
+public class Item {
+ // ...
+}
+Bây giờ, bạn có thể sử dụng hình thức ngắn gọn trong truy vấn cho lớp Item trong gói my.other.model. Do đó, bạn giải
+quyết xung đột đặt tên với một lớp Item khác trong gói khác. Tất nhiên, bạn luôn có thể sử dụng tên dài đầy đủ với tiền tố gói.
+
+Điều này hoàn thành chuyến tham quan về các tùy chọn đặt tên trong Hibernate. Tiếp theo, chúng tôi sẽ thảo luận về cách
+Hibernate tạo ra SQL chứa những tên này.

@@ -1,0 +1,295 @@
+4.2 Ánh xạ các entities với Identity
+Ánh xạ các thực thể với định danh đòi hỏi bạn phải hiểu về định danh và tính bằng nhau trong Java trước khi chúng ta
+có thể thảo luận về một ví dụ về lớp thực thể và cách ánh xạ của nó. Sau đó, chúng ta sẽ có thể đào sâu hơn và
+chọn một khóa chính, cấu hình các trình tạo khóa và cuối cùng đi qua các chiến lược tạo định danh. Đầu tiên, điều quan
+trọng là phải hiểu sự khác biệt giữa định danh đối tượng Java và tính bằng nhau đối tượng trước khi chúng ta thảo luận
+về các thuật ngữ như định danh cơ sở dữ liệu và cách JPA quản lý định danh.
+
+4.2.1 Hiểu về định danh và tính bằng nhau trong Java
+Những người phát triển Java hiểu sự khác biệt giữa định danh đối tượng Java và tính bằng nhau. Định danh đối tượng (==)
+là một khái niệm được định nghĩa bởi máy ảo Java. Hai tham chiếu là giống nhau nếu chúng trỏ vào cùng một vị trí bộ nhớ.
+Ngược lại, tính bằng nhau đối tượng là một khái niệm được định nghĩa bởi phương thức equals() của một lớp, đôi khi còn
+được gọi là tính tương đương. Tương đương có nghĩa là hai trường hợp khác nhau (không giống nhau) có cùng giá trị - cùng
+trạng thái. Hai trường hợp khác nhau của String là bằng nhau nếu chúng biểu diễn cùng một chuỗi ký tự, ngay cả khi mỗi
+trường hợp có vị trí riêng trong không gian bộ nhớ của máy ảo. (Nếu bạn là một chuyên gia Java, chúng tôi xác nhận rằng
+String là một trường hợp đặc biệt. Hãy giả sử chúng tôi đã sử dụng một lớp khác để đưa ra điểm tương tự.)
+
+Sự bền vững làm phức tạp hình ảnh này. Với object/relationship persistence, một trường hợp bền vững là biểu diễn
+trong bộ nhớ của một hàng cụ thể (hoặc các hàng) của một bảng cơ sở dữ liệu (hoặc các bảng). Bên cạnh định danh và
+tính bằng nhau trong Java, chúng ta định nghĩa định danh cơ sở dữ liệu. Bây giờ bạn có ba phương thức để phân biệt
+giữa các tham chiếu:
+ Các đối tượng giống nhau nếu chúng chiếm cùng một vị trí bộ nhớ trong JVM. Điều này có thể được kiểm tra bằng toán
+tử a == b. Khái niệm này được gọi là định danh đối tượng.
+ Các đối tượng giống nhau nếu chúng có cùng trạng thái, được định nghĩa bởi phương thức a.equals(Object b).
+Các lớp không ghi đè một cách rõ ràng phương thức này sẽ kế thừa cài đặt được định nghĩa bởi java.lang.Object, so sánh
+định danh đối tượng với ==. Khái niệm này được gọi là tính bằng nhau đối tượng.
+ Các đối tượng được lưu trữ trong cơ sở dữ liệu liên quan giống nhau nếu chúng chia sẻ cùng một bảng và giá trị khóa chính.
+Khái niệm này, được ánh xạ vào không gian Java, được gọi là định danh cơ sở dữ liệu.
+Bây giờ chúng ta cần xem xét cách định danh cơ sở dữ liệu liên quan đến định danh đối tượng và cách biểu diễn định danh
+cơ sở dữ liệu trong metadata mapping. Như một ví dụ, bạn sẽ ánh xạ một thực thể của một mô hình miền.
+
+4.2.2 Một lớp thực thể đầu tiên và ánh xạ
+Chúng tôi không hoàn toàn trung thực trong chương trước: chú thích @Entity không đủ để ánh xạ một lớp bền vững.
+Bạn cũng cần một chú thích @Id, như được hiển thị trong ví dụ bên dưới.
+
+PATH: /model/src/main/java/org/jpwh/model/simple/Item.java
+
+Mỗi lớp thực thể phải có một thuộc tính @Id; đó là cách JPA tiết lộ danh tính cơ sở dữ liệu cho ứng dụng. Chúng tôi không
+hiển thị thuộc tính định danh trong các biểu đồ của mình; chúng tôi giả định rằng mỗi lớp thực thể đều có một.
+Trong các ví dụ của chúng tôi, chúng tôi luôn đặt tên thuộc tính định danh là "id". Điều này là một thực hành tốt cho
+dự án của bạn; hãy sử dụng cùng tên thuộc tính định danh cho tất cả các lớp thực thể mô hình miền của bạn.
+Nếu bạn không chỉ định gì khác, thuộc tính này sẽ ánh xạ thành một cột khóa chính có tên là "ID" của bảng ITEM trong mô
+hình cơ sở dữ liệu của bạn.
+
+Hibernate sẽ sử dụng trường này để truy cập giá trị thuộc tính định danh khi nạp và lưu các mục, không sử dụng các phương
+thức getter hoặc setter. Bởi vì @Id được đặt trên một trường, Hibernate sẽ kích hoạt mọi trường của lớp làm một thuộc
+tính bền vững theo mặc định. Quy tắc trong JPA là: nếu @Id được đặt trên một trường, nhà cung cấp JPA sẽ truy cập trực tiếp
+các trường của lớp và xem xét tất cả các trường là một phần của trạng thái bền vững theo mặc định. Bạn sẽ thấy cách ghi
+đè điều này sau trong chương này - trong kinh nghiệm của chúng tôi, truy cập trường thường là sự lựa chọn tốt,
+vì nó mang lại sự tự do hơn cho thiết kế phương thức truy cập.
+
+Liệu bạn có nên có một phương thức getter (công khai) cho thuộc tính định danh? Ứng dụng thường sử dụng các định danh cơ
+sở dữ liệu như một cách tiện lợi để thao tác với một thể hiện cụ thể, ngay cả bên ngoài tầng bền vững. Ví dụ, trong các
+ứng dụng web, thường xem kết quả của màn hình tìm kiếm như một danh sách tóm tắt cho người dùng. Khi người dùng chọn một
+phần tử cụ thể, ứng dụng có thể cần lấy lại mục đã chọn, và việc sử dụng định danh để tra cứu cho mục đích này
+là phổ biến - bạn có thể đã sử dụng định danh như vậy, ngay cả trong các ứng dụng sử dụng JDBC.
+
+Liệu bạn có nên có một phương thức setter? Giá trị khóa chính không bao giờ thay đổi, vì vậy bạn không nên cho phép sửa đổi
+giá trị thuộc tính định danh. Hibernate sẽ không cập nhật một cột khóa chính, và bạn không nên tiết lộ một phương thức setter
+định danh công khai trên một thực thể.
+
+Kiểu Java của thuộc tính định danh, ví dụ trước đó sử dụng java.lang.Long, phụ thuộc vào kiểu cột khóa chính của bảng ITEM
+và cách giá trị khóa được tạo ra. Điều này đưa chúng ta đến chú thích @GeneratedValue và khóa chính chung.
+
+
+4.2.3 Lựa chọn khóa chính
+Identity cơ sở dữ liệu của một thực thể được ánh xạ thành một khóa chính của bảng nào đó, vì vậy hãy trước hết tìm hiểu
+một chút về khóa chính mà không cần quan tâm đến việc ánh xạ. Hãy lùi lại một bước và suy nghĩ về cách bạn xác định
+các thực thể.
+
+Một khóa ứng viên là một cột hoặc tập hợp cột mà bạn có thể sử dụng để xác định một hàng cụ thể trong một bảng.
+Để trở thành khóa chính, một khóa ứng viên phải đáp ứng các yêu cầu sau:
+ Giá trị của bất kỳ cột khóa ứng viên nào không bao giờ là null. Bạn không thể xác định một cái gì đó bằng dữ liệu không biết,
+và không có giá trị null trong mô hình quan hệ.
+Một số sản phẩm SQL cho phép định nghĩa khóa chính (hỗn hợp) với các cột có thể là null, vì vậy bạn phải cẩn thận.
+ Giá trị của cột (các cột) khóa ứng viên là giá trị duy nhất đối với bất kỳ hàng nào.
+ Giá trị của cột (các cột) khóa ứng viên không bao giờ thay đổi; nó là bất biến.
+
+<<Khóa chính phải không thay đổi>>
+Mô hình quan hệ xác định rằng một khóa ứng viên phải là duy nhất và không thể giảm thiểu. Ngoài ra, việc chọn một khóa
+ứng viên làm khóa chính là một vấn đề cá nhân. Tuy nhiên, Hibernate mong đợi rằng một khóa ứng viên phải là không thể
+thay đổi khi được sử dụng làm khóa chính. Hibernate không hỗ trợ cập nhật giá trị khóa chính thông qua API;
+nếu bạn cố gắng làm việc xung quanh yêu cầu này, bạn sẽ gặp vấn đề với cơ chế lưu trữ và kiểm tra sự thay đổi của Hibernate.
+Nếu mô hình cơ sở dữ liệu của bạn phụ thuộc vào khóa chính có thể cập nhật
+(và có thể sử dụng ràng buộc khóa ngoại ON UPDATE CASCADE), bạn phải thay đổi mô hình trước khi nó có thể hoạt động với Hibernate.
+
+Nếu một bảng chỉ có một thuộc tính xác định, theo định nghĩa, nó trở thành khóa chính.
+Tuy nhiên, có thể có nhiều cột hoặc sự kết hợp của các cột có thể thỏa mãn những tính chất này cho một bảng cụ thể;
+bạn sẽ chọn giữa các khóa ứng cử để quyết định khóa chính tốt nhất cho bảng. Nếu giá trị của chúng thực sự là duy nhất
+(nhưng có thể không bất biến), bạn nên khai báo các khóa ứng cử không được chọn làm khóa chính như các khóa duy nhất
+trong cơ sở dữ liệu.
+
+Nhiều mô hình dữ liệu SQL thừa kế sử dụng các khóa chính tự nhiên. Một khóa tự nhiên là một khóa có ý nghĩa kinh doanh:
+một thuộc tính hoặc sự kết hợp của các thuộc tính có tính duy nhất thông qua ngữ nghĩa kinh doanh của chúng. Ví dụ về
+các khóa tự nhiên là Số An sinh xã hội Hoa Kỳ và Số Thuế Cá Nhân Australia. Phân biệt các khóa tự nhiên là đơn giản:
+nếu một thuộc tính khóa ứng cử có ý nghĩa ngoài ngữ cảnh cơ sở dữ liệu, đó là một khóa tự nhiên, bất kể nó có được tạo
+tự động hay không. Hãy nghĩ về người dùng ứng dụng: nếu họ đề cập đến một thuộc tính khóa khi nói về và làm việc với ứng dụng,
+đó là một khóa tự nhiên: "Bạn có thể gửi cho tôi các hình ảnh của mục #123-abc không?"
+
+Kinh nghiệm đã cho thấy rằng khóa chính tự nhiên thường gây ra vấn đề cuối cùng. Một khóa chính tốt phải duy nhất, không
+thay đổi và không bao giờ có giá trị null. Một số thuộc tính thực thể thỏa mãn những yêu cầu này, và một số thuộc tính có
+thể không được lập chỉ mục một cách hiệu quả bởi cơ sở dữ liệu SQL (tuy nhiên điều này là một chi tiết triển khai và không nên
+là yếu tố quyết định cho hoặc chống lại một khóa cụ thể). Ngoài ra, bạn nên đảm bảo rằng định nghĩa khóa ứng cử không thay
+đổi trong suốt thời gian tồn tại của cơ sở dữ liệu. Thay đổi giá trị (hoặc thậm chí là định nghĩa) của một khóa chính,
+và tất cả các khóa ngoại tham chiếu đến nó, là một nhiệm vụ đáng chán. Hãy mong đợi cơ sở dữ liệu của bạn tồn tại
+trong nhiều thập kỷ, ngay cả khi ứng dụng của bạn không còn hoạt động.
+
+Hơn nữa, bạn thường chỉ có thể tìm thấy các khóa tự nhiên ứng cử bằng cách kết hợp nhiều cột trong một khóa tự nhiên composite (hợp thành).
+Những khóa composite (hợp thành) này, mặc dù chắc chắn phù hợp cho một số tượng tử mô hình (như một bảng liên kết trong mối quan hệ nhiều-nhiều),
+có thể làm cho việc bảo trì, truy vấn tùy ý và tiến hóa lược đồ trở nên khó khăn hơn nhiều.
+Chúng ta sẽ nói về các khóa composite (composite (hợp thành)) sau trong cuốn sách, trong phần 9.2.1.
+
+Vì những lý do này, chúng tôi mạnh mẽ khuyên bạn nên thêm các ID composite (hợp thành), còn được gọi là khóa thay thế.
+Các khóa thay thế không có ý nghĩa kinh doanh - chúng có giá trị duy nhất được tạo ra bởi cơ sở dữ liệu hoặc ứng dụng.
+Người dùng ứng dụng lý tưởng không nên thấy hoặc đề cập đến các giá trị khóa này; chúng là một phần của bên trong hệ thống.
+Thêm một cột khóa thay thế là phù hợp cũng trong tình huống phổ biến khi không có khóa ứng cử. Nói cách khác, (hầu hết)
+mọi bảng trong lược đồ của bạn nên có một cột khóa chính thay thế riêng với mục đích duy nhất này.
+
+Có một số phương pháp nổi tiếng để tạo ra các giá trị khóa thay thế. Chú thích @GeneratedValue đã đề cập trước đây là
+cách bạn cấu hình điều này.
+
+
+4.2.4 Configuring key generator
+Chú thích @Id là bắt buộc để đánh dấu thuộc tính định danh của một lớp thực thể. Nếu không có @GeneratedValue đặt bên cạnh nó,
+nhà cung cấp JPA sẽ giả định rằng bạn sẽ tự quản lý việc tạo và gán giá trị định danh trước khi lưu một thể hiện.
+Chúng ta gọi điều này là định danh do ứng dụng chỉ định. Việc gán định danh thực thể một cách thủ công là cần thiết khi
+bạn làm việc với cơ sở dữ liệu cổ điển và/hoặc các khóa chính tự nhiên. Chúng tôi sẽ nói thêm về loại ánh xạ này trong
+một phần riêng biệt, 9.2.1.
+
+Thường thì bạn muốn hệ thống tạo ra một giá trị khóa chính khi bạn lưu một thể hiện thực thể, vì vậy bạn sử dụng chú thích
+@GeneratedValue bên cạnh @Id. JPA chuẩn hóa một số strategy (chiến lược) tạo giá trị với enum javax.persistence.GenerationType,
+mà bạn chọn bằng @GeneratedValue(strategy = ...):
+ GenerationType.AUTO - Hibernate chọn một chiến lược phù hợp, hỏi ngôn ngữ SQL của cơ sở dữ liệu được cấu hình của bạn
+là gì tốt nhất. Điều này tương đương với @GeneratedValue() mà không có bất kỳ cài đặt nào.
+ GenerationType.SEQUENCE - Hibernate mong đợi (và tạo ra, nếu bạn sử dụng các công cụ) một chuỗi có tên là HIBERNATE_SEQUENCE
+trong cơ sở dữ liệu của bạn. Chuỗi này sẽ được gọi riêng rẽ trước mỗi INSERT, sản xuất các giá trị số liên tục.
+ GenerationType.IDENTITY - Hibernate mong đợi (và tạo ra trong bảng DDL) một cột khóa chính tự động tạo giá trị số trên INSERT,
+trong cơ sở dữ liệu.
+ GenerationType.TABLE - Hibernate sẽ sử dụng một bảng phụ trong mô hình cơ sở dữ liệu của bạn để lưu giữ giá trị khóa
+chính số liên tục tiếp theo, một hàng cho mỗi lớp thực thể. Bảng này sẽ được đọc và cập nhật tương ứng trước các INSERT.
+Tên bảng mặc định là HIBERNATE_SEQUENCES với các cột SEQUENCE_NAME và SEQUENCE_NEXT_HI_VALUE.
+(Triển khai nội tại sử dụng thuật toán generation hi/lo phức tạp hơn; chúng tôi sẽ nói thêm về điều này sau.)
+Mặc dù AUTO có vẻ tiện lợi, nhưng bạn cần kiểm soát hơn, vì vậy thông thường bạn không nên phụ thuộc vào nó và nên cấu
+hình một chiến lược tạo khóa chính một cách rõ ràng.
+
+Ngoài ra, hầu hết các ứng dụng làm việc với các chuỗi cơ sở dữ liệu,
+nhưng bạn có thể muốn tùy chỉnh tên và các cài đặt khác của chuỗi cơ sở dữ liệu. Do đó, thay vì chọn một trong các chiến
+lược JPA, chúng tôi đề xuất một ánh xạ của định danh với @GeneratedValue(generator = "ID_GENERATOR"), như được hiển thị
+trong ví dụ trước đó.
+
+Đây là một máy tạo định danh có tên; bạn có thể tự do cấu hình cài đặt của ID_GENERATOR một cách độc lập với các
+lớp thực thể của bạn.
+
+JPA có hai chú thích tích hợp sẵn mà bạn có thể sử dụng để cấu hình máy tạo có tên:
+@javax.persistence.SequenceGenerator
+@javax.persistence.TableGenerator
+
+Với những chú thích này, bạn có thể tạo ra một máy tạo có tên với các tên chuỗi và bảng của riêng bạn. Như thông thường
+với các chú thích JPA, bạn không may mắn chỉ có thể sử dụng chúng ở đầu của một lớp (có thể là một lớp trống hoặc có nội dung khác),
+và không thể sử dụng chúng trong tệp package-info.java.
+
+[Hibernate Feature]
+Vì lý do này và vì các chú thích JPA không cho phép truy cập đầy đủ tính năng của Hibernate, chúng tôi ưa thích một cách
+thay thế:
+Annotation: @org.hibernate.annotations.GenericGenerator.
+Nó hỗ trợ tất cả các chiến lược tạo khóa của Hibernate và các chi tiết cấu hình của chúng. Không giống như các chú thích
+JPA tương đối hạn chế, bạn có thể sử dụng chú thích Hibernate trong tệp package-info.java, thường trong cùng gói với các
+lớp mô hình miền của bạn. Phần tiếp theo cho thấy một cấu hình được đề xuất:
+
+Listing 4.2 Hibernate identifier generator configured as package-level metadata
+PATH: /model/src/main/java/org/jpwh/model/package-info.java
+
+Cấu hình generator cụ thể cho Hibernate có những ưu điểm sau:
+ Chiến lược enhanced-sequence (1) tạo ra các giá trị số theo trình tự. Nếu hệ điều hành SQL của bạn hỗ trợ sequences,
+Hibernate sẽ sử dụng một sequence thực tế trong cơ sở dữ liệu. Nếu hệ quản trị cơ sở dữ liệu của bạn không hỗ trợ sequences
+tự nhiên, Hibernate sẽ quản lý và sử dụng một "bảng sequence" bổ sung, mô phỏng hành vi của một sequence.
+Điều này mang lại tính di động thực sự: trình tạo luôn có thể được gọi trước khi thực hiện SQL INSERT, khác với ví dụ
+cột identity tự tăng, ví dụ, tạo ra một giá trị trong lúc INSERT mà sau đó phải trả lại cho ứng dụng.
+Tóm lại, enhanced-sequence của Hibernate là một chiến lược mạnh mẽ hơn cho việc tạo khóa chính tự động, vì nó cho phép bạn
+tạo số trước khi thực hiện INSERT, trong khi GenerationType.IDENTITY dựa vào tính năng của cơ sở dữ liệu để tạo khóa chính
+trong quá trình INSERT và sau đó trả lại giá trị.
+ Bạn có thể cấu hình sequence_name (2). Hibernate sẽ sử dụng một sequence hiện có hoặc tạo mới nó khi bạn tạo tự động
+schema SQL. Nếu hệ quản trị cơ sở dữ liệu của bạn không hỗ trợ sequences, đây sẽ là tên đặc biệt "sequence table".
+Bạn có thể bắt đầu với initial_value (3) để có chỗ cho dữ liệu kiểm tra. Ví dụ, khi kiểm tra tích hợp chạy, Hibernate
+sẽ thực hiện bất kỳ thêm dữ liệu nào từ mã kiểm tra với các giá trị định danh lớn hơn 1000. Bất kỳ dữ liệu kiểm tra nào
+bạn muốn nhập trước khi kiểm tra có thể sử dụng số từ 1 đến 999, và bạn có thể tham chiếu đến các giá trị định danh ổn định
+trong các kiểm tra của bạn: "Nạp mục có id 123 và chạy một số kiểm tra trên nó." Điều này được áp dụng khi Hibernate
+tạo ra schema SQL và sequence; đó là một tùy chọn DDL.
+Bạn có thể chia sẻ cùng một sequence cơ sở dữ liệu cho tất cả các lớp mô hình miền của bạn. Không có hại gì trong việc
+chỉ định @GeneratedValue(generator = "ID_GENERATOR") trong tất cả các lớp thực thể của bạn. Không quan trọng nếu giá
+trị khóa chính không liên tục cho một thực thể cụ thể, miễn là chúng duy nhất trong một bảng. Nếu bạn lo lắng về sự cạnh tranh,
+vì sequence phải được gọi trước mỗi lần INSERT, chúng ta sẽ thảo luận về một biến thể của cấu hình generator này sau, trong phần 20.1.
+Cuối cùng, bạn sử dụng kiểu java.lang.Long cho thuộc tính định danh trong lớp thực thể, kiểu này hoàn toàn phù hợp với trình
+tạo sequence số trong cơ sở dữ liệu. Bạn cũng có thể sử dụng kiểu long nguyên thuỷ. Sự khác biệt chính là cái mà someItem.getId()
+trả về trên một mục mới chưa được lưu trong cơ sở dữ liệu: null hoặc 0. Nếu bạn muốn kiểm tra xem một mục có phải là mới
+hay không, kiểm tra null có lẽ dễ hiểu hơn đối với người khác đọc mã của bạn. Bạn không nên sử dụng kiểu nguyên thuỷ
+khác như int hoặc short cho định danh. Mặc dù chúng có thể hoạt động trong một thời gian (có thể là nhiều năm),
+khi kích thước cơ sở dữ liệu của bạn tăng lên, bạn có thể bị giới hạn bởi phạm vi của chúng. Một kiểu Integer sẽ hoạt động
+trong khoảng gần hai tháng nếu bạn tạo ra một định danh mới mỗi mili giây mà không có khoảng trống, và một kiểu Long sẽ
+kéo dài khoảng 300 triệu năm.
+Mặc dù được khuyến nghị cho hầu hết các ứng dụng, chiến lược enhanced-sequence như được thể hiện trong danh sách 4.2
+chỉ là một trong các chiến lược được tích hợp vào Hibernate.
+
+4.2.5 Chiến lược máy tạo định danh (Identifier generator)
+
+Dưới đây là danh sách tất cả các strategy (chiến lược) tạo khóa chính của Hibernate, các tùy chọn của chúng và
+lời khuyên sử dụng của chúng tôi. Nếu bạn không muốn đọc toàn bộ danh sách ngay bây giờ, hãy sử dụng `GenerationType.AUTO`
+và kiểm tra xem Hibernate sẽ mặc định sử dụng chiến lược nào cho ngôn ngữ SQL của bạn. Đó có lẽ là sequence hoặc identity -
+một lựa chọn tốt nhưng có thể không phải là lựa chọn hiệu quả hoặc dễ di chuyển nhất. Nếu bạn cần tính nhất quán và
+giá trị định danh sẵn sàng trước khi INSERT, hãy sử dụng `enhanced-sequence`, như đã được hiển thị ở phần trước đó.
+Đây là một chiến lược có tính di động, linh hoạt và hiện đại, cũng cung cấp các bộ tối ưu hóa cho các tập dữ liệu lớn.
+
+Chúng tôi cũng hiển thị mối quan hệ giữa mỗi chiến lược tiêu chuẩn JPA và chiến lược tương đương native của Hibernate.
+Hibernate đã phát triển tự nhiên nên hiện có hai tập ánh xạ giữa chiến lược tiêu chuẩn và chiến lược native;
+chúng tôi gọi chúng là Old và New trong danh sách. Bạn có thể chuyển đổi ánh xạ này bằng cài đặt `hibernate.id.new_generator_mappings`
+trong tệp `persistence.xml` của bạn. Giá trị mặc định là true; do đó là ánh xạ New. Phần mềm không lão hóa như rượu vang:
+
+- `native` - Tự động chọn các chiến lược khác như sequence hoặc identity, tùy thuộc vào SQL dialect (ngôn ngữ) được cấu hình.
+Bạn phải xem Javadoc (hoặc nguồn) của SQL dialect được cấu hình trong `persistence.xml`. Tương đương với `GenerationType.AUTO`
+trong JPA với ánh xạ Old.
+
+- `sequence` - Sử dụng sequence cơ sở dữ liệu native có tên là HIBERNATE_SEQUENCE. Sequence này được gọi trước mỗi lệnh INSERT
+của một hàng mới. Bạn có thể tùy chỉnh tên sequence và cung cấp các cài đặt DDL bổ sung; xem Javadoc cho lớp
+`org.hibernate.id.SequenceGenerator`.
+
+- `sequence-identity` - Tạo giá trị khóa bằng cách gọi sequence cơ sở dữ liệu trong quá trình chèn:
+ví dụ, `insert into ITEM(ID) values (HIBERNATE_SEQUENCE.nextval)`. Giá trị khóa được trả về sau khi INSERT, cùng với hành vi
+tương tự chiến lược identity. Hỗ trợ các tham số và kiểu thuộc tính giống như chiến lược sequence; xem Javadoc cho lớp
+`org.hibernate.id.SequenceIdentityGenerator` và lớp cha của nó.
+
+- `enhanced-sequence` - Sử dụng sequence cơ sở dữ liệu native nếu được hỗ trợ; nếu không, sử dụng một bảng cơ sở dữ liệu
+bổ sung với một cột và một hàng duy nhất, mô phỏng một sequence. Mặc định tên là HIBERNATE_SEQUENCE. Luôn gọi cơ sở dữ liệu
+"sequence" trước mỗi lệnh INSERT, cung cấp hành vi giống nhau bất kể DBMS có hỗ trợ sequence thực sự hay không.
+Hỗ trợ một `org.hibernate.id.enhanced.Optimizer` để tránh gọi cơ sở dữ liệu trước mỗi lệnh INSERT; mặc định là không tối
+ưu hóa và trích xuất một giá trị mới cho mỗi INSERT. Bạn có thể tìm thấy thêm ví dụ trong chương 20. Đối với tất cả các
+tham số, xem Javadoc cho lớp `org.hibernate.id.enhanced.SequenceStyleGenerator`. Tương đương với `GenerationType.SEQUENCE`
+và `GenerationType.AUTO` trong JPA với ánh xạ New được kích hoạt, có lẽ là lựa chọn tốt nhất trong các chiến lược tích hợp sẵn.
+
+- `seqhilo` - Sử dụng sequence cơ sở dữ liệu native có tên là HIBERNATE_SEQUENCE, tối ưu hóa các cuộc gọi trước INSERT
+bằng cách kết hợp các giá trị hi/lo. Nếu giá trị hi được truy xuất từ sequence là 1, 9 lần INSERT tiếp theo sẽ được thực
+hiện với các giá trị khóa là 11, 12, 13, ..., 19. Sau đó, sequence được gọi lại để lấy giá trị hi tiếp theo (2 hoặc cao hơn),
+và quy trình lặp lại với 21, 22, 23, v.v. Bạn có thể cấu hình giá trị lo tối đa (9 là giá trị mặc định) bằng tham số `max_lo`.
+Thật không may, do một tính năng trong mã nguồn Hibernate, bạn không thể cấu hình chiến lược này trong `@GenericGenerator`.
+Cách duy nhất để sử dụng nó là với `GenerationType.SEQUENCE` của JPA và ánh xạ Old. Bạn có thể cấu hình nó bằng chú thích
+`@SequenceGenerator` tiêu chuẩn của JPA trên một lớp (có thể trống) khác. Xem Javadoc cho lớp `org.hibernate.id.SequenceHiLoGenerator`
+và lớp cha của nó để biết thêm thông tin. Hãy xem xét sử dụng `enhanced-sequence` thay thế, với một bộ tối ưu hóa.
+
+- `hilo` - Sử dụng một bảng cơ sở dữ liệu bổ sung có tên là HIBERNATE_UNIQUE_KEY với cùng thuật toán như chiến lược `seqhilo`.
+Bảng này có một cột và một hàng duy nhất, chứa giá trị tiếp theo của sequence. Giá trị `lo` tối đa mặc định là 32767,
+vì vậy bạn có thể muốn cấu hình nó bằng tham số `max_lo`. Xem Javadoc cho lớp `org.hibernate.id.TableHiLoGenerator`
+để biết thêm thông tin. Chúng tôi không đề xuất sử dụng chiến lược cổ điển này; hãy sử dụng `enhanced-sequence`
+thay thế với một bộ tối ưu hóa.
+
+- `enhanced-table` - Sử dụng một bảng cơ sở dữ liệu bổ sung có tên là HIBERNATE_SEQUENCES, mặc định có một hàng đại diện
+cho sequence, lưu giá trị tiếp theo. Giá trị này được chọn và cập nhật khi giá trị định danh cần được tạo. Bạn có thể cấu
+hình trình tạo này để sử dụng nhiều hàng hơn: một cho mỗi trình tạo; xem Javadoc cho `org.hibernate.id.enhanced.TableGenerator`.
+Tương đương với `GenerationType.TABLE` trong JPA với ánh xạ New được kích hoạt. Thay thế cho chiến lược cũ
+`org.hibernate.id.MultipleHiLoPerTableGenerator`, là ánh xạ Old cho `GenerationType.TABLE`.
+
+- `identity` - Hỗ trợ các cột IDENTITY và auto-increment trong DB2, MySQL, MS SQL Server và Sybase. Giá trị định danh
+cho cột khóa chính sẽ được tạo ra trong quá trình INSERT một hàng. Không có tùy chọn. Thật không may, do một tính năng
+trong mã nguồn Hibernate, bạn không thể cấu hình chiến lược này trong `@GenericGenerator`. Cách duy nhất để sử dụng nó
+là với `GenerationType.IDENTITY` của JPA và ánh xạ Old hoặc New, khiến nó trở thành giá trị mặc định cho `GenerationType.IDENTITY`.
+
+- `increment` - Tại thời điểm khởi động Hibernate, đọc giá trị cột khóa chính tối đa (số) của mỗi bảng của mỗi thực thể và
+tăng giá trị đó lên một mỗi khi một hàng mới được chèn. Đặc biệt hiệu quả nếu ứng dụng Hibernate không phân tán có quyền
+truy cập độc quyền vào cơ sở dữ liệu; nhưng không nên sử dụng nó trong bất kỳ tình huống nào khác.
+
+- `select` - Hibernate sẽ không tạo giá trị khóa và không bao gồm cột khóa chính trong câu lệnh INSERT. Hibernate kỳ vọng
+DBMS sẽ gán một giá trị (mặc định trong schema hoặc bằng trigger) cho cột trong quá trình chèn. Sau đó, Hibernate sẽ truy
+xuất cột khóa chính bằng một truy vấn SELECT sau khi chèn. Tham số bắt buộc là `key`, đặt tên thuộc tính định danh cơ
+sở dữ liệu (ví dụ: id) cho SELECT. Chiến lược này không hiệu quả và nên chỉ được sử dụng với các trình điều khiển JDBC cũ
+không thể trả lại giá trị khóa được tạo trực tiếp.
+
+- `uuid2` - Tạo ra một UUID 128 bit duy nhất ở tầng ứng dụng. Hữu ích khi bạn cần có giá trị định danh toàn cầu duy nhất
+trên nhiều cơ sở dữ liệu (ví dụ: bạn sáp nhập dữ liệu từ nhiều cơ sở dữ liệu sản xuất riêng biệt vào một lưu trữ dự phòng hàng đêm).
+UUID có thể được mã hóa dưới dạng `java.lang.String`, `byte[16]`, hoặc `java.util.UUID` trong lớp thực thể của bạn.
+Thay thế cho chiến lược `uuid` và `uuid.hex`. Bạn cấu hình nó bằng `org.hibernate.id.UUIDGenerationStrategy`;
+xem Javadoc cho lớp `org.hibernate.id.UUIDGenerator` để biết thêm chi tiết
+
+- `guid` - Sử dụng một giá trị định danh duy nhất toàn cầu được tạo bởi cơ sở dữ liệu, với một hàm SQL có sẵn trên Oracle,
+Ingres, MS SQL Server và MySQL. Hibernate gọi hàm cơ sở dữ liệu trước INSERT. Ánh xạ thành thuộc tính định danh `java.lang.String`.
+Nếu bạn cần kiểm soát hoàn toàn việc tạo giá trị định danh, cấu hình chiến lược `@GenericGenerator` với tên đầy đủ của
+một lớp triển khai `org.hibernate.id.IdentityGenerator`.
+
+Tóm lại, lời khuyên của chúng tôi về chiến lược tạo khóa định danh là:
+
+- Nói chung, chúng tôi ưa thích các chiến lược tạo khóa trước INSERT sản phẩm giúp sản xuất giá trị định danh độc lập
+trước khi INSERT.
+- Sử dụng `enhanced-sequence`, sử dụng sequence cơ sở dữ liệu native khi được hỗ trợ và nếu không, chuyển sang một bảng
+cơ sở dữ liệu bổ sung với một cột và một hàng duy nhất, mô phỏng một sequence.
+
+Chúng tôi giả định rằng từ nay trở đi, bạn đã thêm các thuộc tính định danh vào các lớp thực thể của mô hình miền của
+bạn và sau khi bạn hoàn thành ánh xạ cơ bản của mỗi thực thể và thuộc tính định danh của nó, bạn tiếp tục ánh xạ các
+thuộc tính kiểu giá trị của các thực thể. Chúng tôi sẽ nói về các tùy chọn đặc biệt khác có thể làm đơn giản và cải thiện
+ánh xạ của lớp của bạn.
