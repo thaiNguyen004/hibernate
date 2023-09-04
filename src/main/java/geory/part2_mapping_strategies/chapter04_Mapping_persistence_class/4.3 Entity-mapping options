@@ -118,3 +118,139 @@ quyết xung đột đặt tên với một lớp Item khác trong gói khác. T
 
 Điều này hoàn thành chuyến tham quan về các tùy chọn đặt tên trong Hibernate. Tiếp theo, chúng tôi sẽ thảo luận về cách
 Hibernate tạo ra SQL chứa những tên này.
+
+
+
+[Hibernate Feature]
+4.3.2 Tạo SQL động
+Mặc định, Hibernate tạo các câu lệnh SQL cho mỗi lớp persistence khi đơn vị persistence được tạo ra, vào lúc khởi động.
+Những câu lệnh này đơn giản là các hoạt động create, read, update và delete (CRUD) để đọc một hàng đơn, xóa một hàng và vân vân.
+Điều này tiết kiệm chi phí bằng cách lưu trữ chúng trong bộ nhớ từ đầu, thay vì tạo ra chuỗi SQL mỗi khi một truy vấn
+đơn giản như vậy phải được thực thi tại thời gian chạy. Ngoài ra, việc lưu trữ câu lệnh đã chuẩn bị tại cấp JDBC
+hiệu quả hơn nhiều nếu có ít câu lệnh hơn.
+
+
+Làm thế nào Hibernate có thể tạo một câu lệnh UPDATE khi khởi động? Cuối cùng, tại thời điểm này, các cột cần được
+cập nhật không được biết. Câu trả lời là câu lệnh SQL được tạo ra cập nhật tất cả các cột và nếu giá trị của một cột
+cụ thể không được sửa đổi, câu lệnh sẽ đặt giá trị của nó về giá trị cũ.
+
+Trong một số tình huống, chẳng hạn như một bảng kế thừa có hàng trăm cột nơi các câu lệnh SQL sẽ lớn cho ngay cả những
+thao tác đơn giản nhất (ví dụ, chỉ cần cập nhật một cột), bạn nên tắt việc tạo SQL khi khởi động và chuyển sang sử dụng
+câu lệnh động được tạo ra tại thời gian chạy. Một số lượng lớn các đối tượng có thể ảnh hưởng đến thời gian khởi động,
+bởi vì Hibernate phải tạo tất cả các câu lệnh SQL cho CRUD từ đầu. Tiêu thụ bộ nhớ cho bộ đệm câu lệnh truy vấn cũng sẽ
+rất cao nếu phải lưu trữ một tá câu lệnh cho hàng nghìn đối tượng. Điều này có thể trở thành một vấn đề trong môi trường
+ảo hóa có giới hạn bộ nhớ hoặc trên các thiết bị có hiệu năng thấp.
+
+Để tắt việc tạo ra các câu lệnh INSERT và UPDATE SQL khi khởi động, bạn cần sử dụng các chú thích (annotations)
+nguyên bản của Hibernate:
+
+@Entity
+@org.hibernate.annotations.DynamicInsert
+@org.hibernate.annotations.DynamicUpdate
+public class Item {
+ // ...
+}
+
+Bằng cách bật chức năng INSERT và UPDATE động, bạn cho biết cho Hibernate rằng hãy tạo ra các chuỗi SQL khi cần,
+chứ không phải từ đầu. Câu lệnh UPDATE sẽ chỉ chứa các cột với các giá trị đã được cập nhật, và câu lệnh INSERT sẽ
+chỉ chứa các cột không thể trống (non-nullable).
+
+Chúng tôi sẽ trở lại để thảo luận thêm về việc tạo ra SQL và tùy chỉnh SQL trong chương 17. Đôi khi, bạn có thể hoàn
+toàn tránh việc tạo ra một câu lệnh UPDATE nếu thực thể của bạn là không thay đổi (immutable).
+
+
+[Hibernate Feature]
+4.3.3 Tạo một thực thể không thay đổi (immutable)
+Các thể hiện của một lớp cụ thể có thể là không thay đổi. Ví dụ, trong CaveatEmptor, một Lượt đặt chỗ cho một mặt hàng
+là không thay đổi. Do đó, Hibernate không bao giờ cần thực hiện các câu lệnh UPDATE trên bảng BID. Hibernate cũng có
+thể thực hiện một số tối ưu hóa khác, chẳng hạn như tránh kiểm tra dirty (sự thay đổi), nếu bạn ánh xạ một lớp không
+thay đổi như được thể hiện trong ví dụ tiếp theo. Ở đây, lớp Bid là không thay đổi và các thể hiện không bao giờ được sửa đổi:
+
+@Entity
+@org.hibernate.annotations.Immutable
+public class Bid {
+ // ...
+}
+
+Một POJO (Plain Old Java Object) trở nên không thay đổi khi không có phương thức setter công khai cho bất kỳ thuộc tính
+nào của lớp được tiết lộ — tất cả các giá trị được đặt trong constructor. Hibernate nên truy cập trực tiếp các trường
+khi nạp và lưu trữ các thể hiện. Chúng ta đã nói về điều này trước đó trong chương này: nếu chú thích @Id được đặt trên
+một trường, Hibernate sẽ truy cập trực tiếp các trường và bạn có tự do thiết kế các phương thức getter và setter theo
+ý muốn của bạn. Hãy nhớ rằng không phải tất cả các framework đều làm việc với POJO mà không có phương thức setter;
+ví dụ, JSF không truy cập trực tiếp các trường để điền dữ liệu vào một thể hiện.
+
+Khi bạn không thể tạo một view trong cơ sở dữ liệu của bạn, bạn có thể ánh xạ một lớp thực thể không thay đổi với một
+truy vấn SQL SELECT.
+
+
+[Hibernate feature]
+4.3.4 Ánh xạ một thực thể thành một subselect
+Đôi khi DBA của bạn không cho phép bạn thay đổi cơ sở dữ liệu; thậm chí việc thêm một view mới cũng có thể không
+thực hiện được. Hãy giả sử bạn muốn tạo một view chứa Id của một mặt hàng đấu giá và số lượt đặt chỗ đã
+được thực hiện cho mặt hàng đó.
+Sử dụng một chú thích Hibernate, bạn có thể tạo ra một view ứng dụng, một lớp thực thể chỉ đọc được ánh xạ vào
+một câu lệnh SQL SELECT:
+PATH: /model/src/main/java/org/jpwh/model/advanced/ItemBidSummary.java
+
+@Entity
+@Immutable
+@Subselect(
+        value = "SELECT i.ID as ITEMID, i.ITEM_NAME as NAME, COUNT(b.ID) as NUMBEROFBIDS " +
+                "FROM ITEM i left outer join BID b on i.ID = b.ITEM_ID " +
+                "GROUP BY i.ID, i.ITEM_NAME"
+)
+@Synchronize({"Item", "Bid"})
+public class ItemBidSummary {
+    @Id
+    protected Long itemId;
+    protected String name;
+    protected long numberOfBids;
+
+    public ItemBidSummary() {
+    }
+
+    // Getter method...
+}
+
+
+Khi một thể hiện của `ItemBidSummary` được loaded (nạp), Hibernate thực hiện câu lệnh SQL SELECT tùy chỉnh của bạn như một câu
+lệnh con (subselect):
+
+PATH: /examples/src/test/java/org/jpwh/test/advanced/MappedSubselect.java
+
+ItemBidSummary itemBidSummary = em.find(ItemBidSummary.class, ITEM_ID);
+// select * from (
+//      select i.ID as ITEMID, i.ITEM_NAME as NAME, ...
+// ) where ITEMID = ?
+
+Bạn nên liệt kê tất cả các tên bảng được tham chiếu trong câu SELECT của bạn trong chú thích `@org.hibernate.annotations.Synchronize`.
+(Tại thời điểm viết, Hibernate có một lỗi được theo dõi dưới vấn đề HHH-84301
+, khiến tên của bảng được đồng bộ hóa trở nên phân biệt chữ hoa chữ thường.) Hibernate sẽ sau đó biết rằng nó cần phải
+đồng bộ hóa các sửa đổi của các thể hiện Item và Bid trước khi thực hiện một truy vấn đối với ItemBidSummary:
+
+PATH: /examples/src/test/java/org/jpwh/test/advanced/MappedSubselect.java
+
+Item item = em.find(Item.class, ITEM_ID);
+item.setName("New name");
+// ItemBidSummary itemBidSummary = em.find(ItemBidSummary.class, ITEM_ID);
+Query query = em.createQuery(
+        "select ibs from ItemBidSummary ibs where ibs.itemId = :id");
+ItemBidSummary itemBidSummary =
+        (ItemBidSummary)query.setParameter("id", ITEM_ID).getSingleResult();
+
+Lưu ý rằng Hibernate không tự động thực hiện việc flush (ghi dữ liệu xuống cơ sở dữ liệu) trước một hoạt động `find()`
+— chỉ trước khi một truy vấn `Query` được thực hiện, nếu cần thiết. Hibernate phát hiện rằng việc thay đổi `Item` sẽ ảnh
+hưởng đến kết quả của truy vấn, bởi vì bảng `ITEM` được đồng bộ hóa với `ItemBidSummary`.
+Do đó, việc flush và cập nhật hàng trong bảng `ITEM` là cần thiết để tránh truy vấn trả về dữ liệu lỗi thời (stale data).
+
+4.4 Tóm tắt
+ Entity (Thực thể) là những lớp cấp độ thô của hệ thống của bạn. Các thể hiện của chúng có một vòng đời độc
+lập và có ID (danh tính) riêng của họ, và nhiều thể hiện khác có thể tham chiếu đến chúng.
+ Ngược lại, value type (loại giá trị) phụ thuộc vào một lớp Entity cụ thể. Một thể hiện loại giá trị được
+liên kết với thể hiện thực thể sở hữu của nó và chỉ có một thể hiện thực thể có thể tham chiếu đến nó - nó không có
+danh tính riêng.
+ Chúng ta đã xem xét về Identifier Java, tính bằng nhau của đối tượng và danh tính cơ sở dữ liệu, cùng với điều gì tạo
+nên các khóa chính tốt. Bạn đã tìm hiểu về các trình tạo giá trị khóa chính mà Hibernate cung cấp sẵn, và cách sử dụng và
+mở rộng hệ thống định danh này.
+ Chúng ta đã thảo luận về một số tùy chọn ánh xạ lớp hữu ích, chẳng hạn như chiến lược đặt tên và tạo ra SQL động.
+
