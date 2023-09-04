@@ -30,8 +30,6 @@ của mô hình miền của bạn trong các dự án thế giới thực phứ
 Hãy bắt đầu với ứng dụng minh họa.
 
 
-Dịch:
-
 3.1 Ứng dụng mẫu CaveatEmptor
 Ví dụ CaveatEmptor là một ứng dụng đấu giá trực tuyến thể hiện các kỹ thuật ORM và chức năng của Hibernate. Bạn có thể
 tải mã nguồn của ứng dụng từ trang web www.jpwh.org. Chúng ta sẽ không tập trung nhiều vào giao diện người dùng trong
