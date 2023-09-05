@@ -1,0 +1,74 @@
+Bạn sẽ bắt đầu với một vấn đề mà bất kỳ việc triển khai nào cũng phải đối mặt: sự tách biệt giữa các vấn đề (concerns). 
+Triển khai domain model thường là một thành phần trung tâm, tổ chức; nó được tái sử dụng mạnh mẽ mỗi khi bạn triển khai
+chức năng mới của ứng dụng. Vì lý do này, bạn nên chuẩn bị sẵn sàng để đảm bảo rằng các quan tâm khác ngoài các khía
+cạnh business không tràn vào triển khai domain model.
+
+3.2.1 Xử lý sự tràn lan của các vấn đề
+Khi các vấn đề như persistence, transaction management, or authorization bắt đầu xuất hiện trong các lớp domain model,
+đây là một ví dụ về sự tràn lan của các vấn đề. Triển khai domain model là một phần mã nguồn quan trọng đến mức nó
+không nên phụ thuộc vào các API Java chéo. Ví dụ, mã trong domain model không nên thực hiện tìm kiếm JNDI
+hoặc gọi cơ sở dữ liệu qua JDBC API, không trực tiếp và không thông qua một trung gian trừ khi cần thiết. Điều này cho
+phép bạn tái sử dụng các lớp domain model gần như bất cứ đâu:
+
+- Lớp presentation có thể truy cập các instance và thuộc tính của các entity domain model khi hiển thị các chế độ xem.
+- Các controller component trong lớp business cũng có thể truy cập trạng thái của các entity domain model và gọi các
+phương thức của các entity để thực hiện logic business.
+- Lớp persistence có thể tải và lưu trữ các instancce của các entity domain model từ và đến cơ sở dữ liệu,
+bảo tồn trạng thái của chúng.
+
+Quan trọng nhất, việc ngăn chặn sự tràn lan của các vấn đề giúp dễ dàng kiểm tra đơn vị domain model mà không cần một môi
+trường chạy cụ thể hoặc bộ chứng thực dịch vụ nào đó. Bạn có thể viết các bài kiểm tra đơn vị để xác minh hành vi chính xác
+của các lớp domain model mà không cần bất kỳ hệ thống kiểm tra đặc biệt nào. (Chúng tôi không đề cập đến việc kiểm tra các
+khía cạnh "tải từ cơ sở dữ liệu" và "lưu trữ vào cơ sở dữ liệu", mà chỉ là "tính toán chi phí vận chuyển và thuế".)
+Tiêu chuẩn Java EE giải quyết vấn đề của sự tràn lan các vấn đề bằng metadata, dưới dạng các Annotation trong mã của bạn
+hoặc được bên ngoài hóa dưới dạng các mô tả XML. Phương pháp này cho phép container runtime triển khai một số vấn đề
+cross-cutting đã được xác định trước - bảo mật, đồng thời, lưu trữ, giao dịch và tính xa - bằng cách chặn các cuộc gọi
+đến các thành phần ứng dụng.
+Hibernate không phải là môi trường chạy Java EE và cũng không phải là máy chủ ứng dụng. Nó là một triển khai của chỉ một
+quy định trong phạm vi Java EE - JPA - và là một giải pháp chỉ cho một trong những vấn đề này: persistence.
+JPA xác định lớp entity là thành phần lập trình chính. Mô hình lập trình này cho phép tích hợp lưu trữ rõ ràng, và một
+nhà cung cấp JPA như Hibernate cũng cung cấp tích hợp lưu trữ tự động.
+
+3.2.2 Transparent (tính minh bạch) và tự động về tính persistence
+
+Chúng tôi sử dụng thuật ngữ "transparent" để chỉ sự tách biệt hoàn toàn về mặt mục đích giữa các lớp persistence của 
+domain model và lớp persistence. Các lớp persistence unaware of (Không nhận thức được) - và have no dependency (Không phụ thuộc)
+- cơ chế persistence. Chúng tôi sử dụng thuật ngữ "tự động" để ám chỉ một giải pháp persistence 
+(miêu tả miền của bạn, lớp persistence và cơ chế) giúp bạn không cần xử lý các chi tiết cơ bản cấp thấp, như viết hầu 
+hết các câu lệnh SQL và làm việc với API JDBC.
+
+Ví dụ, lớp Item trong domain model CaveatEmptor không nên có bất kỳ phụ thuộc runtime nào vào bất kỳ API persistence 
+Java Persistence hoặc Hibernate nào. Hơn nữa:
+ JPA không đòi hỏi bất kỳ lớp cha hoặc giao diện đặc biệt nào phải được kế thừa hoặc thực hiện bởi các lớp persistence.
+Cũng không sử dụng bất kỳ lớp đặc biệt nào để thực hiện các thuộc tính và mối quan hệ. (Tất nhiên, bạn luôn có thể sử dụng
+cả hai kỹ thuật nếu muốn.)
+ Bạn có thể tái sử dụng các lớp persistence ngoài ngữ cảnh persistence, trong unit tests hoặc trong presentation layer, 
+ví dụ. Bạn có thể tạo các instance trong bất kỳ môi trường runtime nào bằng toán tử new Java thông thường, giữ cho tính
+khả năng kiểm tra được và tính tái sử dụng.
+ Trong hệ thống với tính persistence đồng nhất, các instance của entity không nhận biết về cơ sở dữ liệu cơ bản;
+chúng không cần biết họ đang được persistence hay đang được truy xuất. JPA externalizes các vấn đề liên quan đến tính persistence 
+thành một API quản lý persistence chung.
+ Do đó, hầu hết mã của bạn, và chắc chắn là logic business phức tạp của bạn, không cần quan tâm đến trạng thái hiện tại
+của một instance entity domain model trong một luồng thực hiện duy nhất.
+
+Chúng tôi xem xét tính tranpsarency là một yêu cầu vì nó làm cho ứng dụng dễ dàng xây dựng và bảo trì. Tính tranpsarent persistence
+nên là một trong những mục tiêu chính của bất kỳ giải pháp ORM nào. Rõ ràng, không có giải pháp persistence tự động nào
+hoàn toàn rõ ràng minh bạch: Mọi lớp persistence tự động, bao gồm JPA và Hibernate, đều áp đặt một số yêu cầu đối với các lớp persistence.
+Ví dụ, JPA đòi hỏi các thuộc tính có giá trị tập hợp phải có kiểu là một giao diện như java.util.Set hoặc java.util.List
+và không phải là một triển khai thực tế như java.util.HashSet (điều này là một thực hành tốt bất kể). Hoặc, một lớp entity JPA
+phải có một thuộc tính đặc biệt, được gọi là bộ nhận diện cơ sở dữ liệu (điều này cũng không phải là một ràng buộc nhưng thường tiện lợi).
+
+Bây giờ bạn biết tại sao cơ chế persistence nên có tác động tối thiểu đối với cách bạn triển khai domain model và rằng
+tính transparent và tính persistence tự động là bắt buộc. Mô hình lập trình ưa thích của chúng tôi để đạt được điều này là POJO.
+
+Khoảng 10 năm trước, nhiều nhà phát triển bắt đầu nói về POJO, một cách tiếp cận quay trở lại cơ bản, về cơ bản là tái sinh JavaBeans,
+một mô hình thành phần cho phát triển giao diện người dùng, và áp dụng lại nó vào các lớp khác của hệ thống. Một số bản dự thảo
+của các đặc tả EJB và JPA đã đưa đến các entity nhẹ mới, và nó sẽ thích hợp để gọi là POJO
+POJO là viết tắt của Plain Old Java Objects. Martin Fowler, Rebecca Parsons và Josh Mackenzie đã đặt thuật ngữ này vào năm 2000.
+
+Thêm vào đó, JavaBeans có khả năng persistence. Các kỹ sư Java thường sử dụng tất cả các thuật ngữ này như đồng nghĩa
+với cùng một cách tiếp cận thiết kế cơ bản.
+
+Tuy bạn không cần quá quan tâm đến các thuật ngữ chúng tôi sử dụng trong cuốn sách này; mục tiêu cuối cùng là áp dụng khía
+cạnh persistence một cách rõ ràng nhất có thể đối với các lớp Java. Hầu hết các lớp Java có thể có khả năng persistence
+nếu bạn tuân theo một số thực hành đơn giản. Hãy xem cách điều này được thể hiện trong mã nguồn.
