@@ -1,13 +1,17 @@
-Bạn sẽ bắt đầu với một vấn đề mà bất kỳ việc triển khai nào cũng phải đối mặt: sự tách biệt giữa các vấn đề (concerns). 
-Triển khai domain model thường là một thành phần trung tâm, tổ chức; nó được tái sử dụng mạnh mẽ mỗi khi bạn triển khai
-chức năng mới của ứng dụng. Vì lý do này, bạn nên chuẩn bị sẵn sàng để đảm bảo rằng các quan tâm khác ngoài các khía
-cạnh business không tràn vào triển khai domain model.
+Bạn sẽ bắt đầu với một issue(vấn đề) mà bất kỳ việc triển khai nào cũng phải đối mặt: 
+    - sự tách biệt giữa các vấn đề (concerns).  (the separation of concerns.)
 
-3.2.1 Xử lý sự tràn lan của các vấn đề
-Khi các vấn đề như persistence, transaction management, or authorization bắt đầu xuất hiện trong các lớp domain model,
-đây là một ví dụ về sự tràn lan của các vấn đề. Triển khai domain model là một phần mã nguồn quan trọng đến mức nó
-không nên phụ thuộc vào các API Java chéo. Ví dụ, mã trong domain model không nên thực hiện tìm kiếm JNDI
-hoặc gọi cơ sở dữ liệu qua JDBC API, không trực tiếp và không thông qua một trung gian trừ khi cần thiết. Điều này cho
+Việc triển khai domain model thường là trọng tâm, tổ chức thành phần; nó được tái sử dụng 
+mạnh mẽ mỗi khi bạn triển khai chức năng mới của ứng dụng. Vì lý do này, bạn nên chuẩn bị 
+sẵn sàng để đảm bảo rằng các concerns khác ngoài các khía cạnh business không tràn vào 
+triển khai domain model.
+
+3.2.1 Xử lý sự leakage (tràn) của các concerns
+Khi các concerns như persistence, transaction management, or authorization bắt đầu xuất hiện 
+trong các lớp domain model, đây là một ví dụ về sự tràn lan của các concern. 
+Triển khai domain model là một phần mã nguồn quan trọng đến mức nó không nên phụ thuộc vào các 
+API Java chéo. Ví dụ, mã trong domain model không nên thực hiện tìm kiếm JNDI hoặc gọi cơ sở 
+dữ liệu qua JDBC API, không trực tiếp và không thông qua một trung gian trừ khi cần thiết. Điều này cho
 phép bạn tái sử dụng các lớp domain model gần như bất cứ đâu:
 
 - Lớp presentation có thể truy cập các instance và thuộc tính của các entity domain model khi hiển thị các chế độ xem.
@@ -16,14 +20,16 @@ phương thức của các entity để thực hiện logic business.
 - Lớp persistence có thể tải và lưu trữ các instancce của các entity domain model từ và đến cơ sở dữ liệu,
 bảo tồn trạng thái của chúng.
 
-Quan trọng nhất, việc ngăn chặn sự tràn lan của các vấn đề giúp dễ dàng kiểm tra đơn vị domain model mà không cần một môi
-trường chạy cụ thể hoặc bộ chứng thực dịch vụ nào đó. Bạn có thể viết các bài kiểm tra đơn vị để xác minh hành vi chính xác
-của các lớp domain model mà không cần bất kỳ hệ thống kiểm tra đặc biệt nào. (Chúng tôi không đề cập đến việc kiểm tra các
+Quan trọng nhất, việc ngăn chặn sự tràn lan của các vấn đề giúp dễ dàng unit-test domain model mà không cần một môi
+trường chạy cụ thể hoặc bộ chứng thực dịch vụ nào đó. Bạn có thể viết unit tests để xác minh hành vi chính xác
+của các lớp domain model mà không cần bất kỳ hệ thống test đặc biệt nào. (Chúng tôi không đề cập đến việc kiểm tra các
 khía cạnh "tải từ cơ sở dữ liệu" và "lưu trữ vào cơ sở dữ liệu", mà chỉ là "tính toán chi phí vận chuyển và thuế".)
-Tiêu chuẩn Java EE giải quyết vấn đề của sự tràn lan các vấn đề bằng metadata, dưới dạng các Annotation trong mã của bạn
+
+Tiêu chuẩn Java EE giải quyết vấn đề của sự tràn lan các concern bằng metadata, dưới dạng các Annotation trong mã của bạn
 hoặc được bên ngoài hóa dưới dạng các mô tả XML. Phương pháp này cho phép container runtime triển khai một số vấn đề
-cross-cutting đã được xác định trước - bảo mật, đồng thời, lưu trữ, giao dịch và tính xa - bằng cách chặn các cuộc gọi
-đến các thành phần ứng dụng.
+cross-cutting concerns - bảo mật, concurency, persistence, transaction và remoteness - in một cách chung chung, 
+bằng cách chặn các cuộc gọi đến các thành phần ứng dụng.
+
 Hibernate không phải là môi trường chạy Java EE và cũng không phải là máy chủ ứng dụng. Nó là một triển khai của chỉ một
 quy định trong phạm vi Java EE - JPA - và là một giải pháp chỉ cho một trong những vấn đề này: persistence.
 JPA xác định lớp entity là thành phần lập trình chính. Mô hình lập trình này cho phép tích hợp lưu trữ rõ ràng, và một
@@ -31,7 +37,7 @@ nhà cung cấp JPA như Hibernate cũng cung cấp tích hợp lưu trữ tự 
 
 3.2.2 Transparent (tính minh bạch) và tự động về tính persistence
 
-Chúng tôi sử dụng thuật ngữ "transparent" để chỉ sự tách biệt hoàn toàn về mặt mục đích giữa các lớp persistence của 
+Chúng tôi sử dụng thuật ngữ "transparent" để chỉ sự tách biệt hoàn toàn về mặt concern giữa các lớp persistence của 
 domain model và lớp persistence. Các lớp persistence unaware of (Không nhận thức được) - và have no dependency (Không phụ thuộc)
 - cơ chế persistence. Chúng tôi sử dụng thuật ngữ "tự động" để ám chỉ một giải pháp persistence 
 (miêu tả miền của bạn, lớp persistence và cơ chế) giúp bạn không cần xử lý các chi tiết cơ bản cấp thấp, như viết hầu 
@@ -46,7 +52,8 @@ cả hai kỹ thuật nếu muốn.)
 ví dụ. Bạn có thể tạo các instance trong bất kỳ môi trường runtime nào bằng toán tử new Java thông thường, giữ cho tính
 khả năng kiểm tra được và tính tái sử dụng.
  Trong hệ thống với tính persistence đồng nhất, các instance của entity không nhận biết về cơ sở dữ liệu cơ bản;
-chúng không cần biết họ đang được persistence hay đang được truy xuất. JPA externalizes các vấn đề liên quan đến tính persistence 
+chúng không cần biết họ đang được persistence hay đang được truy xuất. JPA biểu diễn (externalizes) các vấn đề liên quan
+đến tính persistence
 thành một API quản lý persistence chung.
  Do đó, hầu hết mã của bạn, và chắc chắn là logic business phức tạp của bạn, không cần quan tâm đến trạng thái hiện tại
 của một instance entity domain model trong một luồng thực hiện duy nhất.
@@ -72,3 +79,360 @@ với cùng một cách tiếp cận thiết kế cơ bản.
 Tuy bạn không cần quá quan tâm đến các thuật ngữ chúng tôi sử dụng trong cuốn sách này; mục tiêu cuối cùng là áp dụng khía
 cạnh persistence một cách rõ ràng nhất có thể đối với các lớp Java. Hầu hết các lớp Java có thể có khả năng persistence
 nếu bạn tuân theo một số thực hành đơn giản. Hãy xem cách điều này được thể hiện trong mã nguồn.
+
+
+3.2.3 Viết các lớp persistence-capable (có khả năng persistence)
+Làm việc với các domain model có độ tinh vi và phong phú là một mục tiêu chính của Hibernate.
+Điều này là lý do tại sao chúng ta làm việc với các POJOs (Plain Old Java Objects - Đối tượng Java cổ điển). 
+Nói chung, việc sử dụng các đối tượng tinh vi đòi hỏi sử dụng nhiều lớp hơn so với các bảng.
+Một lớp plain-old persistence-capable khai báo các thuộc tính, đại diện cho trạng thái,
+và các phương thức kinh doanh, định nghĩa hành vi. Một số thuộc tính đại diện cho các mối quan hệ
+tới các lớp có khả năng lưu trữ khác.
+Một phiên bản POJO của đối tượng User trong mô hình miền được hiển thị trong
+mã nguồn bên dưới. Chúng ta hãy đi qua mã nguồn này.
+
+POJO:
+
+public class User implements Serializable {
+    protected String username;
+    
+    public User() {
+    }
+    
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public BigDecimal calcShippingCosts(Address fromLocation) {
+        // Empty implementation of business method
+        return null;
+    }
+    // ...
+}
+
+
+JPA không yêu cầu các persistent class phải triển khai java.io.Serializable. Nhưng
+khi các thể hiện được lưu trữ trong một HttpSession hoặc được chuyển theo giá trị 
+bằng cách sử dụng RMI, việc tuần tự hóa là cần thiết. Mặc dù điều này có thể không 
+xảy ra trong ứng dụng của bạn, lớp sẽ có khả năng tuần tự hóa mà không cần bất kỳ 
+công việc bổ sung nào, và không có bất kỳ hạn chế nào khi khai báo điều đó.
+(Chúng tôi sẽ không khai báo nó trong mọi ví dụ, giả sử bạn biết khi nó cần thiết.)
+
+Lớp có thể là lớp trừu tượng và, nếu cần, mở rộng từ một lớp non-persistent hoặc triển 
+khai một giao diện. Nó phải là một lớp cấp cao nhất, không được lồng trong một lớp khác. 
+Lớp persistence-capable và bất kỳ phương thức nào của nó không thể được đánh dấu 
+là final (một yêu cầu của thiết lập JPA).
+Khác với đặc tả JavaBeans, mà không yêu cầu bất kỳ constructor cụ thể nào, Hibernate (và JPA) 
+yêu cầu một constructor không có đối số cho mọi persistent class.
+Nếu cần, bạn cũng có thể không viết constructor; Hibernate sau đó sẽ sử dụng constructor 
+mặc định của Java. Hibernate gọi các lớp bằng cách sử dụng Java reflection API trên constructor 
+không đối số như vậy để tạo các instance. Constructor không thể là public, nhưng nó phải 
+ít nhất là có thể truy cập từ package nếu Hibernate sẽ sử dụng các proxy được tạo vào runtime 
+cho tối ưu hóa hiệu suất. Hãy cân nhắc cũng đến các yêu cầu của các đặc tả khác:
+tiêu chuẩn EJB yêu cầu tính hiển thị public cho constructor của session bean, giống như
+đặc tả JavaServer Faces (JSF) yêu cầu cho các managed bean của nó. Còn có những
+tình huống khi bạn muốn một constructor public để tạo một trạng thái "trống rỗng": 
+ví dụ, khi xây dựng truy vấn theo ví dụ.
+Các thuộc tính của POJO triển khai các thuộc tính của các thực thể kinh doanh - 
+ví dụ, thuộc tính "username" của User. Thông thường, bạn triển khai các thuộc tính như là các 
+trường thành viên private hoặc protected, cùng với các phương thức truy cập thuộc tính 
+public hoặc protected: cho mỗi trường có một phương thức để lấy giá trị của nó và một 
+phương thức để đặt giá trị.
+Những phương thức này được gọi là phương thức getter và setter, tương ứng. Ví dụ về POJO trong
+mã nguồn 3.1 khai báo các phương thức getter và setter cho thuộc tính "username".
+Đặc tả JavaBean định nghĩa hướng dẫn về cách đặt tên cho các phương thức truy cập;
+điều này cho phép các công cụ thông thường như Hibernate dễ dàng khám phá và thao tác giá trị thuộc tính. 
+Tên phương thức getter bắt đầu bằng "get", sau đó là tên của thuộc tính
+(với chữ cái đầu tiên viết hoa); tên phương thức setter bắt đầu bằng "set" và tương tự là
+sau đó là tên của thuộc tính. Bạn có thể bắt đầu các phương thức getter cho thuộc tính kiểu 
+Boolean bằng "is" thay vì "get".
+Hibernate không yêu cầu các phương thức truy cập. Bạn có thể chọn cách lưu trạng thái của một
+thể hiện của các persistent  class của bạn. Hibernate sẽ truy cập trực tiếp các trường hoặc gọi 
+các phương thức truy cập. Thiết kế lớp của bạn không bị ảnh hưởng nhiều bởi những xem xét này. 
+Bạn có thể làm cho một số phương thức truy cập không public hoặc hoàn toàn
+loại bỏ chúng - sau đó cấu hình Hibernate để dựa vào truy cập trường cho các thuộc tính này.
+
+Nên đặt trường thuộc tính và các phương thức truy cập là private, protected, hoặc package visible?
+
+Thường thì, bạn muốn ngăn chặn việc truy cập trực tiếp vào trạng thái nội tại của lớp của bạn, 
+vì vậy bạn không nên làm cho các trường thuộc tính trở nên public. Nếu bạn đặt các trường hoặc 
+phương thức là private, bạn đang tuyên bố rằng không ai nên bao giờ truy cập chúng; chỉ có bạn 
+hoặc một dịch vụ như Hibernate được phép làm điều đó. Điều này là một tuyên bố rõ ràng. 
+Thường có lý do tốt khi có người nào đó cần truy cập vào "private" internals của bạn—thường 
+là để sửa một trong những lỗi của bạn—và bạn chỉ khiến mọi người tức giận nếu họ phải sử dụng 
+reflection (sự phản xạ) để truy cập trong trường hợp khẩn cấp. Thay vào đó, bạn có thể giả định 
+hoặc biết rằng kỹ sư tiếp theo sẽ có quyền truy cập vào mã của bạn và biết họ đang làm gì.
+
+Sự hiển thị protected thì có vẻ hợp lý hơn là một giá trị mặc định. Bạn ngăn chặn việc truy cập 
+trực tiếp từ public, cho biết rằng chi tiết thành viên cụ thể này là nội bộ, nhưng vẫn 
+cho phép truy cập từ các lớp con nếu cần. Bạn tin tưởng kỹ sư tạo lớp con.
+
+Sự hiển thị package visible thì không tôn trọng: bạn đang buộc người khác phải tạo mã trong 
+cùng gói để truy cập các trường và phương thức thành viên; điều này làm công việc thừa thãi mà 
+không có lý do tốt. Quan trọng nhất, những khuyến nghị về hiển thị này áp dụng cho môi trường 
+không có chính sách bảo mật và không có SecurityManager chạy vào thời điểm thực thi. 
+Nếu bạn phải giữ mã nội bộ của mình là private, hãy để nó private.
+
+Mặc dù các phương thức truy cập đơn giản thường thấy, một trong những lý do chúng 
+ta thích sử dụng các phương thức truy cập theo kiểu JavaBeans là chúng cung cấp 
+encapsulation (tính đóng gói): bạn có thể thay đổi triển khai hidden internal (nội tại ẩn) 
+của một thuộc tính mà không cần thay đổi public interface. 
+
+Nếu bạn cấu hình Hibernate để truy cập các thuộc tính thông qua các phương thức, 
+bạn abstract (trừu tượng hóa) cấu trúc internal data (dữ liệu nội tại) của lớp—các biến thể 
+từ khóa—khỏi thiết kế của cơ sở dữ liệu.
+
+Ví dụ, nếu cơ sở dữ liệu của bạn lưu trữ tên của một người dùng dưới dạng một cột NAME duy nhất, 
+nhưng lớp User của bạn có các trường firstname và lastname, bạn có thể thêm thuộc tính name có 
+tính chất bền vững sau đây vào lớp đó.
+
+public class User {
+    protected String firstname;
+    protected String lastname;
+    
+    public String getName() {
+        return firstname + ' ' + lastname;
+    }
+    
+    public void setName(String name) {
+        StringTokenizer t = new StringTokenizer(name);
+        firstname = t.nextToken();
+        lastname = t.nextToken();
+    }
+}
+
+Sau này, bạn sẽ thấy rằng việc sử dụng một bộ chuyển đổi kiểu tùy chỉnh trong persistence service là một 
+cách tốt hơn để xử lý nhiều tình huống như vậy. Có nhiều lựa chọn là điều có ích.
+
+Một vấn đề khác cần xem xét là kiểm tra trạng thái bẩn (dirty checking). Hibernate tự động phát hiện sự 
+thay đổi trạng thái để đồng bộ hóa trạng thái cập nhật với cơ sở dữ liệu. Thường thì, việc trả về một 
+instance khác trong phương thức getter so với instance được truyền bởi Hibernate trong phương thức setter 
+là an toàn. Hibernate so sánh chúng dựa trên giá trị—không dựa trên định danh đối tượng—để xác định xem 
+trạng thái bền vững của thuộc tính có cần phải cập nhật hay không. Ví dụ, phương thức getter sau đây 
+không dẫn đến các lệnh SQL UPDATE không cần thiết:
+
+public String getFirstname() {
+    return new String(firstname);
+}
+
+Tuy nhiên, nếu bạn trả về một instance mới của một lớp khác, Hibernate sẽ không thể so sánh chúng dựa trên
+giá trị. Nếu bạn muốn trả về một instance mới, bạn phải đảm bảo rằng bạn cung cấp một phương thức equals()
+thích hợp. Nếu không, Hibernate sẽ không thể phát hiện được sự thay đổi trạng thái và sẽ không cập nhật
+cơ sở dữ liệu.
+
+Có một ngoại lệ quan trọng trong trường hợp này: collections được so sánh dựa trên định danh! 
+Đối với một thuộc tính được ánh xạ như persistence collection, bạn nên trả về chính xác instance của collection 
+đó từ phương thức getter mà Hibernate đã truyền vào phương thức setter. Nếu bạn không làm như vậy, 
+Hibernate sẽ cập nhật cơ sở dữ liệu, ngay cả khi không cần thiết cập nhật, mỗi khi trạng thái 
+được giữ trong bộ nhớ được đồng bộ hóa với cơ sở dữ liệu. Thường thường, bạn nên tránh viết mã trong các 
+phương thức truy cập như vậy.
+
+protected String[] names = new String[0];
+
+public void setNames(List<String> names) {
+    this.names = names.toArray(new String[names.size()]);
+}
+
+public List<String> getNames() {
+    return Arrays.asList(names);
+}
+
+Đừng làm điều này nếu Hibernate truy cập các phương thức!
+
+Vấn đề ở đây là, khi bạn sử dụng Hibernate và ánh xạ thuộc tính names này vào cơ sở dữ liệu, 
+Hibernate sẽ theo dõi sự thay đổi trong thuộc tính này bằng cách so sánh định danh (identity)
+của các đối tượng. Nếu bạn trả về một danh sách mới từ phương thức getNames, Hibernate sẽ xem xét 
+danh sách mới này là khác biệt với danh sách ban đầu được lưu trong thuộc tính names. 
+Kết quả là, Hibernate sẽ thực hiện cập nhật cơ sở dữ liệu mỗi khi bạn gọi getNames(), ngay cả khi 
+không có sự thay đổi thực sự trong danh sách.
+
+Điều này có thể dẫn đến hiệu suất kém và các truy vấn cơ sở dữ liệu không cần thiết. 
+Vì vậy, khi bạn sử dụng Hibernate hoặc các công cụ tương tự, nên trả về cùng một thể hiện của 
+danh sách từ phương thức getNames() như bạn đã thấy từ phương thức setNames(). Điều này giúp 
+Hibernate biết rằng không có sự thay đổi nếu không cần thiết và không thực hiện các cập nhật 
+không cần thiết vào cơ sở dữ liệu.
+
+
+Tất nhiên, điều này sẽ không gây vấn đề nếu Hibernate truy cập trực tiếp trường `names`, 
+bỏ qua các phương thức getter và setter của bạn.
+
+Hibernate xử lý các ngoại lệ khi các phương thức truy cập của bạn ném ra ngoại lệ như thế nào? 
+Nếu Hibernate sử dụng các phương thức truy cập khi nạp và lưu các instance và một RuntimeException 
+(unchecked) được ném ra, giao dịch hiện tại sẽ bị rollback và ngoại lệ sẽ được xử lý trong mã 
+gọi API Java Persistence (hoặc Hibernate native). Nếu bạn ném ra một ngoại lệ checked, 
+Hibernate sẽ bọc ngoại lệ này trong một RuntimeException.
+
+Ví dụ trong danh sách 3.2 cũng xác định một phương thức kinh doanh tính toán chi phí giao hàng 
+cho một mặt hàng cụ thể cho một người dùng (chúng ta đã bỏ qua việc triển khai phương thức này).
+
+Tiếp theo, chúng ta sẽ tập trung vào mối quan hệ giữa các thực thể và các mối quan hệ giữa các lớp bền vững.
+
+
+3.2.4 Triển khai các quan hệ POJO 
+Bây giờ bạn sẽ thấy cách kết hợp và tạo ra các loại quan hệ khác nhau giữa các đối tượng: 
+one-to-many, many-to-one, và bidirectional relationships (quan hệ hai chiều). Chúng ta sẽ xem xét 
+mã nguồn cần thiết để tạo các mối quan hệ này, cách đơn giản hóa quản lý quan hệ và cách đảm bảo 
+tính toàn vẹn của các mối quan hệ này.
+
+Bạn tạo các thuộc tính để biểu thị các mối quan hệ giữa các lớp và bạn (thường) gọi các phương thức 
+truy cập để điều hướng từ instance này đến instance khác trong runtime. Hãy xem xét các mối quan hệ được 
+xác định bởi các lớp persistence Item và Bid, như được hiển thị trong hình 3.4.
+
+Tương tự như với tất cả các biểu đồ lớp UML của chúng tôi, chúng tôi đã bỏ qua các thuộc tính association-related
+(liên quan đến mối quan hệ), Item#bids và Bid#item. Các thuộc tính này và các phương thức điều chỉnh giá trị của 
+chúng được gọi là mã cơ sở. Dưới đây là ví dụ về mã cơ sở cho lớp Bid:
+
+public class Bid {
+    protected Item item;
+    
+    public Item getItem() {
+    
+    return item;
+    }
+    
+    public void setItem(Item item) {
+        this.item = item;
+    }
+}
+
+Thuộc tính item cho phép điều hướng từ một Bid đến Item liên quan. Đây là một mối quan hệ với many-to-one; 
+người dùng có thể đặt nhiều lượt đấu giá cho mỗi mặt hàng. Đây là mã khung của lớp Item:
+
+public class Item {
+    protected Set<Bid> bids = new HashSet<Bid>();
+
+    public Set<Bid> getBids() {
+        return bids;
+    }
+    
+    public void setBids(Set<Bid> bids) {
+        this.bids = bids;
+    }
+}
+
+Mối quan hệ giữa hai lớp này cho phép điều hướng 'bidirectional' (hai chiều): mối quan hệ many-to-one từ góc nhìn 
+này có thể xem như one-to-many (lại một mặt hàng có thể có nhiều lượt đấu giá). Mã khung cho thuộc tính bids sử 
+dụng một loại giao diện tập hợp là java.util.Set. JPA yêu cầu các giao diện cho các thuộc tính kiểu tập hợp, nơi 
+bạn phải sử dụng java.util.Set, java.util.List hoặc java.util.Collection thay vì HashSet, ví dụ. Thực tế tốt là 
+lập trình theo các giao diện tập hợp, thay vì các triển khai cụ thể, vì vậy ràng buộc này không nên gây phiền phức 
+cho bạn.
+
+Bạn chọn một Set và khởi tạo trường này bằng một HashSet mới vì ứng dụng không cho phép các lượt đấu giá trùng lặp. 
+Điều này là tốt vì bạn tránh được bất kỳ NullPointerException nào khi có người truy cập thuộc tính của một mục Item 
+mới mà không có bất kỳ lượt đấu giá nào.
+
+Nhà cung cấp JPA cũng yêu cầu thiết lập giá trị non-empty cho bất kỳ thuộc tính collection đã được ánh xạ nào: 
+ví dụ, khi một Item không có lượt đấu giá được loaded từ cơ sở dữ liệu. (Nó không nhất thiết phải sử dụng HashSet; 
+triển khai được giao cho nhà cung cấp. Hibernate có các triển khai tập hợp riêng biệt với các khả năng bổ sung, 
+ví dụ, kiểm tra trạng thái bẩn.)
+
+Có nên lưu trữ các đối tượng Bid trong một list không? 
+Phản ứng đầu tiên thường là duy trì thứ tự các phần tử theo cách chúng được nhập bởi người dùng, bởi vì đây có 
+thể cũng là thứ tự mà bạn sẽ hiển thị chúng sau này. Chắc chắn, trong ứng dụng đấu giá, phải có một thứ tự được xác 
+định nơi người dùng xem các lượt đấu giá cho một mục—ví dụ: lượt đấu giá cao nhất trước hoặc lượt đấu giá mới nhất 
+cuối cùng. Bạn có thể thậm chí làm việc với một java.util.List trong mã giao diện người dùng của bạn để sắp xếp và 
+hiển thị các lượt đấu giá của một mục. Tuy nhiên, điều này không có nghĩa rằng thứ tự hiển thị này cần phải được 
+duy trì lâu dài; tính toàn vẹn dữ liệu không bị ảnh hưởng bởi thứ tự mà các lượt đấu giá được hiển thị. Bạn cần lưu trữ 
+số tiền của mỗi lượt đấu giá để bạn có thể tìm lượt đấu giá cao nhất và bạn cần lưu trữ thời điểm tạo lượt đấu giá để 
+bạn có thể tìm lượt đấu giá mới nhất. Khi còn băn khoăn, hãy làm cho hệ thống của bạn linh hoạt và sắp xếp dữ liệu khi 
+nó được truy xuất từ cơ sở dữ liệu (trong truy vấn) và/hoặc khi nó được hiển thị cho người dùng (trong mã Java), 
+chứ không phải khi nó được lưu trữ.
+
+Tương tự như đối với các thuộc tính cơ bản, các phương thức truy cập cho các mối quan hệ cần được khai báo public 
+chỉ khi chúng là một phần của giao diện bên ngoài (external interface) của lớp persistence được sử dụng bởi logic 
+ứng dụng để tạo liên kết giữa hai instance. Bây giờ chúng tôi sẽ tập trung vào vấn đề này, vì quản lý liên kết 
+giữa một Item và một Bid phức tạp hơn nhiều trong mã Java so với trong cơ sở dữ liệu SQL, với các ràng buộc khóa 
+ngoại khai báo. Theo kinh nghiệm của chúng tôi, các kỹ sư thường không nhận thức được sự phức tạp này xuất phát từ 
+một object model (mô hình đối tượng) với các tham chiếu bidirectional (hai chiều) (con trỏ). Hãy đi từng bước 
+để hiểu vấn đề này.
+
+Thủ tục cơ bản để liên kết một Bid với một Item trông như sau:
+
+anItem.getBids().add(aBid);
+aBid.setItem(anItem);
+
+Mỗi khi bạn tạo liên kết hai chiều này, bạn cần thực hiện hai hành động:
+- Bạn phải thêm Bid vào tập hợp bids của Item.
+- Thuộc tính item của Bid phải được thiết lập.
+
+JPA không quản lý các mối quan hệ bền vững. Nếu bạn muốn thao tác với một mối quan hệ, bạn phải viết chính xác 
+mã mà bạn sẽ viết nếu không có Hibernate. Nếu mối quan hệ là hai chiều, bạn phải xem xét cả hai phía của mối quan hệ. 
+Nếu bạn bao giờ gặp vấn đề trong việc hiểu hành vi của các mối quan hệ trong JPA, hãy tự hỏi, "Tôi sẽ làm gì nếu không 
+có Hibernate?" Hibernate không thay đổi cú pháp Java thông thường.
+
+Chúng tôi đề xuất bạn nên thêm các phương thức utility để gom nhóm những hoạt động này, cho phép tái sử dụng và đảm 
+bảo tính chính xác, và cuối cùng đảm bảo tính toàn vẹn dữ liệu (một Bid được yêu cầu phải có một tham chiếu đến một Item). 
+Dưới đây là một ví dụ về phương thức tiện ích trong lớp Item:
+
+public void addBid(Bid bid) {
+    if (bid == null)
+        throw new NullPointerException("Can't add null Bid");
+    if (bid.getItem() != null)
+    throw new IllegalStateException("Bid is already assigned to an
+        ➥ Item");
+    getBids().add(bid);
+    bid.setItem(this);
+}
+
+Phương thức `addBid()` không chỉ giảm đi số dòng mã khi làm việc với các thể hiện của Item và Bid, mà còn bắt buộc 
+số lượng của mối quan hệ. 
+
+Bằng cách này, bạn tránh được các lỗi phát sinh từ việc bỏ sót một trong hai hành động bắt buộc. Bạn nên luôn cung cấp 
+kiểu nhóm hóa các hoạt động cho các mối quan hệ, nếu có thể. Nếu bạn so sánh điều này với relationship model of foreign key 
+trong một cơ sở dữ liệu SQL, bạn có thể dễ dàng thấy là một mô hình network và mô hình con trỏ làm phức tạp một phép tính 
+đơn giản: thay vì một ràng buộc khai báo, bạn cần mã thủ tục để đảm bảo tính toàn vẹn dữ liệu.
+
+Bởi vì bạn muốn `addBid()` là phương thức chỉnh sửa duy nhất mà có thể nhìn thấy bên ngoài cho các lượt đấu giá 
+của một mục (có thể bổ sung thêm một phương thức `removeBid()`), bạn có thể làm cho phương thức `Item#setBids()` 
+là private hoặc loại bỏ nó và cấu hình Hibernate để truy cập trực tiếp vào các trường để lưu trữ. 
+
+Hãy xem xét việc làm cho phương thức `Bid#setItem()` có thể truy cập từ gói (package-visible), vì cùng một lý do.
+
+Phương thức getter `Item#getBids()` vẫn trả về một tập hợp có thể sửa đổi, vì vậy người dùng có thể sử dụng nó 
+để thực hiện các thay đổi không phản ánh ở phía ngược lại. Các lượt đấu giá được thêm trực tiếp vào tập hợp này sẽ 
+không có tham chiếu đến một mục - một trạng thái không nhất quán, theo ràng buộc cơ sở dữ liệu của bạn. 
+Để ngăn điều này, bạn có thể bọc internal collection (collection nội bộ) trước khi trả về nó từ phương thức getter, 
+sử dụng `Collections.unmodifiableCollection(c)` và `Collections.unmodifiableSet(s)`. Khi đó, người dùng sẽ nhận được 
+một ngoại lệ nếu họ cố gắng sửa đổi collection; bạn do đó bắt buộc mọi sự thay đổi phải thông qua phương thức 
+relationship management để đảm bảo tính toàn vẹn. Lưu ý rằng trong trường hợp này, bạn sẽ phải cấu hình Hibernate để truy cập 
+trường, vì tập hợp trả về bởi phương thức getter sau đó không giống với mô hình được truyền vào phương thức setter.
+
+Một chiến lược thay thế là sử dụng các thể hiện không thay đổi (immutable instances). Ví dụ, bạn có thể đảm bảo 
+tính toàn vẹn bằng cách yêu cầu một đối số Item trong hàm tạo của Bid, như được thể hiện trong ví dụ sau đây.
+
+public class Bid {
+    protected Item item;
+
+    public Bid(Item item) {
+        this.item = item;
+        item.getBids().add(this);
+    }
+
+    public Item getItem() {
+        return item;
+    }
+}
+
+Trong hàm tạo này, trường item được thiết lập và không nên xảy ra sự thay đổi nào khác đối với giá trị của trường này. 
+Bản sao tập hợp trên "phía kia" cũng được cập nhật cho mối quan hệ hai chiều. Không có phương thức Bid#setItem(), 
+và có lẽ bạn không nên tiết lộ phương thức public Item#setBids().
+
+Tuy nhiên, có một số vấn đề với cách tiếp cận này. Đầu tiên, Hibernate không thể gọi hàm tạo này. Bạn cần thêm một hàm 
+tạo không có đối số cho Hibernate, và nó cần ít nhất là có thể truy cập từ gói (package-visible). Hơn nữa, vì không 
+có phương thức setItem(), Hibernate sẽ phải được cấu hình để truy cập trực tiếp vào trường item. Điều này có nghĩa 
+rằng trường không thể là final, vì vậy lớp không được đảm bảo là không thay đổi.
+
+Trong các ví dụ trong cuốn sách này, chúng tôi đôi khi sẽ viết các phương thức khung như Item#addBid() đã được trình 
+bày trước đó, hoặc chúng tôi có thể có các hàm tạo bổ sung cho các giá trị bắt buộc. Tùy thuộc vào bạn có muốn bao bọc 
+bao nhiêu phương thức tiện ích và lớp quanh các thuộc tính và/hoặc trường quan hệ bền vững, nhưng chúng tôi đề xuất 
+hãy duy trì tính nhất quán và áp dụng chiến lược tương tự cho tất cả các lớp mô hình miền của bạn. Vì sự đọc hiểu, 
+chúng tôi không luôn hiển thị các phương thức tiện ích, các hàm tạo đặc biệt và các mã khung tương tự trong các 
+ví dụ mã sau này và cho rằng bạn sẽ thêm chúng dựa trên sở thích và yêu cầu của riêng bạn.
+
+Bạn đã thấy các lớp domain model, cách biểu diễn các thuộc tính của chúng và các mối quan hệ giữa chúng. Tiếp theo, 
+chúng tôi sẽ tăng cường mức trừu tượng, thêm thông tin về triển khai domain model và khai báo các khía cạnh như quy tắc 
+kiểm tra và lưu trữ.
