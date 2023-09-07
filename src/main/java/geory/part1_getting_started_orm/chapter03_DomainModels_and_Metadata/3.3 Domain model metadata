@@ -21,3 +21,25 @@ Chúng tôi cũng sẽ thảo luận về Bean Validation (JSR 303) và cách n�
 cách khai báo cho các lớp domain model của bạn (hoặc bất kỳ lớp nào khác). Dự án Hibernate Validator 
 là phiên bản tham chiếu của thông số kỹ thuật này. Hầu hết các kỹ sư ngày nay ưa thích annotation 
 Java là cơ chế chính để khai báo Metadata.
+
+3.3.1 Metadata dựa trên Annotation
+Ưu điểm lớn của các annotations là đặt dữ liệu dạng siêu dữ liệu (metadata) cùng với thông tin mô tả nó, 
+thay vì tách riêng về mặt vật lý thành một tệp khác. Dưới đây là một ví dụ.
+
+PATH: /model/src/main/java/org/jpwh/model/simple/Item.java
+
+import javax.persistence.Entity; 
+@Entity
+public class Item {
+}
+
+Bạn có thể tìm thấy các JPA mapping annotation tiêu chuẩn trong gói javax.persistence. 
+Ví dụ này khai báo lớp Item là một đối tượng persistence sử dụng chú thích @javax.persistence.Entity. 
+Tất cả các thuộc tính của nó hiện được automatic persistence với một chiến lược mặc định. Điều đó có 
+nghĩa là bạn có thể load và store các instance của Item và tất cả các thuộc tính của lớp đều là một phần 
+của trạng thái quản lý.
+
+(Nếu bạn đã theo dõi chương trước, bạn có thể nhận thấy chú thích bắt buộc @Id và thuộc tính định danh đã bị thiếu. Nếu bạn muốn thử ví dụ về Item, bạn sẽ cần...)
+đã bị thiếu. Nếu bạn muốn thử ví dụ về Item, bạn sẽ cần…
+
+
