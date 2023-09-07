@@ -438,6 +438,6 @@ hãy duy trì tính nhất quán và áp dụng chiến lược tương tự cho
 chúng tôi không luôn hiển thị các phương thức tiện ích, các hàm tạo đặc biệt và các mã khung tương tự trong các 
 ví dụ mã sau này và cho rằng bạn sẽ thêm chúng dựa trên sở thích và yêu cầu của riêng bạn.
 
-Bạn đã thấy các lớp domain model, cách biểu diễn các thuộc tính của chúng và các mối quan hệ giữa chúng. Tiếp theo, 
-chúng tôi sẽ tăng cường mức trừu tượng, thêm thông tin về triển khai domain model và khai báo các khía cạnh như quy tắc 
-kiểm tra và lưu trữ.
+Bây giờ bạn đã thấy các class domain model, cách biểu diễn các thuộc tính của chúng và
+mối quan hệ giữa chúng. Tiếp theo, chúng ta sẽ nâng cao mức độ trừu tượng, thêm metadata vào việc triển khai 
+domain model và xác định các khía cạnh như validation và persistence rule.
