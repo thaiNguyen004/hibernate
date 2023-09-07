@@ -215,14 +215,19 @@ là an toàn. Hibernate so sánh chúng dựa trên giá trị—không dựa tr
 trạng thái bền vững của thuộc tính có cần phải cập nhật hay không. Ví dụ, phương thức getter sau đây 
 không dẫn đến các lệnh SQL UPDATE không cần thiết:
 
+Trong mô hình Hibernate, khi bạn gọi phương thức getter để lấy dữ liệu từ một thuộc tính của đối tượng, 
+bạn không nên trả về cùng một đối tượng mà Hibernate đã sử dụng để gán dữ liệu ban đầu. Thay vào đó, 
+bạn nên trả về một bản sao hoặc một đối tượng mới được tạo để đảm bảo rằng Hibernate có thể so sánh giá trị 
+để xác định xem có cần cập nhật cơ sở dữ liệu hay không.
+
 public String getFirstname() {
-    return new String(firstname);
+    return new String(firstname); // This case! Hibernate luôn kiểm tra trạng thái của field firstName 
 }
 
-Tuy nhiên, nếu bạn trả về một instance mới của một lớp khác, Hibernate sẽ không thể so sánh chúng dựa trên
-giá trị. Nếu bạn muốn trả về một instance mới, bạn phải đảm bảo rằng bạn cung cấp một phương thức equals()
-thích hợp. Nếu không, Hibernate sẽ không thể phát hiện được sự thay đổi trạng thái và sẽ không cập nhật
-cơ sở dữ liệu.
+Tuy nhiên, nếu bạn trả về một instance mới của một class khác hiện là một trường trong lớp hiện tại, 
+Hibernate sẽ không thể so sánh chúng dựa trên giá trị. Nếu bạn muốn trả về một instance mới, bạn phải 
+đảm bảo rằng bạn cung cấp một phương thức equals() thích hợp. Nếu không, Hibernate sẽ không thể phát 
+hiện được sự thay đổi trạng thái và sẽ không cập nhật cơ sở dữ liệu.
 
 Có một ngoại lệ quan trọng trong trường hợp này: collections được so sánh dựa trên định danh! 
 Đối với một thuộc tính được ánh xạ như persistence collection, bạn nên trả về chính xác instance của collection 
@@ -385,15 +390,15 @@ kiểu nhóm hóa các hoạt động cho các mối quan hệ, nếu có thể.
 trong một cơ sở dữ liệu SQL, bạn có thể dễ dàng thấy là một mô hình network và mô hình con trỏ làm phức tạp một phép tính 
 đơn giản: thay vì một ràng buộc khai báo, bạn cần mã thủ tục để đảm bảo tính toàn vẹn dữ liệu.
 
-Bởi vì bạn muốn `addBid()` là phương thức chỉnh sửa duy nhất mà có thể nhìn thấy bên ngoài cho các lượt đấu giá 
-của một mục (có thể bổ sung thêm một phương thức `removeBid()`), bạn có thể làm cho phương thức `Item#setBids()` 
+Bởi vì bạn muốn `addBid()` là phương thức chỉnh sửa duy nhất mà có thể nhìn thấy bên ngoài cho bids 
+của một item (có thể bổ sung thêm một phương thức `removeBid()`), bạn có thể làm cho phương thức `Item#setBids()` 
 là private hoặc loại bỏ nó và cấu hình Hibernate để truy cập trực tiếp vào các trường để lưu trữ. 
 
 Hãy xem xét việc làm cho phương thức `Bid#setItem()` có thể truy cập từ gói (package-visible), vì cùng một lý do.
 
 Phương thức getter `Item#getBids()` vẫn trả về một tập hợp có thể sửa đổi, vì vậy người dùng có thể sử dụng nó 
-để thực hiện các thay đổi không phản ánh ở phía ngược lại. Các lượt đấu giá được thêm trực tiếp vào tập hợp này sẽ 
-không có tham chiếu đến một mục - một trạng thái không nhất quán, theo ràng buộc cơ sở dữ liệu của bạn. 
+để thực hiện các thay đổi không phản ánh ở phía ngược lại. Các lượt đấu giá được thêm trực tiếp vào collection này sẽ 
+không có tham chiếu đến một item - một trạng thái không nhất quán, theo ràng buộc cơ sở dữ liệu của bạn. 
 Để ngăn điều này, bạn có thể bọc internal collection (collection nội bộ) trước khi trả về nó từ phương thức getter, 
 sử dụng `Collections.unmodifiableCollection(c)` và `Collections.unmodifiableSet(s)`. Khi đó, người dùng sẽ nhận được 
 một ngoại lệ nếu họ cố gắng sửa đổi collection; bạn do đó bắt buộc mọi sự thay đổi phải thông qua phương thức 
@@ -432,6 +437,6 @@ hãy duy trì tính nhất quán và áp dụng chiến lược tương tự cho
 chúng tôi không luôn hiển thị các phương thức tiện ích, các hàm tạo đặc biệt và các mã khung tương tự trong các 
 ví dụ mã sau này và cho rằng bạn sẽ thêm chúng dựa trên sở thích và yêu cầu của riêng bạn.
 
-Bạn đã thấy các lớp domain model, cách biểu diễn các thuộc tính của chúng và các mối quan hệ giữa chúng. Tiếp theo, 
-chúng tôi sẽ tăng cường mức trừu tượng, thêm thông tin về triển khai domain model và khai báo các khía cạnh như quy tắc 
-kiểm tra và lưu trữ.
+Bây giờ bạn đã thấy các class domain model, cách biểu diễn các thuộc tính của chúng và
+mối quan hệ giữa chúng. Tiếp theo, chúng ta sẽ nâng cao mức độ trừu tượng, thêm metadata vào việc triển khai 
+domain model và xác định các khía cạnh như validation và persistence rule.
