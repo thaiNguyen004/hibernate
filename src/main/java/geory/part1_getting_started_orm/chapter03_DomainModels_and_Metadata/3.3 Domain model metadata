@@ -1,0 +1,23 @@
+3.3 Domain model metadata
+Metadata là thông tin về data, vì vậy Metadata domain model là thông tin về domain model của bạn. 
+Ví dụ, khi bạn sử dụng Java reflection API để khám phá tên của các lớp trong domain model của bạn 
+hoặc tên của các thuộc tính của chúng, bạn đang truy cập vào Metadata domain model.
+
+Các công cụ ORM cũng yêu cầu Metadata để chỉ định sự ánh xạ giữa các lớp và bảng, thuộc tính và cột, 
+các mối quan hệ và các khóa ngoại, kiểu dữ liệu Java và kiểu dữ liệu SQL, và cứ tiếp tục. 
+ORM metadata điều chỉnh quá trình biến đổi giữa các hệ thống kiểu khác nhau và biểu diễn mối quan hệ 
+trong hệ thống hướng đối tượng và SQL. JPA có một API Metadata, mà bạn có thể gọi để lấy thông tin 
+chi tiết về các khía cạnh liên quan đến persistence của domain model của bạn, chẳng hạn như tên của 
+các persistence entities và attributes. Đầu tiên, công việc của bạn là một kỹ sư là tạo ra và 
+maintain (duy trì) thông tin này.
+
+JPA tiêu chuẩn hóa hai tùy chọn Metadata: annotations trong mã Java và các tệp mô tả XML bên ngoài. 
+Hibernate có một số tiện ích mở rộng cho chức năng cơ bản, cũng có sẵn dưới dạng annotation và/hoặc 
+tệp mô tả XML. Thông thường, chúng ta ưa thích chú thích hoặc tệp XML làm nguồn chính cho Metadata 
+ánh xạ. Sau khi đọc phần này, bạn sẽ có thông tin cơ bản để đưa ra quyết định có kiến thức cho dự án 
+của bạn.
+
+Chúng tôi cũng sẽ thảo luận về Bean Validation (JSR 303) và cách nó cung cấp tính năng xác thực theo 
+cách khai báo cho các lớp domain model của bạn (hoặc bất kỳ lớp nào khác). Dự án Hibernate Validator 
+là phiên bản tham chiếu của thông số kỹ thuật này. Hầu hết các kỹ sư ngày nay ưa thích annotation 
+Java là cơ chế chính để khai báo Metadata.
