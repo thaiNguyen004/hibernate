@@ -123,3 +123,91 @@ Chú thích sẽ là công cụ chính của chúng tôi trong toàn bộ cuốn
 và có nhiều điều để học về chủ đề này. Trước khi chúng ta xem xét một số kiểu ánh xạ thay thế với tệp XML,
 hãy sử dụng một số chú thích đơn giản để cải thiện các lớp mô hình miền dữ liệu với các quy tắc xác minh.
 
+
+3.3.2 Applying Bean Validation rules
+
+Hầu hết các ứng dụng chứa nhiều kiểm tra tính toàn vẹn dữ liệu. Bạn đã thấy điều gì xảy ra khi vi phạm một 
+trong những ràng buộc tính toàn vẹn dữ liệu đơn giản nhất: bạn nhận được một NullPointerException khi bạn 
+mong đợi một giá trị có sẵn. Các ví dụ khác bao gồm thuộc tính có giá trị kiểu chuỗi không được trống 
+(hãy nhớ, chuỗi trống không phải là null), một chuỗi phải khớp với một mẫu biểu thức chính quy cụ thể và 
+một giá trị số hoặc ngày phải nằm trong một khoảng cụ thể.
+
+Những quy tắc business này ảnh hưởng đến mọi lớp trong ứng dụng: mã giao diện người dùng phải hiển thị 
+thông báo lỗi chi tiết và địa chỉ. Các lớp business và lớp persistence phải kiểm tra giá trị đầu vào nhận 
+được từ máy khách trước khi chuyển chúng đến lớp dữ liệu. Cơ sở dữ liệu SQL phải là người xác minh cuối cùng, 
+cuối cùng đảm bảo tính toàn vẹn của dữ liệu bền vững.
+
+Ý tưởng đằng sau Bean Validation là việc khai báo các quy tắc như "Thuộc tính này không thể là null" hoặc 
+"Số này phải nằm trong khoảng cụ thể" dễ dàng hơn và ít dễ gây lỗi hơn so với việc viết các thủ tục if-then-else 
+lặp đi lặp lại. Hơn nữa, việc khai báo những quy tắc này trên thành phần trung tâm của ứng dụng của bạn, 
+triển khai domain model, cho phép kiểm tra tính toàn vẹn ở mọi lớp trong hệ thống. Sau đó, các quy tắc sẽ 
+sẵn sàng cho các lớp presentation và lớp persistence. Nếu bạn xem xét cách ràng buộc tính toàn vẹn dữ liệu 
+không chỉ ảnh hưởng đến mã ứng dụng Java của bạn mà còn đến cơ sở dữ liệu SQL của bạn - đó là một bộ quy tắc tính 
+toàn vẹn khác - bạn có thể nghĩ về các ràng buộc Bean Validation như là dữ liệu ORM bổ sung.
+
+Hãy xem xét lớp domain model Item được mở rộng sau đây.
+
+import javax.validation.constraints.Future;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+@Entity
+public class Item {
+     
+    @NotNull 
+    @Size(
+        min = 2,
+        max = 255,
+        message = "Name is required, maximum 255 characters."
+    )
+    protected String name;
+  
+    @Future
+    protected Date auctionEnd;
+}
+
+Bạn thêm hai thuộc tính nữa - name một item và auctionEnd ( ngày đấu giá kết thúc) - khi một phiên đấu giá kết thúc. 
+Cả hai đều là ứng cử viên điển hình cho các ràng buộc bổ sung: bạn muốn đảm bảo rằng tên luôn có mặt và có thể đọc 
+được bởi con người (tên một ký tự không có nhiều ý nghĩ), nhưng nó không nên quá dài - cơ sở dữ liệu SQL của bạn sẽ 
+hiệu quả nhất với chuỗi độ dài biến đổi lên đến 255 ký tự, và giao diện người dùng của bạn cũng có một số ràng buộc 
+về không gian nhãn hiển thị. 
+Thời gian kết thúc của một phiên đấu giá rõ ràng nên ở trong tương lai. Nếu bạn không cung cấp một error message, 
+một message mặc định sẽ được sử dụng. Các message có thể là các (keys) đến các file properties external (bên ngoài), 
+để đa ngôn ngữ hóa nội dung. Tức là dựa vào keys có thể hiển thị các message với nhiều dạng ngôn ngữ khác nhau mà
+không cần thay đổi mã nguồn.
+
+Bộ máy kiểm tra tính hợp lệ (validation engine) sẽ truy cập trực tiếp vào các trường nếu bạn đánh dấu các trường đó. 
+Nếu bạn ưa thích các cuộc gọi thông qua các phương thức truy cập, hãy đánh dấu phương thức getter với các ràng buộc 
+validate, chứ không phải phương thức setter. Sau đó, các ràng buộc sẽ là một phần của API của lớp và được bao gồm 
+trong tài liệu Javadoc của nó, làm cho việc triển khai domain model dễ hiểu hơn. Lưu ý rằng điều này độc lập với 
+việc truy cập bởi nhà cung cấp JPA; tức là, Hibernate Validator có thể gọi các phương thức truy cập, trong khi 
+Hibernate ORM có thể gọi trực tiếp các trường.
+
+Bean Validation không giới hạn ở các annotation build-in; bạn có thể tạo ra các constaint và annotation custom của 
+riêng mình. Với một ràng buộc tùy chỉnh, bạn có thể sử dụng cả annotation cấp lớp và kiểm tra nhiều giá trị thuộc tính 
+cùng một lúc trên một instance của lớp. 
+
+Đoạn mã kiểm tra sau đây cho thấy cách bạn có thể kiểm tra tính toàn vẹn của một thể hiện Item một cách thủ công.
+
+
+Testing an Item instance for constraint violations
+Kiểm tra một instance Item cho các ràng buộc vi phạm (violations)
+PATH: /examples/src/test/java/org/jpwh/test/simple/ModelOperations.java
+
+
+ValidatorFactory factory = Validation.buildDefaultValidatorFactory(); Validator validator = factory.getValidator();
+    Item item = new Item();
+item.setName("Some Item");
+item.setAuctionEnd(new Date());
+One validation error: auction end date not in the future!
+Set<ConstraintViolation<Item>> violations = validator.validate(item);
+assertEquals(1, violations.size());
+ConstraintViolation<Item> violation = violations.iterator().next(); String failedPropertyName =
+        violation.getPropertyPath().iterator().next().getName();
+assertEquals(failedPropertyName, "auctionEnd");
+if (Locale.getDefault().getLanguage().equals("en"))
+    assertEquals(violation.getMessage(), "must be in the future");
+
+
+
+
+
