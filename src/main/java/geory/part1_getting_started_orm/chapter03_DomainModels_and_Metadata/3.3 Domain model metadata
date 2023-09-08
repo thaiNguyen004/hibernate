@@ -39,7 +39,87 @@ Tất cả các thuộc tính của nó hiện được automatic persistence v�
 nghĩa là bạn có thể load và store các instance của Item và tất cả các thuộc tính của lớp đều là một phần 
 của trạng thái quản lý.
 
-(Nếu bạn đã theo dõi chương trước, bạn có thể nhận thấy chú thích bắt buộc @Id và thuộc tính định danh đã bị thiếu. Nếu bạn muốn thử ví dụ về Item, bạn sẽ cần...)
-đã bị thiếu. Nếu bạn muốn thử ví dụ về Item, bạn sẽ cần…
+(Nếu bạn đã theo dõi chương trước, bạn có thể đã thấy thiếu chú thích @Id bắt buộc
+và thuộc tính định danh. Nếu bạn muốn thử ví dụ về Item, bạn sẽ phải thêm một thuộc tính định danh. 
+Chúng ta sẽ thảo luận về các thuộc tính định danh lại trong chương tiếp theo, trong phần 4.2.)
 
+
+Lớp của bạn có phụ thuộc vào JPA không?
+Có, nhưng đó là một phụ thuộc chỉ ở thời điểm biên dịch. 
+Bạn cần có các thư viện JPA trên classpath của bạn khi biên dịch mã nguồn của lớp domain model dữ liệu của bạn. 
+Java Persistence API không cần phải nằm trên classpath khi bạn tạo một instance của lớp: 
+ví dụ, trong ứng dụng máy tính để bàn không thực thi bất kỳ mã JPA nào. Chỉ khi bạn truy cập các annotations
+thông qua reflection tại thời điểm runtime (như Hibernate làm nội bộ khi đọc metadata của bạn) thì bạn cần có 
+các gói trên đường dẫn lớp.
+
+Khi các chú thích Java Persistence chuẩn không đủ, một nhà cung cấp JPA có thể cung cấp các chú thích bổ sung.
+
+SỬ DỤNG PHẦN MỞ RỘNG CỦA NHÀ CUNG CẤP
+Ngay cả khi bạn ánh xạ hầu hết mô hình ứng dụng của mình bằng các chú thích tương thích với JPA từ gói javax.persistence, 
+bạn sẽ phải sử dụng các phần mở rộng của nhà cung cấp tại một số điểm nào đó. Ví dụ, một số tùy chỉnh tinh chỉnh hiệu suất 
+mà bạn mong đợi có sẵn trong phần mềm persistence chất lượng cao chỉ có sẵn dưới dạng các chú thích cụ thể cho Hibernate. 
+Đây chính là cách các nhà cung cấp JPA cạnh tranh, vì vậy bạn không thể tránh được các chú thích từ các gói khác — có lý 
+do bạn đã chọn Hibernate.
+Dưới đây là mã nguồn thực thể Item với một tùy chọn ánh xạ chỉ có sẵn trong Hibernate:
+
+import javax.persistence.Entity;
+
+@Entity
+@org.hibernate.annotations.Cache(
+    usage = org.hibernate.annotations.CacheConcurrencyStrategy.READ_WRITE
+)
+public class Item {
+}
+
+Chúng tôi ưu tiên việc đặt tiền tố cho các chú thích Hibernate với tên gói đầy đủ là "org.hibernate.annotations". 
+Điều này được coi là một thực hành tốt, vì bạn có thể dễ dàng nhận biết được metadata nào thuộc về JPA theo đặc tả 
+và metadata nào thuộc về nhà cung cấp cụ thể. Bạn cũng có thể dễ dàng tìm kiếm mã nguồn của mình với từ khoá 
+"org.hibernate.annotations" và nhận được một cái nhìn toàn diện về tất cả các chú thích phi chuẩn trong ứng dụng của 
+bạn chỉ trong một kết quả tìm kiếm duy nhất. Nếu bạn chuyển đổi nhà cung cấp Java Persistence của mình, bạn chỉ cần 
+thay thế các phần mở rộng cụ thể của nhà cung cấp, nơi bạn có thể mong đợi sẽ có một tập tính năng tương tự với hầu 
+hết các triển khai JPA trưởng thành. Tất nhiên, chúng tôi hy vọng rằng bạn sẽ không bao giờ phải làm điều này và thực tế 
+thì điều này không xảy ra thường xuyên, nhưng bạn nên sẵn sàng cho trường hợp đó.
+
+Các chú thích trên các lớp chỉ bao gồm metadata áp dụng cho lớp cụ thể đó. Bạn thường cần metadata ở một cấp độ cao hơn, 
+cho một gói toàn bộ hoặc thậm chí là toàn bộ ứng dụng.
+
+METADATA CHUNG CHO ANNOTATION TOÀN CỤC
+Chú thích @Entity ánh xạ một lớp cụ thể. JPA và Hibernate cũng có các annotation cho metadata toàn cục. 
+Ví dụ, @NamedQuery có phạm vi toàn cục; bạn không áp dụng nó cho một lớp cụ thể. Bạn nên đặt annotation này ở đâu?
+
+Mặc dù có thể đặt các chú thích toàn cục như vậy trong tệp nguồn của một lớp (bất kỳ lớp nào cũng được, thực sự, ở đầu tệp), 
+chúng tôi muốn giữ metadata toàn cục trong một tệp riêng biệt. Chú thích cấp gói là một sự lựa chọn tốt; 
+chúng được đặt trong một tệp có tên là package-info.java trong một thư mục gói cụ thể. Bạn có thể thấy ví dụ về các khai 
+báo truy vấn có tên toàn cục trong đoạn mã sau.
+
+PATH: /model/src/main/java/org/jpwh/model/querying/package-info.java
+
+@org.hibernate.annotations.NamedQueries({
+    @org.hibernate.annotations.NamedQuery(
+        name = "findItemsOrderByName",
+        query = "select i from Item i order by i.name asc"
+    )
+    ,
+    @org.hibernate.annotations.NamedQuery(
+        // Tìm Mặt Hàng Mua Ngay Giá lớn hơn
+        name = "findItemBuyNowPriceGreaterThan",
+        query = "select i from Item i where i.buyNowPrice > :price",
+        timeout = 60,
+        comment = "Custom SQL comment"
+    )
+})
+
+Nếu bạn chưa từng sử dụng các chú thích cấp gói trước đây, cú pháp của tệp này với các khai báo gói và
+import ở cuối tệp có lẽ mới đối với bạn. Có một lý do mà ví dụ mã trước đó chỉ bao gồm các chú thích từ
+gói Hibernate và không có chú thích Java Persistence. Chúng tôi đã bỏ qua chú thích chuẩn JPA
+@org.javax.persistence.NamedQuery và sử dụng tùy chọn Hibernate. Các chú thích JPA không có khả năng
+áp dụng cho gói - chúng tôi không biết tại sao. Trên thực tế, JPA không cho phép chú thích trong tệp
+package-info.java. Các chú thích Hibernate nguyên bản cung cấp cùng, và đôi khi thậm chí nhiều hơn,
+chức năng, vì vậy điều này không nên là một vấn đề quá lớn. Nếu bạn không muốn sử dụng các chú thích
+Hibernate, bạn sẽ phải đặt các chú thích JPA ở đầu của bất kỳ lớp nào
+(bạn có thể có một lớp MyNamedQueries trống trơn như một phần của mô hình miền dữ liệu của bạn) hoặc sử
+dụng một tệp XML, như bạn sẽ thấy sau trong phần này.
+Chú thích sẽ là công cụ chính của chúng tôi trong toàn bộ cuốn sách này để xác định siêu dữ liệu ORM,
+và có nhiều điều để học về chủ đề này. Trước khi chúng ta xem xét một số kiểu ánh xạ thay thế với tệp XML,
+hãy sử dụng một số chú thích đơn giản để cải thiện các lớp mô hình miền dữ liệu với các quy tắc xác minh.
 
