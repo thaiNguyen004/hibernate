@@ -194,20 +194,209 @@ Kiểm tra một instance Item cho các ràng buộc vi phạm (violations)
 PATH: /examples/src/test/java/org/jpwh/test/simple/ModelOperations.java
 
 
-ValidatorFactory factory = Validation.buildDefaultValidatorFactory(); Validator validator = factory.getValidator();
-    Item item = new Item();
+ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+Validator validator = factory.getValidator();
+Item item = new Item();
 item.setName("Some Item");
 item.setAuctionEnd(new Date());
-One validation error: auction end date not in the future!
 Set<ConstraintViolation<Item>> violations = validator.validate(item);
+// So sánh kết quả với giá trị kỳ vọng là 1
 assertEquals(1, violations.size());
-ConstraintViolation<Item> violation = violations.iterator().next(); String failedPropertyName =
-        violation.getPropertyPath().iterator().next().getName();
+ConstraintViolation<Item> violation = violations.iterator().next();
+String failedPropertyName =
+ violation.getPropertyPath().iterator().next().getName();
 assertEquals(failedPropertyName, "auctionEnd");
 if (Locale.getDefault().getLanguage().equals("en"))
-    assertEquals(violation.getMessage(), "must be in the future");
+ assertEquals(violation.getMessage(), "must be in the future");
 
 
+Chúng tôi sẽ không giải thích mã này chi tiết nhưng đưa nó ra để bạn khám phá. Bạn hiếm khi viết mã kiểm tra kiểu này; 
+hầu hết thời gian, khía cạnh này được xử lý tự động bởi giao diện người dùng và persistence framework của bạn. Do đó, 
+quan trọng để tìm tích hợp Bean Validation khi chọn một framework giao diện người dùng. Ví dụ, phiên bản 2 trở lên của 
+JSF tự động tích hợp với Bean Validation.
+
+Hibernate, như yêu cầu từ bất kỳ nhà cung cấp JPA nào, cũng tự động tích hợp với Hibernate Validator nếu thư viện này 
+có sẵn trên classpath và cung cấp các tính năng sau đây:
+- Bạn không cần phải kiểm tra thủ công các entity trước khi truyền chúng cho Hibernate để lưu trữ.
+- Hibernate nhận biết các ràng buộc trên các lớp persistence domain model và kích hoạt kiểm tra trước khi thực hiện 
+thao tác chèn hoặc cập nhật vào cơ sở dữ liệu. Khi kiểm tra thất bại, Hibernate sẽ ném ra một (Ngoại lệ ràng buộc vi phạm) 
+ConstraintViolationException, chứa thông tin về việc error validate, đến mã gọi các thao tác quản lý sự tồn tại.
+- Công cụ Hibernate để tự động tạo schema (lược đồ) SQL hiểu được nhiều ràng buộc và tạo ra các ràng buộc tương đương 
+SQL DDL cho bạn. Ví dụ, một chú thích @NotNull dịch thành một ràng buộc SQL NOT NULL, và một quy tắc @Size(n) xác định 
+số ký tự trong một cột được định kiểu VARCHAR(n). Bạn có thể kiểm soát hành vi này của Hibernate với phần tử <validation-mode> 
+trong tệp cấu hình persistence.xml của bạn. Chế độ mặc định là AUTO, vì vậy Hibernate chỉ kiểm tra nếu nó tìm thấy một nhà 
+cung cấp Bean Validation (như Hibernate Validator) trên classpath của ứng dụng đang chạy. Với chế độ CALLBACK, kiểm tra sẽ 
+luôn xảy ra và bạn sẽ nhận được lỗi triển khai nếu bạn quên đóng gói một nhà cung cấp Bean Validation. Chế độ NONE tắt 
+kiểm tra tự động bởi nhà cung cấp JPA.
+
+Bạn sẽ lại thấy các annotation Bean Validation sau này trong cuốn sách này; bạn cũng sẽ tìm thấy chúng trong bộ mã ví dụ. 
+Tại điểm này, chúng tôi có thể viết nhiều hơn về Hibernate Validator, nhưng chúng tôi chỉ sẽ lặp lại những gì đã có trong 
+hướng dẫn tham khảo tuyệt vời của dự án. Hãy xem và tìm hiểu thêm về các tính năng như validation group và API metadata 
+để khám phá các ràng buộc. Tiêu chuẩn Java Persistence và Bean Validation chấp nhận annotation một cách mạnh mẽ. 
+Các nhóm chuyên gia đã nhận thức được lợi ích của tệp mô tả triển khai XML trong một số tình huống, đặc biệt là đối với 
+configuration metadata thay đổi với mỗi triển khai (each deployment).
+
+3.3.3 Externalizing metadata with XML file
+
+Bạn có thể thay thế hoặc ghi đè lên mọi annotation trong JPA bằng một phần tử mô tả XML. 
+Nói cách khác, bạn không cần phải sử dụng các annotation nếu bạn không muốn hoặc nếu việc giữ siêu dữ liệu ánh xạ riêng biệt 
+khỏi mã nguồn có lợi cho thiết kế hệ thống của bạn vì bất kỳ lý do gì.
+
+XML metadata with JPA
+Dưới đây là một ví dụ về một phần tử mô tả XML JPA cho một persistence unit cụ thể.
+
+<entity-mappings
+     version="2.1"
+     xmlns="http://xmlns.jcp.org/xml/ns/persistence/orm"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence/orm
+         http://xmlns.jcp.org/xml/ns/persistence/orm_2_1.xsd">
+
+    // First, statement below is global metadata
+    <persistence-unit-metadata>
+        // Below, Ignore (bỏ qua) all annotations and all mapping metadata in XML file
+        <xml-mapping-metadata-complete>
+
+        // Some default settings
+        <persistence-unit-default>
+            /*
+                Chiến lược thoát (escape) tất cả các column, table, và tất cả các tên khác
+                ví dụ nếu SQL của bạn cso tên là từ khóa USER thì phải sử dụng chiến lược escape để
+                làm cho SQL không bị nhầm lẫn với từ USER từ hệ thống.
+            */
+            <delimited-identifier/>
+        </persistence-unit-default>
+
+    </persistence-unit-metadata>
+
+    <entity class="org.jpwh.model.simple.Item" access="FIELD">
+         <attributes>
+             <id name="id">
+                 <generated-value strategy="AUTO"/>
+             </id>
+             <basic name="name"/>
+             <basic name="auctionEnd">
+                 <temporal>TIMESTAMP</temporal>
+             </basic>
+         </attributes>
+     </entity>
+</entity-mappings>
+
+
+Nhà cung cấp JPA tự động nhận dạng mô tả này nếu bạn đặt nó trong một tệp META-INF/orm.xml trên classpath 
+của persistence unit. Nếu bạn muốn sử dụng tên khác hoặc nhiều tệp, bạn sẽ phải thay đổi cấu hình của persistence unit 
+trong tệp META-INF/persistence.xml của bạn:
+
+<persistence-unit name="SimpleXMLCompletePU">
+    ...
+    <mapping-file>simple/Mappings.xml</mapping-file>
+    <mapping-file>simple/Queries.xml</mapping-file>
+    ...
+</persistence-unit>
+
+Nếu bạn bao gồm phần tử <xml-mapping-metadata-complete>, nhà cung cấp JPA sẽ bỏ qua tất cả các chú thích trên 
+các lớp domain model của bạn trong persistence unit này và chỉ dựa vào các ánh xạ được định nghĩa trong mô tả XML. 
+Bạn có thể (một cách dư thừa trong trường hợp này) kích hoạt tính năng này trên cấp độ thực thể bằng cách sử dụng 
+<metadata-complete="true"/>. Nếu được kích hoạt, nhà cung cấp JPA sẽ cho rằng bạn đã ánh xạ tất cả các thuộc tính 
+của thực thể trong XML và rằng nó nên bỏ qua tất cả các annotation cho thực thể cụ thể này.
+
+Thay vào đó, nếu bạn không muốn bỏ qua mà muốn override lên các annotation metadata, bạn không nên đánh dấu các 
+mô tả XML như "complete" và đặt tên lớp và thuộc tính cần ghi đè:
+
+<entity class="org.jpwh.model.simple.Item">
+     <attributes>
+         <basic name="name">
+            <!-- Override annotations here --> 
+            <column name="ITEM_NAME"/>
+         </basic>
+     </attributes>
+</entity>
+
+
+Ở đây, bạn ánh xạ thuộc tính `name` vào cột `ITEM_NAME`; mặc định, thuộc tính này sẽ ánh xạ vào cột `NAME`. 
+Hibernate bây giờ sẽ bỏ qua bất kỳ chú thích hiện có nào từ các gói javax.persistence.annotation và org.hibernate.annotations 
+trên thuộc tính `name` của lớp Item. Tuy nhiên, Hibernate không bỏ qua các chú thích Bean Validation và vẫn áp dụng 
+chúng để kiểm tra tự động và tạo lược đồ!
+Tất cả các chú thích khác trên lớp Item cũng được nhận dạng. Lưu ý rằng bạn không chỉ định một chiến lược truy cập 
+trong ánh xạ này, vì vậy truy cập trường hoặc phương thức truy cập được sử dụng, tùy thuộc vào vị trí của chú thích @Id trong Item. 
+(Chúng tôi sẽ quay lại chi tiết này trong chương tiếp theo.)
+Chúng tôi sẽ không nói nhiều về các mô tả XML JPA trong cuốn sách này. Cú pháp của các tài liệu này là một bản phản chiếu 1:1 
+của cú pháp chú thích JPA, vì vậy bạn không nên gặp bất kỳ vấn đề nào khi viết chúng. Chúng tôi sẽ tập trung vào khía cạnh quan trọng: 
+các mapping strategies (chiến lược ánh xạ). 
+Cú pháp được sử dụng để ghi lại siêu dữ liệu là phụ.
+Rất tiếc, giống như nhiều lược đồ khác trong thế giới Java EE, tệp orm_2_0.xsd của JPA không cho phép các phần tử và thuộc tính 
+từ một không gian tên khác trong các tài liệu ánh xạ XML JPA. Do đó, việc sử dụng các tiện ích mở rộng của nhà cung cấp và các tính 
+năng native của Hibernate đòi hỏi phải quay lại cú pháp XML khác.
+
+Để sử dụng các tính năng mở rộng hoặc tính năng riêng của Hibernate, bạn cần sử dụng một cú pháp XML khác, không phải là cú pháp 
+chuẩn JPA. Điều này đặc biệt quan trọng khi bạn cần sử dụng các tính năng đặc biệt của Hibernate mà không thể được thực hiện bằng 
+cú pháp JPA tiêu chuẩn.
+
+HIBERNATE XML MAPPING FILES
+
+Trước khi JDK 5 giới thiệu chú thích (annotations), định dạng tệp ánh xạ XML nguyên bản của Hibernate đã tồn tại. 
+Theo quy ước, bạn đặt tên cho các tệp này với hậu tố .hbm.xml. Dưới đây là một ví dụ về một tài liệu ánh xạ 
+Hibernate XML cơ bản:
+
+<?xml version="1.0"?>
+<hibernate-mapping
+     xmlns="http://www.hibernate.org/xsd/orm/hbm"
+     package="org.jpwh.model.simple"
+     default-access="field">  // Declare metadata [1]
+
+    <class name="Item"> // Entity class mapping
+         <id name="id">
+             <generator class="native"/>
+         </id>
+         <property name="name"/>
+         <property name="auctionEnd" type="timestamp"/>
+    </class>
+
+    <query name="findItemsHibernate">select i from Item i</query> // Externalized queries
+
+    <database-object> // Lược đồ phụ trợ DDL
+         <create>create index ITEM_NAME_IDX on ITEM(NAME)</create>
+         <drop>drop index if exists ITEM_NAME_IDX</drop>
+    </database-object>
+</hibernate-mapping>
+
+[1]. Các tài liệu XML Hibernate được sử dụng để định nghĩa mapping metadata cho các đối tượng Java trong ứng dụng của bạn. 
+Dưới đây là một số điểm quan trọng về việc sử dụng tài liệu XML Hibernate:
+
+- Metadata được khai báo trong một phần tử gốc `<hibernate-mapping>`. Các thuộc tính như package và default-access áp dụng 
+cho tất cả các mapping trong tệp này. Bạn có thể bao gồm nhiều ánh xạ lớp thực thể như bạn muốn.
+
+- Tài liệu XML này khai báo một không gian tên XML mặc định cho tất cả các phần tử; đây là một tùy chọn mới trong Hibernate 5. 
+Nếu bạn có các tệp ánh xạ hiện có cho Hibernate 4 hoặc phiên bản cũ hơn với khai báo loại tài liệu XML, bạn có thể tiếp tục sử dụng chúng.
+
+- Mặc dù bạn có thể khai báo ánh xạ cho nhiều lớp trong cùng một tệp ánh xạ bằng cách sử dụng nhiều phần tử `<class>`, nhiều dự án 
+Hibernate cũ hơn tổ chức với một tệp ánh xạ cho mỗi lớp thực thể. Quy ước là đặt tên tệp giống với tên và gói của lớp được ánh xạ, 
+ví dụ: my/model/Item.hbm.xml cho lớp my.model.Item.
+
+- Một ánh xạ class trong tài liệu XML Hibernate là một ánh xạ "đầy đủ"; nghĩa là bất kỳ siêu dữ liệu ánh xạ khác nào cho lớp đó, 
+có sử dụng chú thích hoặc tài liệu XML JPA, sẽ gây ra lỗi "ánh xạ trùng lặp" khi khởi động ứng dụng. Nếu bạn ánh xạ một lớp trong 
+tài liệu XML Hibernate, khai báo này phải bao gồm tất cả chi tiết ánh xạ. Bạn không thể ghi đè lên từng thuộc tính cá nhân hoặc 
+mở rộng ánh xạ hiện có. Ngoài ra, bạn phải liệt kê và ánh xạ tất cả các thuộc tính cố định của lớp thực thể trong tài liệu XML Hibernate. 
+Nếu bạn không ánh xạ một thuộc tính, Hibernate coi nó là trạng thái transient. Điều này khác biệt so với ánh xạ JPA, trong đó chỉ cần 
+chú thích @Entity là tất cả các thuộc tính của một lớp trở nên cố định.
+
+- Tài liệu XML gốc của Hibernate không còn là sự lựa chọn chính cho việc khai báo hầu hết metadata ORM của một dự án. 
+Đa số kỹ sư hiện nay ưa thích chú thích (annotations). Tài liệu XML gốc chủ yếu được sử dụng để truy cập các tính năng đặc biệt của 
+Hibernate mà không có sẵn dưới dạng chú thích hoặc để dễ dàng duy trì trong các tệp XML (ví dụ, vì nó là siêu dữ liệu cấu hình phụ thuộc 
+vào triển khai). Bạn không bắt buộc phải có bất kỳ phần tử `<class>` nào trong tệp ánh xạ XML Hibernate. Do đó, tất cả siêu dữ liệu 
+trong các tệp này có thể là toàn cục cho persistence unit, chẳng hạn như chuỗi truy vấn (bao gồm cả SQL native), định nghĩa kiểu tùy chỉnh, 
+SQL DDL phụ cho các sản phẩm DBMS cụ thể, bộ lọc ngữ cảnh cố định động, và nhiều tính năng khác.
+
+Khi chúng tôi thảo luận về các tính năng cao cấp và native của Hibernate sau này, chúng tôi sẽ hướng dẫn bạn cách khai báo chúng 
+trong các tệp XML Hibernate. Như đã đề cập trước đó, trọng tâm của bạn nên là hiểu bản chất của mapping strategy, và hầu hết các ví dụ 
+của chúng tôi sẽ sử dụng annotation JPA và Hibernate để diễn đạt các chiến lược này.
+
+
+Các phương pháp chúng tôi đã mô tả cho đến nay giả định rằng tất cả ORM metadata được biết đến vào thời gian phát triển (hoặc triển khai). 
+Giả sử rằng một số thông tin không được biết đến trước khi ứng dụng bắt đầu. 
+
+Liệu bạn có thể can thiệp vào mapping metadata một cách tự động trong runtime ứng dụng không? 
+Chúng tôi cũng đã đề cập đến JPA metadata API để truy cập các chi tiết persistence-unit. Nó hoạt động như thế nào và khi nào nó hữu ích?
 
 
 
