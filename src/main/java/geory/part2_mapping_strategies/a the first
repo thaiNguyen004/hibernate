@@ -1,19 +1,18 @@
-Phần này là về ORM thực tế, từ class và property đến table và column.
-• Chương 4 bắt đầu với việc (mapping) ánh xạ class và property thông thường và giải thích cách bạn có thể ánh xạ các
-domain model (mô hình miền) Java chi tiết.
+Phần này tập trung vào ORM thực tế, từ các lớp và thuộc tính đến các bảng và cột. 
+Chương 4 bắt đầu với việc ánh xạ class và property thông thường và giải thích cách bạn có thể ánh xạ các domain model Java chi tiết. 
+Chương 5, bạn sẽ thấy cách ánh xạ các property cơ bản và các thành phần embed (nhúng), cũng như cách kiểm soát việc 
+ánh xạ giữa các loại Java và SQL. 
+Chương 6, bạn sẽ ánh xạ các thừa kế của các thực thể lên cơ sở dữ liệu bằng bốn chiến lược cơ bản về ánh xạ thừa kế; bạn cũng sẽ 
+ánh xạ các mối quan hệ polymorphic (đa hình). 
+Chương 7 tập trung vào việc ánh xạ các collections và entity association (mối quan hệ thực thể): bạn sẽ ánh xạ các collection có tính 
+persistence, collection các loại cơ bản và có thể nhúng, cũng như các mối quan hệ many-to-one đơn giản và one-to-many. 
 
-• Tiếp theo, trong chương 5, bạn sẽ thấy cách ánh xạ các thuộc tính cơ bản và các thành phần có thể nhúng, cũng như cách
-kiểm soát ánh xạ giữa Java và các kiểu SQL. Trong chương 6, bạn sẽ ánh xạ các hệ thống phân cấp kế thừa của thực thể
-vào cơ sở dữ liệu bằng cách sử dụng bốn chiến lược ánh xạ kế thừa cơ bản; bạn cũng sẽ ánh xạ các hiệp hội đa hình.
-Chương 7 là tất cả về ánh xạ các collections và associations entity: bạn ánh xạ các persistence collections ,
-các collections của các kiểu cơ bản và có thể nhúng, và các (associations) hiệp hội thực thể many-one và one-many đơn giản.
-Chương 8 đi sâu hơn với các ánh xạ association nâng cao như ánh xạ các association entity one-one, các tùy chọn ánh xạ
-one-many và các mối quan hệ thực thể many-many và mối quan hệ thực thể tenary.
-Cuối cùng, bạn sẽ thấy chương 9 thú vị nhất nếu bạn cần giới thiệu Hibernate trong một ứng dụng hiện có, hoặc nếu bạn
-phải làm việc với các lược đồ cơ sở dữ liệu kế thừa và SQL viết tay. Chúng ta cũng sẽ nói về DDL SQL tùy chỉnh để tạo
-lược đồ trong chương này.
+Chương 8 đào sâu hơn với việc ánh xạ các entity association (các mô hình quan hệ thực thể) nâng cao như ánh xạ one-to-one, 
+các tùy chọn ánh xạ one-to-many và các mối quan hệ thực thể many-many và ternary relationship (mối quan hệ bậc ba) . 
 
-Sau khi đọc phần này của cuốn sách, bạn sẽ sẵn sàng tạo ngay cả các ánh xạ phức tạp nhất một cách nhanh chóng và với chiến
-lược phù hợp. Bạn sẽ hiểu cách giải quyết vấn đề ánh xạ kế thừa và cách ánh xạ các collections và các associations.
-Bạn cũng sẽ có thể điều chỉnh và tùy chỉnh Hibernate để tích hợp với bất kỳ lược đồ cơ sở dữ liệu hoặc ứng dụng hiện có nào.
+Cuối cùng, bạn sẽ thấy chương 9 thú vị nhất nếu bạn cần giới thiệu Hibernate vào một ứng dụng hiện có, hoặc nếu bạn phải làm việc 
+với các lược đồ cơ sở dữ liệu kế thừa và SQL được viết bằng tay. Chúng ta cũng sẽ thảo luận về tạo lược đồ SQL DDL tùy chỉnh để sinh 
+ra lược đồ trong chương này. Sau khi đọc phần này của cuốn sách, bạn sẽ sẵn sàng tạo ra các ánh xạ phức tạp ngay lập tức và với 
+chiến lược đúng đắn. Bạn sẽ hiểu cách giải quyết vấn đề ánh xạ thừa kế và cách ánh xạ các bộ sưu tập và mối quan hệ. 
+Bạn cũng có khả năng điều chỉnh và tùy chỉnh Hibernate để tích hợp với bất kỳ lược đồ cơ sở dữ liệu hoặc ứng dụng hiện có nào.
 
