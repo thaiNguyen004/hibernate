@@ -1,0 +1,48 @@
+In this chapter
+→ Mapping basic properties
+→ Mapping embeddable components
+→ Controlling mapping between Java and SQL types
+
+
+Sau khi dành hầu hết chương trước để tập trung vào các thực thể (entities) và các mapping option lớp và identity
+tương ứng, chúng ta bây giờ chuyển tập trung vào các giá trị (value types) trong các dạng khác nhau của chúng.
+Chúng tôi chia value type thành hai loại: value-type basic đi kèm với JDK như String, Date, các kiểu dữ liệu
+nguyên thủy và các lớp bọc tương ứng; và các value-type class do người phát triển định nghĩa, chẳng hạn như
+Address và MonetaryAmount trong CaveatEmptor.
+
+Trong chương này,
+→ trước tiên chúng ta ánh xạ các persistent properties bằng các kiểu dữ liệu JDK và tìm
+hiểu về các annotation ánh xạ cơ bản.
+Bạn sẽ thấy cách làm việc với các khía cạnh khác nhau của các thuộc tính:
+ghi đè các giá trị mặc định, tùy chỉnh cách truy cập và giá trị được tạo ra. Bạn cũng sẽ thấy cách SQL
+được sử dụng với các thuộc tính tạo ra (derived properties) và giá trị cột được biến đổi.
+Chúng tôi kết thúc phần về các thuộc tính cơ bản bằng các thuộc tính thời gian (temporal properties) và
+ánh xạ các liệt kê (enumerations).
+
+- Thuộc tính "derived properties" (còn được gọi là computed properties hoặc calculated properties) là các thuộc tính
+trong một đối tượng (entity) không được lưu trữ trực tiếp trong cơ sở dữ liệu, mà thay vào đó được tính toán hoặc
+xuất phát từ các thuộc tính khác trong đối tượng.
+
+→ Sau đó, chúng tôi thảo luận về các value-type do người dùng định nghĩa
+và ánh xạ chúng dưới dạng các thành phần nhúng được nhúng vào (embeddable components). Bạn sẽ tìm hiểu cách
+các lớp liên quan đến cơ sở dữ liệu và làm cho các lớp của bạn có thể nhúng, đồng thời cho phép ghi đè các
+thuộc tính đã được nhúng. Chúng tôi hoàn thành các thành phần nhúng bằng cách ánh xạ các thành phần lồng nhau
+(nested components). Cuối cùng, chúng tôi thảo luận về cách tùy chỉnh việc tải và lưu trữ các giá trị thuộc
+tính ở một cấp độ thấp hơn với các bộ chuyển đổi JPA linh hoạt, một điểm mở rộng đã được tiêu chuẩn hóa của
+mọi nhà cung cấp JPA.
+
+Các tính năng mới quan trọng trong JPA 2 bao gồm:
+
+1. Khả năng chuyển đổi truy cập: Có khả năng chuyển đổi cách truy cập vào các thuộc tính thông qua trường 
+(field) hoặc các phương thức getter/setter của thuộc tính cho một cấu trúc thừa kế (entity hierarchy), 
+hoặc từng thuộc tính riêng lẻ, bằng cách sử dụng annotation `@Access`. 
+
+2. Tạo embeddable component (thành phần nhúng) lồng vào nhiều cấp độ: Bạn có thể tạo thành phần nhúng lồng vào
+nhiều cấp độ khác nhau, và bạn cũng có khả năng áp dụng annotation `@AttributeOverride` cho các thuộc tính nhúng
+được nhúng vào với cú pháp dấu chấm (dot notation).
+
+3. Thêm Converter API cho các thuộc tính có kiểu dữ liệu cơ bản: JPA 2 giới thiệu API Converter cho các thuộc
+tính có kiểu dữ liệu cơ bản (basic-typed attributes). Điều này cho phép bạn kiểm soát cách giá trị được load
+và store và biến đổi chúng nếu cần thiết. Điều này có nghĩa là bạn có khả năng tùy chỉnh cách dữ liệu được
+xử lý khi nó được đọc từ hoặc lưu vào cơ sở dữ liệu, và bạn cũng có khả năng biến đổi dữ liệu nếu cần thiết.
+

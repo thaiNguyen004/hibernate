@@ -2,14 +2,15 @@ Bây giờ, bạn đã ánh xạ một lớp cố định với @Entity, sử d�
 chẳng hạn như tên bảng SQL được ánh xạ. Phần tiếp theo sẽ khám phá một số tùy chọn cấp lớp và cách bạn kiểm soát chúng:
 - Các tùy chọn và chiến lược mặc định cho việc đặt tên.
 - Tạo SQL động.
-- Khả năng thay đổi thực thể.
+- Khả năng thay đổi entity.
 
 Đây là các tùy chọn; bạn có thể bỏ qua phần này và quay lại sau khi bạn phải xử lý một vấn đề cụ thể.
-4.3.1 Kiểm soát tên
-Đầu tiên, hãy nói về cách đặt tên cho các lớp thực thể và bảng cơ sở dữ liệu. Nếu bạn chỉ định @Entity trên lớp có
-persistence-capable (khả năng duy trì), tên bảng được ánh xạ theo mặc định sẽ giống với tên của lớp.
+
+[4.3.1] Kiểm soát tên
+Đầu tiên, hãy nói về cách đặt tên cho các lớp entity và bảng cơ sở dữ liệu. Nếu bạn chỉ định @Entity trên
+persistence-capable class (khả năng duy trì), tên bảng được ánh xạ theo mặc định sẽ giống với tên của lớp.
 Lưu ý rằng chúng tôi viết tên đối tượng SQL bằng CHỮ IN HOA để dễ phân biệt chúng - SQL thực sự không phân biệt
-chữ hoa chữ thường. Vì vậy, lớp thực thể Java Item ánh xạ thành bảng ITEM. Bạn có thể ghi đè tên bảng bằng chú thích
+chữ hoa chữ thường. Vì vậy, lớp entity Java Item ánh xạ thành bảng ITEM. Bạn có thể ghi đè tên bảng bằng chú thích
 JPA @Table, như được thể hiện bên dưới.
 
 PATH: /model/src/main/java/org/jpwh/model/simple/User.java
@@ -19,20 +20,20 @@ PATH: /model/src/main/java/org/jpwh/model/simple/User.java
 public class User implements Serializable {
     // ...
 }
-Thực thể User sẽ ánh xạ thành bảng USER; đây là một từ khóa dự trữ trong hầu hết các hệ quản trị cơ sở dữ liệu SQL.
+entity User sẽ ánh xạ thành bảng USER; đây là một từ khóa reserved(dự trữ) trong hầu hết các hệ quản trị cơ sở dữ liệu SQL.
 Bạn không thể có một bảng với tên đó, vì vậy bạn sẽ ánh xạ nó thành USERS thay vì. Chú thích @javax.persistence.Table
-cũng có các tùy chọn catalog và schema, nếu cấu trúc cơ sở dữ liệu của bạn yêu cầu chúng như tiền tố tên.
+cũng có các tùy chọn `catalog` và `schema`, nếu cấu trúc cơ sở dữ liệu của bạn yêu cầu chúng như tiền tố tên.
 
-Nếu thực sự cần thiết, việc đặt tên cho phép bạn sử dụng tên SQL dự trữ và thậm chí làm việc với các tên phân
+Nếu thực sự cần thiết, việc đặt tên cho phép bạn sử dụng tên reserved SQL (dự trữ) và thậm chí làm việc với các tên phân
 biệt chữ hoa chữ thường.
-
 
 TRÍCH DẪN CÁC ĐỊNH DANH SQL
 
-Thỉnh thoảng, đặc biệt là trong cơ sở dữ liệu cổ điển, bạn sẽ gặp các định danh chứa các ký tự kỳ lạ hoặc khoảng trắng,
+Thỉnh thoảng, đặc biệt là trong cơ sở dữ liệu cổ điển, bạn sẽ gặp các ID chứa các ký tự kỳ lạ hoặc khoảng trắng,
 hoặc muốn bắt buộc sự nhạy cảm với việc phân biệt chữ hoa chữ thường. Hoặc, như trong ví dụ trước, việc ánh xạ tự động
-của một lớp hoặc thuộc tính có thể đòi hỏi một tên bảng hoặc cột là một từ khóa được dự trữ.
-Hibernate 5 biết các từ khóa dự trữ của hệ quản trị cơ sở dữ liệu của bạn thông qua các cấu hình cơ sở dữ liệu đã được định.
+của một class hoặc thuộc tính có thể đòi hỏi một tên bảng hoặc cột là một từ khóa reserved.
+
+Hibernate 5 biết các reserved keyword của hệ quản trị cơ sở dữ liệu của bạn thông qua các cấu hình cơ sở dữ liệu đã được định.
 Hibernate 5 có thể tự động đặt trích dẫn xung quanh các chuỗi như vậy khi tạo SQL. Bạn có thể kích hoạt việc trích dẫn
 tự động này bằng cách đặt hibernate.auto_quote_keyword=true trong cấu hình persistence unit của bạn. Nếu bạn đang sử dụng
 một phiên bản cũ hơn của Hibernate, hoặc bạn thấy rằng thông tin về ngôn ngữ của bạn không đầy đủ, bạn vẫn phải áp dụng
@@ -51,11 +52,11 @@ cho định danh trong SQL được tạo ra. Điều này vẫn hoạt động 
 Cả hai cách đều hoạt động tốt với Hibernate. Nó biết ký tự trích dẫn native của ngôn ngữ của bạn và bây giờ tạo SQL tương ứng:
 [USER] cho MS SQL Server, 'USER' cho MySQL, "USER" cho H2, và còn nhiều loại khác.
 
-Nếu bạn phải trích dẫn tất cả các định danh SQL, hãy tạo tệp orm.xml và thêm thiết lập <delimited-identifiers/>
+Nếu bạn phải trích dẫn tất cả các ID SQL, hãy tạo tệp orm.xml và thêm thiết lập <delimited-identifiers/>
 vào phần <persistence-unit-defaults> của nó, như được hiển thị trong danh sách 3.8. Sau đó, Hibernate sẽ bắt buộc sử dụng
-định danh được trích dẫn ở mọi nơi.
+ID được trích dẫn ở mọi nơi.
 
-Bạn nên xem xét việc đổi tên các bảng hoặc cột có tên từ khóa đã được dự trữ khi có thể. Truy vấn SQL tùy ý khó viết
+Bạn nên xem xét việc đổi tên các bảng hoặc cột có tên từ khóa là reserved keyword khi có thể. Truy vấn SQL tùy ý khó viết
 trong một cửa sổ SQL nếu bạn phải trích dẫn và thoát mọi thứ một cách đúng cách bằng tay.
 
 Tiếp theo, bạn sẽ thấy cách Hibernate có thể giúp đỡ khi bạn gặp tổ chức có quy tắc nghiêm ngặt cho tên bảng và cột
@@ -64,7 +65,7 @@ cơ sở dữ liệu.
 
 [Hibernate feature]
 Hibernate cung cấp một tính năng cho phép bạn tự động áp dụng các tiêu chuẩn đặt tên. Giả sử tất cả các tên bảng trong
-CaveatEmptor nên tuân theo mẫu CE_<tên bảng>. Một giải pháp là chỉ định chú thích @Table trên tất cả các lớp thực thể
+CaveatEmptor nên tuân theo mẫu CE_<tên bảng>. Một giải pháp là chỉ định chú thích @Table trên tất cả các lớp entity
 một cách thủ công. Cách tiếp cận này tốn thời gian và dễ bị quên. Thay vào đó, bạn có thể triển khai giao diện
 PhysicalNamingStrategy của Hibernate hoặc ghi đè lên một phiên bản hiện tại, như trong ví dụ dưới đây.
 
@@ -93,15 +94,15 @@ Bạn phải kích hoạt việc triển khai chiến lược đặt tên trong 
 
 
 Tùy chọn thứ hai cho việc tùy chỉnh tên là ImplicitNamingStrategy. Trong khi chiến lược đặt tên vật lý hoạt động ở mức thấp nhất,
-khi tên các đối tượng lược đồ cuối cùng được tạo ra, chiến lược đặt tên ngầm định được gọi trước. Nếu bạn ánh xạ một lớp thực thể
+khi tên các đối tượng lược đồ cuối cùng được tạo ra, chiến lược đặt tên ngầm định được gọi trước. Nếu bạn ánh xạ một lớp entity
 và không có chú thích @Table với tên rõ ràng, triển khai chiến lược đặt tên ngầm định sẽ được hỏi tên bảng nên là gì.
-Điều này dựa trên các yếu tố như tên thực thể và tên lớp. Hibernate đi kèm với nhiều chiến lược để triển khai các tên
+Điều này dựa trên các yếu tố như tên entity và tên lớp. Hibernate đi kèm với nhiều chiến lược để triển khai các tên
 mặc định tuân theo tiêu chuẩn JPA hoặc tương thích với phiên bản trước.
 Chiến lược mặc định là ImplicitNamingStrategyJpaCompliantImpl.
 
-Hãy cùng nhìn vào một vấn đề liên quan khác nhanh chóng, đó là việc đặt tên cho các thực thể trong các truy vấn.
+Hãy cùng nhìn vào một vấn đề liên quan khác nhanh chóng, đó là việc đặt tên cho các entity trong các truy vấn.
 
-Mặc định, tất cả các tên thực thể sẽ được tự động nhập vào không gian tên của bộ máy truy vấn. Nói cách khác, bạn có
+Mặc định, tất cả các tên entity sẽ được tự động nhập vào không gian tên của bộ máy truy vấn. Nói cách khác, bạn có
 thể sử dụng tên lớp ngắn gọn mà không có tiền tố gói trong các chuỗi truy vấn JPA, điều này rất tiện lợi:
 List<Item> result = em.createQuery("select i from Item i", Item.class)
                    .getResultList();
@@ -120,10 +121,9 @@ quyết xung đột đặt tên với một lớp Item khác trong gói khác. T
 Hibernate tạo ra SQL chứa những tên này.
 
 
-
 [Hibernate Feature]
 4.3.2 Tạo SQL động
-Mặc định, Hibernate tạo các câu lệnh SQL cho mỗi lớp persistence khi đơn vị persistence được tạo ra, vào lúc khởi động.
+Mặc định, Hibernate tạo các câu lệnh SQL cho mỗi lớp persistence khi persistence unit được tạo ra, vào lúc khởi động.
 Những câu lệnh này đơn giản là các hoạt động create, read, update và delete (CRUD) để đọc một hàng đơn, xóa một hàng và vân vân.
 Điều này tiết kiệm chi phí bằng cách lưu trữ chúng trong bộ nhớ từ đầu, thay vì tạo ra chuỗi SQL mỗi khi một truy vấn
 đơn giản như vậy phải được thực thi tại thời gian chạy. Ngoài ra, việc lưu trữ câu lệnh đã chuẩn bị tại cấp JDBC
@@ -156,12 +156,12 @@ chứ không phải từ đầu. Câu lệnh UPDATE sẽ chỉ chứa các cột
 chỉ chứa các cột không thể trống (non-nullable).
 
 Chúng tôi sẽ trở lại để thảo luận thêm về việc tạo ra SQL và tùy chỉnh SQL trong chương 17. Đôi khi, bạn có thể hoàn
-toàn tránh việc tạo ra một câu lệnh UPDATE nếu thực thể của bạn là không thay đổi (immutable).
+toàn tránh việc tạo ra một câu lệnh UPDATE nếu entity của bạn là không thay đổi (immutable).
 
 
 [Hibernate Feature]
-4.3.3 Tạo một thực thể không thay đổi (immutable)
-Các thể hiện của một lớp cụ thể có thể là không thay đổi. Ví dụ, trong CaveatEmptor, một Lượt đặt chỗ cho một mặt hàng
+4.3.3 Tạo một entity không thay đổi (immutable)
+Các thể hiện của một lớp cụ thể có thể là không thay đổi. Ví dụ, trong CaveatEmptor, một Bid cho một Item
 là không thay đổi. Do đó, Hibernate không bao giờ cần thực hiện các câu lệnh UPDATE trên bảng BID. Hibernate cũng có
 thể thực hiện một số tối ưu hóa khác, chẳng hạn như tránh kiểm tra dirty (sự thay đổi), nếu bạn ánh xạ một lớp không
 thay đổi như được thể hiện trong ví dụ tiếp theo. Ở đây, lớp Bid là không thay đổi và các thể hiện không bao giờ được sửa đổi:
@@ -179,16 +179,16 @@ một trường, Hibernate sẽ truy cập trực tiếp các trường và bạ
 ý muốn của bạn. Hãy nhớ rằng không phải tất cả các framework đều làm việc với POJO mà không có phương thức setter;
 ví dụ, JSF không truy cập trực tiếp các trường để điền dữ liệu vào một thể hiện.
 
-Khi bạn không thể tạo một view trong cơ sở dữ liệu của bạn, bạn có thể ánh xạ một lớp thực thể không thay đổi với một
+Khi bạn không thể tạo một view trong cơ sở dữ liệu của bạn, bạn có thể ánh xạ một lớp entity không thay đổi với một
 truy vấn SQL SELECT.
 
 
 [Hibernate feature]
-4.3.4 Ánh xạ một thực thể thành một subselect
+4.3.4 Ánh xạ một entity thành một subselect
 Đôi khi DBA của bạn không cho phép bạn thay đổi cơ sở dữ liệu; thậm chí việc thêm một view mới cũng có thể không
-thực hiện được. Hãy giả sử bạn muốn tạo một view chứa Id của một mặt hàng đấu giá và số lượt đặt chỗ đã
+thực hiện được. Hãy giả sử bạn muốn tạo một view chứa Id của một mặt hàng đấu giá và số lượt bid đã
 được thực hiện cho mặt hàng đó.
-Sử dụng một chú thích Hibernate, bạn có thể tạo ra một view ứng dụng, một lớp thực thể chỉ đọc được ánh xạ vào
+Sử dụng một chú thích Hibernate, bạn có thể tạo ra một view ứng dụng, một lớp entity chỉ đọc được ánh xạ vào
 một câu lệnh SQL SELECT:
 PATH: /model/src/main/java/org/jpwh/model/advanced/ItemBidSummary.java
 
@@ -213,7 +213,7 @@ public class ItemBidSummary {
 }
 
 
-Khi một thể hiện của `ItemBidSummary` được loaded (nạp), Hibernate thực hiện câu lệnh SQL SELECT tùy chỉnh của bạn như một câu
+Khi một instance của `ItemBidSummary` được loaded (nạp), Hibernate thực hiện câu lệnh SQL SELECT tùy chỉnh của bạn như một câu
 lệnh con (subselect):
 
 PATH: /examples/src/test/java/org/jpwh/test/advanced/MappedSubselect.java
@@ -225,7 +225,7 @@ ItemBidSummary itemBidSummary = em.find(ItemBidSummary.class, ITEM_ID);
 
 Bạn nên liệt kê tất cả các tên bảng được tham chiếu trong câu SELECT của bạn trong chú thích `@org.hibernate.annotations.Synchronize`.
 (Tại thời điểm viết, Hibernate có một lỗi được theo dõi dưới vấn đề HHH-84301
-, khiến tên của bảng được đồng bộ hóa trở nên phân biệt chữ hoa chữ thường.) Hibernate sẽ sau đó biết rằng nó cần phải
+, khiến tên của bảng được đồng bộ hóa trở nên phân biệt chữ hoa chữ thường.), sau đó,  Hibernate sẽ biết rằng nó cần phải
 đồng bộ hóa các sửa đổi của các thể hiện Item và Bid trước khi thực hiện một truy vấn đối với ItemBidSummary:
 
 PATH: /examples/src/test/java/org/jpwh/test/advanced/MappedSubselect.java
@@ -244,12 +244,12 @@ hưởng đến kết quả của truy vấn, bởi vì bảng `ITEM` được �
 Do đó, việc flush và cập nhật hàng trong bảng `ITEM` là cần thiết để tránh truy vấn trả về dữ liệu lỗi thời (stale data).
 
 4.4 Tóm tắt
- Entity (Thực thể) là những lớp cấp độ thô của hệ thống của bạn. Các thể hiện của chúng có một vòng đời độc
-lập và có ID (danh tính) riêng của họ, và nhiều thể hiện khác có thể tham chiếu đến chúng.
- Ngược lại, value type (loại giá trị) phụ thuộc vào một lớp Entity cụ thể. Một thể hiện loại giá trị được
-liên kết với thể hiện thực thể sở hữu của nó và chỉ có một thể hiện thực thể có thể tham chiếu đến nó - nó không có
+ Entity là những lớp cấp độ thô của hệ thống của bạn. Các instance của chúng có một vòng đời độc
+lập và có ID (danh tính) riêng của họ, và nhiều instance khác có thể tham chiếu đến chúng.
+ Ngược lại, value type (loại giá trị) phụ thuộc vào một lớp Entity cụ thể. Một instance value type được
+liên kết với instance entity sở hữu của nó và chỉ có một thể hiện entity có thể tham chiếu đến nó - nó không có
 danh tính riêng.
- Chúng ta đã xem xét về Identifier Java, tính bằng nhau của đối tượng và danh tính cơ sở dữ liệu, cùng với điều gì tạo
+ Chúng ta đã xem xét về Identifier Java, tính equality của đối tượng và identity cơ sở dữ liệu, cùng với điều gì tạo
 nên các khóa chính tốt. Bạn đã tìm hiểu về các trình tạo giá trị khóa chính mà Hibernate cung cấp sẵn, và cách sử dụng và
 mở rộng hệ thống định danh này.
  Chúng ta đã thảo luận về một số tùy chọn ánh xạ lớp hữu ích, chẳng hạn như chiến lược đặt tên và tạo ra SQL động.

@@ -1,0 +1,84 @@
+Khi bạn ánh xạ một persistent class, cho dù đó là một thực thể (entity) hay là một loại nhúng (embeddable type)
+(sẽ được nói rõ hơn sau trong phần 5.2), tất cả các thuộc tính của nó đều được xem xét là persistent by default.
+Các quy tắc default JPA cho các thuộc tính của các lớp persistence là như sau:
+
+- Nếu thuộc tính là kiểu dữ liệu nguyên thủy hoặc kiểu bọc nguyên thủy (primitive wrapper), hoặc kiểu String,
+BigInteger, BigDecimal, java.util.Date, java.util.Calendar, java.sql.Date, java.sql.Time, java.sql.Timestamp,
+byte[], Byte[], char[], hoặc Character[], thì nó tự động là persistence. Hibernate sẽ tải và lưu trữ giá trị
+của thuộc tính này trong một cột với kiểu SQL thích hợp và cùng tên với thuộc tính.
+
+- Nếu không, nếu bạn đánh dấu lớp của thuộc tính bằng `@Embeddable`, hoặc bạn ánh xạ thuộc tính chính nó
+với `@Embedded`, Hibernate sẽ ánh xạ thuộc tính này như một thành phần nhúng (embedded component) của lớp
+sở hữu. Chúng ta sẽ thảo luận về việc nhúng thành phần sau trong chương này, với các lớp nhúng Address và
+MonetaryAmount trong CaveatEmptor.
+
+- Nếu không, nếu kiểu của thuộc tính là java.io.Serializable, giá trị của nó được lưu trữ ở dạng đã được serialize.
+Điều này thường không phải là điều bạn muốn, và bạn nên luôn ánh xạ các lớp Java thay vì lưu trữ một đống bytes
+trong cơ sở dữ liệu. Hãy tưởng tượng việc duy trì một cơ sở dữ liệu chứa thông tin nhị phân này khi ứng dụng không còn
+tồn tại trong vài năm nữa.
+
+- Nếu không, Hibernate sẽ ném ra một ngoại lệ khi khởi động, báo lỗi rằng nó không hiểu kiểu của thuộc tính này.
+
+Phương pháp cấu hình theo quy tắc này có nghĩa là bạn không cần phải đánh dấu một thuộc tính để làm cho nó persistence;
+bạn chỉ cần cấu hình ánh xạ trong trường hợp đặc biệt. Có nhiều annotation có sẵn trong JPA để tùy chỉnh và kiểm soát
+ánh xạ thuộc tính cơ bản.
+
+[5.1.1] Ghi đè các giá trị mặc định của thuộc tính cơ bản
+
+Có thể bạn không muốn tất cả các thuộc tính của một lớp thực thể được coi là persistence. Ví dụ, mặc dù có lý khi có
+một thuộc tính Item#initialPrice là persistence, nhưng thuộc tính Item#totalPriceIncludingTax không nên là persistence
+nếu bạn chỉ tính toán và sử dụng giá trị của nó trong thời gian chạy và do đó không nên được lưu trữ trong cơ sở dữ liệu.
+Để loại trừ một thuộc tính, hãy đánh dấu trường hoặc phương thức getter của thuộc tính đó bằng annotation @javax.persistence.Transient
+hoặc sử dụng từ khóa transient trong Java. Từ khóa transient thường chỉ loại trừ các trường cho việc tuần tự hóa Java, 
+nhưng cũng được nhận biết bởi các nhà cung cấp JPA.
+
+Chúng ta sẽ quay lại việc đặt annotation trên các trường hoặc phương thức getter trong một thời gian ngắn.
+Hãy giả định như trước đây rằng Hibernate sẽ truy cập trực tiếp các trường vì annotation @Id đã được đặt trên một trường.
+Do đó, tất cả các annotation ánh xạ JPA và Hibernate khác cũng được đặt trên các trường.
+Nếu bạn không muốn phụ thuộc vào các giá trị mặc định của ánh xạ thuộc tính, hãy áp dụng annotation @Basic cho một thuộc 
+tính cụ thể, ví dụ: initialPrice của một Item:
+
+@Basic(optional = false)
+BigDecimal initialPrice;
+
+Chúng ta phải admit(thừa nhận) rằng annotation này không có ích lắm. Nó chỉ có hai tham số:
+tham số ở đây, `optional`, đánh dấu thuộc tính là not optional ở mức đối tượng Java.
+Mặc định, tất cả các thuộc tính persistence là có thể null và optional; một `Item` có thể có
+giá trị `initialPrice` không xác định. Ánh xạ thuộc tính `initialPrice` như là `non-optional`
+có ý nghĩa nếu bạn có một ràng buộc NOT NULL trên cột INITIALPRICE trong lược đồ SQL của bạn.
+Nếu Hibernate tạo ra lược đồ SQL, nó sẽ tự động bao gồm ràng buộc NOT NULL cho các thuộc tính
+non-optional.
+
+Bây giờ, khi bạn lưu trữ một Item và quên đặt một giá trị cho trường initialPrice, Hibernate
+sẽ báo lỗi bằng một ngoại lệ trước khi gửi câu lệnh SQL đến cơ sở dữ liệu. Hibernate biết rằng cần
+có một giá trị để thực hiện INSERT hoặc UPDATE. Nếu bạn không đánh dấu thuộc tính là optional
+và cố gắng lưu trữ một NULL, cơ sở dữ liệu sẽ từ chối câu lệnh SQL, và Hibernate sẽ ném ra một
+ngoại lệ vi phạm ràng buộc.
+
+Không có nhiều sự khác biệt trong kết quả cuối cùng, nhưng việc tránh gửi câu lệnh đến cơ sở
+dữ liệu mà thất bại là một cách làm sạch hơn. Chúng tôi sẽ nói về tham số khác của @Basic,
+tùy chọn fetch, khi chúng tôi nghiên cứu các chiến lược tối ưu hóa sau này, trong phần 12.1.
+
+Thay vì sử dụng @Basic, hầu hết các kỹ sư sử dụng annotation @Column đa năng hơn để khai báo tính
+không thể rỗng:
+
+@Column(nullable = false)
+BigDecimal initialPrice;
+
+Bây giờ chúng tôi đã chỉ cho bạn ba cách để khai báo xem giá trị của một thuộc tính có required hay không:
+thông qua annotation @Basic, annotation @Column và trước đây với annotation @NotNull của Bean Validation
+trong phần 3.3.2. Tất cả đều có cùng tác động lên nhà cung cấp JPA: Hibernate thực hiện kiểm tra giá trị
+null khi lưu trữ và tạo ra một ràng buộc NOT NULL trong lược đồ cơ sở dữ liệu. Chúng tôi khuyên bạn nên
+sử dụng annotation @NotNull của Bean Validation để bạn có thể kiểm tra thủ công một phiên bản Item và/hoặc
+cho phép mã giao diện người dùng trong lớp trình diễn thực hiện kiểm tra tự động.
+
+annotation @Column cũng có thể ghi đè ánh xạ tên thuộc tính vào cột cơ sở dữ liệu:
+
+@Column(name = "START_PRICE", nullable = false)
+BigDecimal initialPrice;
+
+annotation @Column có một số tham số khác, hầu hết trong số đó điều khiển các chi tiết cấp SQL như tên catalog
+và schema. Chúng thường không cần thiết, và chúng tôi chỉ hiển thị chúng trong toàn bộ cuốn sách này khi cần thiết.
+
+Property annotations không phải lúc nào cũng nằm trên trường, và bạn có thể không muốn Hibernate truy cập trực tiếp
+vào trường.
