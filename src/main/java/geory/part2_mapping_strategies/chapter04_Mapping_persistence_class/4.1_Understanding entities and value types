@@ -1,155 +1,145 @@
-Chương này giới thiệu một số tùy chọn ánh xạ cơ bản và giải thích cách ánh xạ các lớp entity vào các bảng SQL.
+→ Chương này giới thiệu một mapping options cơ bản và giải thích cách ánh xạ các lớp entity vào các bảng SQL.
 Chúng tôi sẽ trình bày và thảo luận về cách bạn có thể xử lý nhận dạng cơ sở dữ liệu và khóa chính, cũng như cách bạn
 có thể sử dụng các metadata settings khác nhau để tùy chỉnh cách Hibernate loads và stores các instance của các
-lớp domain model của bạn. Tất cả các ví dụ ánh xạ đều sử dụng chú thích JPA. Tuy nhiên, trước tiên, chúng ta cần xác định
+lớp domain model của bạn. Tất cả các ví dụ ánh xạ đều sử dụng annotation JPA. Tuy nhiên, trước tiên, chúng ta cần xác định
 sự khác biệt quan trọng giữa thực thể (entities) và kiểu giá trị (value type), và giải thích cách bạn nên tiếp cận việc
-ánh xạ đối tượng/quan hệ của mô hình miền của mình.
+object/relationship mapping của domain model của mình.
 
 - Hiểu về entities (thực thể) và value types (kiểu giá trị).
-Khi bạn nhìn vào domain model (mô hình miền) của mình, bạn sẽ nhận thấy sự khác biệt giữa các lớp:
+Khi bạn nhìn vào domain model (domain model) của mình, bạn sẽ nhận thấy sự khác biệt giữa các lớp:
 một số loại có vẻ quan trọng hơn, đại diện cho các đối tượng business hạng nhất (thuật ngữ đối tượng được sử dụng ở đây
 theo nghĩa tự nhiên của nó). Ví dụ là các lớp Item, Category và User: đây là các thực thể trong thế giới thực mà bạn đang
-cố gắng đại diện (tham khảo lại hình 3.3 để xem mô hình miền ví dụ). Các loại khác có trong mô hình miền của bạn,
+cố gắng đại diện (tham khảo lại hình 3.3 để xem domain model ví dụ). Các loại khác có trong domain model của bạn,
 chẳng hạn như Address, String và Integer, có vẻ ít quan trọng hơn. Trong phần này, chúng ta sẽ xem xét ý nghĩa của
-việc sử dụng mô hình miền chi tiết và phân biệt giữa thực thể và kiểu giá trị.
+việc sử dụng domain model chi tiết và phân biệt giữa entity và value type.
 
-Một thực thể là một đối tượng có một vai trò quan trọng trong mô hình miền của bạn. Nó có một ý nghĩa kinh doanh riêng
-và có thể tồn tại độc lập với các thực thể khác. Ví dụ, một sản phẩm là một thực thể vì nó có một ý nghĩa kinh doanh riêng
+→ Một entity là một đối tượng có một vai trò quan trọng trong domain model của bạn. Nó có một ý nghĩa business riêng
+và có thể `tồn tại độc lập` với các thực thể khác. Ví dụ, một product là một entity vì nó có một ý nghĩa business riêng
 (đó là một thứ có thể được bán) và nó có thể tồn tại độc lập với các sản phẩm khác
 (một sản phẩm không cần phải thuộc về một danh mục cụ thể).
 
-Một kiểu giá trị là một đối tượng không có vai trò quan trọng trong mô hình miền của bạn. Nó không có ý nghĩa kinh doanh
-riêng và không thể tồn tại độc lập với các đối tượng khác. Ví dụ, một địa chỉ là một kiểu giá trị vì nó không có ý nghĩa
+→ Một value type là một đối tượng không có vai trò quan trọng trong domain model của bạn. Nó không có ý nghĩa kinh doanh
+riêng và không thể tồn tại độc lập với các đối tượng khác. Ví dụ, một địa chỉ là một value type vì nó không có ý nghĩa
 kinh doanh riêng (đó chỉ là một chuỗi văn bản) và nó không thể tồn tại độc lập với một thực thể khác
 (một địa chỉ phải được liên kết với một người dùng hoặc một sản phẩm).
 
-Điều quan trọng là phân biệt giữa thực thể và kiểu giá trị khi bạn đang thiết kế mô hình miền của mình. Thực thể nên được
-ánh xạ thành các bảng trong cơ sở dữ liệu, trong khi kiểu giá trị nên được ánh xạ thành các cột trong các bảng thực thể.
+Điều quan trọng là phân biệt giữa entity và value type khi bạn đang thiết kế domain model của mình. Entity nên được
+ánh xạ thành các bảng trong cơ sở dữ liệu, trong khi value type nên được ánh xạ thành các cột trong các bảng entities.
 Điều này sẽ giúp bạn tối ưu hóa hiệu suất của ứng dụng của mình và đảm bảo rằng dữ liệu của bạn được tổ chức tốt.
 
-4.1.1 Mô hình miền chi tiết
-Một mục tiêu chính của Hibernate là hỗ trợ các mô hình miền chi tiết và phong phú. Đó là một lý do chúng tôi làm việc với
-POJOs. Nói một cách thô thiển, chi tiết nghĩa là nhiều lớp hơn bảng.
+[4.1.1] Fine-grained Domain model (Fine-grained trong trường hợp này có nghĩa là nhiều class hơn table)
+Một mục tiêu chính của Hibernate là hỗ trợ `fine-grained` và `rich` (phong phú) domain model. Đó là một lý do chúng tôi làm
+việc với POJOs. Nói một cách thô thiển, `fine-grained` nghĩa là nhiều class hơn table.
 
-Ví dụ, một người dùng có thể có địa chỉ nhà trong mô hình miền của bạn. Trong cơ sở dữ liệu, bạn có thể có một bảng USERS
-duy nhất với các cột HOME_STREET, HOME_CITY và HOME_ZIPCODE. (Bạn còn nhớ vấn đề về kiểu SQL mà chúng ta đã thảo luận ở phần 1.2.1 không?)
+→ Ví dụ, một user có thể có home address trong domain model của bạn. Trong cơ sở dữ liệu, bạn có thể có một bảng USERS
+duy nhất với các cột HOME_STREET, HOME_CITY và HOME_ZIPCODE. (Bạn còn nhớ vấn đề về kiểu SQL mà chúng ta đã thảo luận ở
+phần 1.2.1 không?)
 
-Trong mô hình miền, bạn có thể sử dụng cách tiếp cận tương tự, đại diện cho địa chỉ dưới dạng ba thuộc tính có giá trị
-chuỗi của lớp User. Nhưng tốt hơn là nên mô hình hóa điều này bằng cách sử dụng lớp Address, nơi User có thuộc tính homeAddress.
-Mô hình miền này đạt được tính kết dính được cải thiện và khả năng tái sử dụng mã cao hơn, và nó dễ hiểu hơn so với SQL
+Trong domain model, bạn có thể sử dụng cách approach (tiếp cận) tương tự, đại diện cho địa chỉ dưới dạng ba thuộc tính có
+giá trị chuỗi của lớp User. Nhưng tốt hơn là nên mô hình hóa điều này bằng cách sử dụng lớp Address, nơi User có thuộc tính
+homeAddress. domain model này đạt được tính kết dính được cải thiện và khả năng tái sử dụng mã cao hơn, và nó dễ hiểu hơn so với SQL
 với hệ thống kiểu không linh hoạt.
 
-JPA nhấn mạnh tính hữu ích của các lớp chi tiết để thực hiện an toàn kiểu và hành vi. Ví dụ, nhiều người mô hình hóa
-địa chỉ email dưới dạng thuộc tính có giá trị chuỗi của User. Một cách tiếp cận tinh vi hơn là định nghĩa lớp EmailAddress,
-thêm ngữ nghĩa và hành vi cấp cao hơn - nó có thể cung cấp phương thức prepareMail() (nó không nên có phương thức sendMail(),
-bởi vì bạn không muốn các lớp mô hình miền của mình phụ thuộc vào hệ thống thư).
+JPA emphasize (nhấn mạnh) tính usefulness(hữu ích) của fine-grained classes để thực hiện an toàn kiểu và hành vi.
+Ví dụ, nhiều người mô hình hóa địa chỉ email dưới dạng thuộc tính có giá trị chuỗi của User.
+Một cách tiếp cận tinh vi hơn là định nghĩa lớp EmailAddress, thêm ngữ nghĩa và hành vi cấp cao hơn - nó có thể cung cấp
+phương thức prepareMail() (nó không nên có phương thức sendMail(),
+bởi vì bạn không muốn các lớp domain model của mình phụ thuộc vào hệ thống thư).
 
 Vấn đề về độ tinh vi này dẫn chúng ta đến một sự phân biệt quan trọng trong ORM. Trong Java, tất cả các lớp đều bình đẳng -
-tất cả các instance đều có ID và vòng đời riêng. Khi bạn giới thiệu tính persistence, một số instance có thể không có ID
+tất cả các instance đều có ID và vòng đời riêng. Khi bạn giới thiệu persistence, một số instance có thể không có ID
 và vòng đời riêng nhưng phụ thuộc vào những instance khác. Hãy cùng đi qua một ví dụ.
 
-Ví dụ, hãy xem xét một ứng dụng quản lý khách hàng. Mô hình miền của ứng dụng này có thể bao gồm các lớp
-Customer, Address và Order. Lớp Customer đại diện cho một khách hàng, lớp Address đại diện cho một địa chỉ và lớp Order
-đại diện cho một đơn đặt hàng.
-
-Một khách hàng có thể có nhiều địa chỉ, nhưng mỗi địa chỉ chỉ thuộc về một khách hàng. Một khách hàng cũng có thể có nhiều
-đơn đặt hàng, nhưng mỗi đơn đặt hàng chỉ thuộc về một khách hàng.
-
-Vì vậy, lớp Customer là một thực thể, trong khi lớp Address và Order là các kiểu giá trị. Các thực thể là các đối tượng
-có vai trò quan trọng trong mô hình miền của bạn. Chúng có một ý nghĩa kinh doanh riêng và có thể tồn tại độc lập với
-các thực thể khác. Các kiểu giá trị là các đối tượng không có vai trò quan trọng trong mô hình miền của bạn. Chúng không
-có ý nghĩa kinh doanh riêng và không thể tồn tại độc lập với các đối tượng khác.
-
-Điều quan trọng là phân biệt giữa thực thể và kiểu giá trị khi bạn đang thiết kế mô hình miền của mình. Các thực thể nên
-được ánh xạ thành các bảng trong cơ sở dữ liệu, trong khi các kiểu giá trị nên được ánh xạ thành các cột trong các bảng
-thực thể. Điều này sẽ giúp bạn tối ưu hóa hiệu suất của ứng dụng của mình và đảm bảo rằng dữ liệu của bạn được tổ chức tốt
-
-
-4.1.2 Xác định các khái niệm ứng dụng
-Hai người sống trong cùng một ngôi nhà và cả hai đều đăng ký tài khoản người dùng trong CaveatEmptor. Chúng ta gọi họ
+[4.1.2] Xác định các khái niệm ứng dụng
+→ Hai người sống trong cùng một ngôi nhà và cả hai đều đăng ký tài khoản trong CaveatEmptor. Chúng ta gọi họ
 lần lượt là John và Jane.
-Mỗi tài khoản được biểu diễn bằng một thể hiện của lớp User. Bởi vì bạn muốn tải, lưu trữ và xóa các thể hiện User này
-một cách độc lập, User là một lớp thực thể (entity class) chứ không phải là một loại giá trị (value type).
+Mỗi tài khoản được biểu diễn bằng một instance của lớp User. Bởi vì bạn muốn load, store và delete các instance User
+này một cách độc lập, User là một lớp thực thể (entity class) chứ không phải là một loại giá trị (value type).
 Việc tìm các lớp thực thể (entity classes) rất dễ dàng.
-Lớp User có một thuộc tính homeAddress; đó là một mối quan hệ với lớp Address. Liệu cả hai thể hiện User có tham chiếu
-thời gian chạy (runtime reference) đến cùng một thể hiện Address không?
+Lớp User có một thuộc tính homeAddress; đó là một mối quan hệ với lớp Address. Liệu cả hai instance User có tham chiếu
+thời gian chạy (runtime reference) đến cùng một instance Address không?
 
-
-Có phải mỗi thể hiện User có một tham chiếu đến Address riêng của nó không? Có quan trọng không rằng John và Jane sống
+→ Có phải mỗi instance User có một tham chiếu đến Address riêng của nó không? Có quan trọng không rằng John và Jane sống
 trong cùng một ngôi nhà?
-Trong hình 4.1, bạn có thể thấy là hai thể hiện User chia sẻ cùng một thể hiện Address
-(đây là object diagram UML, không phải là diagram class). Nếu Address được giả định để hỗ trợ các tham chiếu thời gian chạy chung,
-thì đó là một loại thực thể (entity type). Thể hiện Address có cuộc sống riêng của nó, bạn không thể xóa nó khi John xóa
+
+→ Trong hình 4.1, bạn có thể thấy là hai instance User chia sẻ cùng một instance Address
+(đây là object diagram UML, không phải là diagram class). Nếu Address được giả định để hỗ trợ các tham chiếu runtime chung,
+thì đó là một loại thực thể (entity type). instance Address có cuộc sống riêng của nó, bạn không thể xóa nó khi John xóa
 tài khoản User của mình—Jane có thể vẫn có một tham chiếu đến Address.
-Bây giờ hãy xem xét mô hình thay thế trong đó mỗi thể hiện User có tham chiếu đến thể hiện homeAddress của riêng mình,
-như được thể hiện trong hình 4.2. Trong trường hợp này, bạn có thể làm cho một thể hiện của Address phụ thuộc vào một
-thể hiện của User: bạn biến nó thành một loại giá trị (value type). Khi John xóa tài khoản User của mình, bạn có thể
-an toàn xóa thể hiện Address của anh ấy. Không ai khác sẽ giữ một tham chiếu đến nó.
-Do đó, chúng ta đưa ra sự phân biệt cần thiết sau đây:
-- Bạn có thể lấy một thể hiện của entity type bằng cách sử dụng định danh cố định của nó: ví dụ, một thể hiện User,
-Item hoặc Category. Tham chiếu đến một thể hiện entity (một con trỏ trong JVM) được lưu trữ như một tham chiếu trong
-cơ sở dữ liệu (một giá trị có ràng buộc khóa ngoại). Một thể hiện thực thể có vòng đời riêng của nó; nó có thể tồn tại
-độc lập với bất kỳ thực thể nào khác. Bạn ánh xạ các lớp được lựa chọn từ mô hình miền của bạn dưới dạng các loại thực thể.
-- Một thể hiện của value type không có thuộc tính định danh cố định; nó thuộc về một thể hiện entity. Tuổi thọ của nó
-bị ràng buộc với thể hiện thực thể sở hữu. Một thể hiện giá trị không hỗ trợ tham chiếu chung. Các loại giá trị rõ ràng
+Bây giờ hãy xem xét mô hình thay thế trong đó mỗi instance User có tham chiếu đến instance homeAddress của riêng mình,
+như được instance trong hình 4.2. Trong trường hợp này, bạn có thể làm cho một instance của Address phụ thuộc vào một
+instance của User: bạn biến nó thành một loại giá trị (value type). Khi John xóa tài khoản User của mình, bạn có thể
+an toàn xóa instance Address của anh ấy. Không ai khác sẽ giữ một tham chiếu đến nó.
+
+→ Do đó, chúng ta đưa ra sự phân biệt cần thiết sau đây:
+- Bạn có thể lấy một instance của entity type bằng cách sử dụng persistence identity của nó: ví dụ, một instance User,
+Item hoặc Category. Tham chiếu đến một instance entity (một con trỏ trong JVM) được lưu trữ như một tham chiếu trong
+cơ sở dữ liệu (một giá trị có ràng buộc khóa ngoại). Một instance entity có vòng đời riêng của nó; nó có thể tồn tại
+độc lập với bất kỳ thực thể nào khác. Bạn ánh xạ các lớp được lựa chọn từ domain model của bạn dưới dạng các loại thực thể.
+- Một instance của value type không có thuộc tính định danh cố định; nó thuộc về một instance entity. Tuổi thọ của nó
+bị ràng buộc với instance thực thể sở hữu. Một instance giá trị không hỗ trợ tham chiếu chung. Các loại giá trị rõ ràng
 nhất là tất cả các lớp được định nghĩa bởi JDK như String, Integer và thậm chí các kiểu nguyên thủy. Bạn cũng có thể ánh xạ
-các lớp mô hình miền của bạn riêng là các loại giá trị, ví dụ: Address và MonetaryAmount.
+các lớp domain model của bạn riêng là các value type, ví dụ: Address và MonetaryAmount.
 
 Nếu bạn đọc quy định JPA, bạn sẽ thấy các khái niệm tương tự. Tuy nhiên, trong JPA, các value type được gọi là các loại
 thuộc tính cơ bản hoặc các lớp nhúng. Chúng ta sẽ quay lại điều này trong chương tiếp theo; trước hết, tập trung của
 chúng ta là về các entity (thực thể).
-Xác định các thực thể và value type (loại giá trị) trong mô hình miền của bạn không phải là một nhiệm vụ tùy ý mà tuân
+Xác định các thực thể và value type (loại giá trị) trong domain model của bạn không phải là một nhiệm vụ tùy ý mà tuân
 theo một quy trình cụ thể.
 
 
-4.1.3 Phân biệt giữa entity và value type
+[4.1.3] Phân biệt giữa entity và value type
 
-Bạn có thể thấy hữu ích khi thêm thông tin stereotype (khuôn mẫu) (một cơ chế mở rộng UML) vào các biểu đồ lớp UML của mình để bạn
+→ Bạn có thể thấy hữu ích khi thêm thông tin stereotype (khuôn mẫu) (một cơ chế mở rộng UML) vào các biểu đồ lớp UML của mình để bạn
 có thể nhận ra thực thể và kiểu giá trị ngay lập tức. Thực hành này cũng buộc bạn phải suy nghĩ về sự phân biệt này cho
-tất cả các lớp của mình, đây là bước đầu tiên để có một lớp ánh xạ và lớp lưu trữ hoạt động tốt. Hình 4.3 cho một ví dụ.
+tất cả các lớp của mình, đây là bước đầu tiên để có một mapping tối ưu và lớp persistence hoạt động tốt. Hình 4.3 cho một ví dụ.
 
-Các lớp Item và User là những thực thể rõ ràng. Mỗi lớp có một id riêng, các instances của chúng có tham chiếu từ nhiều
+→ Các lớp Item và User là những entity rõ ràng. Mỗi lớp có một id riêng, các instances của chúng có tham chiếu từ nhiều
 instances khác (tham chiếu được chia sẻ) và chúng có vòng đời độc lập.
 
-Việc đánh dấu Address là kiểu giá trị cũng rất dễ dàng: một instance duy nhất của User tham chiếu đến một instance Address cụ thể.
+→ Việc đánh dấu Address là kiểu giá trị cũng rất dễ dàng: một instance duy nhất của User tham chiếu đến một instance Address cụ thể.
 Bạn biết điều này bởi vì association (mối quan hệ) đã được tạo dưới dạng composition, trong đó instance User đã được chịu
 trách nhiệm hoàn toàn về vòng đời của instance Address được tham chiếu. Do đó, các instances Address không thể được
 tham chiếu bởi bất kỳ ai khác và không cần id của riêng chúng.
 
-Lớp Bid có thể là một vấn đề. Trong mô hình hướng đối tượng, lớp này được đánh dấu là composition
+Lưu ý: Lớp nào được đánh dấu là composition tức là thể hiện mối quan hệ thành phần, one-to-many, ...
+Giúp tổ chức mối quan hệ phức tạp trong Java.
+
+Lớp Bid có thể là một vấn đề. Trong object-oriented model(mô hình hướng đối tượng), lớp này được đánh dấu là composition
 (association (mối quan hệ) giữa Item và Bid có dấu hoa thị). Do đó, một Item là chủ sở hữu của các instances Bid của nó và chứa một
 collection các tham chiếu. Điều này có vẻ hợp lý, vì các bid trong hệ thống đấu giá không có giá trị khi item mà
 chúng được tạo ra đã biến mất.
 
-Nhưng nếu một phần mở rộng trong tương lai của mô hình miền yêu cầu một collection User#bids, chứa tất cả các bid được
-thực hiện bởi một người dùng cụ thể thì sao? Hiện tại, association (mối quan hệ) giữa Bid và User là một chiều; một Bid có một tham chiếu bidder.
-Điều gì sẽ xảy ra nếu nó là hai chiều?
+Nhưng nếu một phần mở rộng trong tương lai của domain model yêu cầu một collection User#bids, chứa tất cả các bid được
+thực hiện bởi một người dùng cụ thể thì sao? Hiện tại, association (mối quan hệ) giữa Bid và User là một chiều;
+một Bid có một tham chiếu bidder. Điều gì sẽ xảy ra nếu nó là hai chiều?
 
 Trong trường hợp đó, bạn phải giải quyết các tham chiếu có thể được chia sẻ cho các instances Bid, vì vậy lớp Bid cần
 phải là một thực thể. Nó có vòng đời phụ thuộc, nhưng nó phải có id của riêng mình để hỗ trợ các tham chiếu được chia sẻ
 (trong tương lai).
 
-Bạn sẽ thường thấy loại hành vi kết hợp này; nhưng phản ứng đầu tiên của bạn nên là biến mọi thứ thành một lớp kiểu giá
-trị và chỉ nâng cấp nó lên thành thực thể khi cần thiết. Hãy thử đơn giản hóa các association (mối quan hệ) của bạn:
+→ Bạn sẽ thường thấy loại hành vi kết hợp này; nhưng phản ứng đầu tiên của bạn nên là biến mọi thứ thành một lớp value type
+và chỉ nâng cấp nó lên thành thực thể khi cần thiết. Hãy thử đơn giản hóa các association (mối quan hệ) của bạn:
 các collection persistent, ví dụ, thường thêm độ phức tạp mà không mang lại bất kỳ lợi thế nào. Thay vì ánh xạ các
 collection Item#bids và User#bids, bạn có thể viết các truy vấn để lấy tất cả các bid cho một Item và những bid được
 thực hiện bởi một người dùng cụ thể. Các association (mối quan hệ) trong biểu đồ lớp UML sẽ chỉ trỏ từ Bid đến Item và User, một chiều,
 và không theo cách khác. Stereotype trên lớp Bid sau đó sẽ là <<Value type>>. Chúng ta sẽ quay lại điểm này một lần nữa
 trong chương 7.
 
-Tiếp theo, hãy lấy biểu đồ mô hình miền của bạn và triển khai POJO cho tất cả các thực thể và kiểu giá trị.
+Tiếp theo, hãy lấy biểu đồ domain model của bạn và triển khai POJO cho tất cả các thực thể và kiểu giá trị.
 Bạn sẽ phải quan tâm đến ba điều sau:
 
-Shared references (Tham chiếu được chia sẻ): Tránh tham chiếu đến các instances value type khi bạn viết các lớp POJO của mình.
-Ví dụ: hãy đảm bảo rằng chỉ một User mới có thể tham chiếu đến một Address. Bạn có thể làm cho Address không thay đổi với
-không có phương thức setUser() công khai và thực thi mối quan hệ với một constructor công khai có đối số User. Tất nhiên,
+Shared references (Tham chiếu được chia sẻ): Avoid (Tránh) tham chiếu đến các instances valuetype khi bạn viết các lớp POJO
+của mình.
+Ví dụ: hãy đảm bảo rằng chỉ một User mới có thể tham chiếu đến một Address. Bạn có thể làm cho Address không thay đổi
+với không có phương thức setUser() công khai và thực thi mối quan hệ với một constructor public có đối số User. Tất nhiên,
 bạn vẫn cần một constructor không có đối số, có thể là protected, như chúng ta đã thảo luận trong chương trước,
 để Hibernate cũng có thể tạo một instance.
 
-Life cycle dependencies (Tùy thuộc vào vòng đời): Nếu một User bị xóa, phụ thuộc của nó vào Address cũng phải bị xóa.
+Life cycle dependencies (Phụ thuộc vào vòng đời): Nếu một User bị xóa, phụ thuộc của nó vào Address cũng phải bị xóa.
 Metadata về tính nhất quán sẽ bao gồm các quy tắc cascading cho tất cả các phụ thuộc như vậy, vì vậy Hibernate
 (hoặc cơ sở dữ liệu) có thể xử lý việc xóa Address đã lỗi thời. Bạn phải thiết kế các thủ tục ứng dụng và giao diện người
-dùng của mình để tôn trọng và mong đợi các phụ thuộc như vậy — viết các POJO mô hình miền của bạn cho phù hợp.
+dùng của mình để tôn trọng và mong đợi các phụ thuộc như vậy — viết các POJO domain model của bạn cho phù hợp.
 
 Identify (Định danh): Các lớp thực thể cần một thuộc tính id trong hầu hết các trường hợp. Các lớp kiểu giá trị
-(và tất nhiên các lớp JDK như String và Integer) không có thuộc tính id, vì các instances được xác định thông qua thực thể
+(và tất nhiên các lớp JDK như String và Integer) không có thuộc tính id, vì các instances được xác định thông qua thực thể.
