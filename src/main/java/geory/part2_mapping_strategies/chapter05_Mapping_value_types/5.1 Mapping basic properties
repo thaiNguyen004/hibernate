@@ -20,7 +20,7 @@ tồn tại trong vài năm nữa.
 - Nếu không, Hibernate sẽ ném ra một ngoại lệ khi khởi động, báo lỗi rằng nó không hiểu kiểu của thuộc tính này.
 
 Phương pháp cấu hình theo quy tắc này có nghĩa là bạn không cần phải đánh dấu một thuộc tính để làm cho nó persistence;
-bạn chỉ cần cấu hình ánh xạ trong trường hợp đặc biệt. Có nhiều annotation có sẵn trong JPA để tùy chỉnh và kiểm soát
+bạn chỉ cần cấu hình ánh xạ trong trường hợp đặc biệt. Có nhiều annotation có sẵn trong JPA để custom và kiểm soát
 ánh xạ thuộc tính cơ bản.
 
 [5.1.1] Ghi đè các giá trị mặc định của thuộc tính cơ bản
@@ -82,3 +82,262 @@ và schema. Chúng thường không cần thiết, và chúng tôi chỉ hiển 
 
 Property annotations không phải lúc nào cũng nằm trên trường, và bạn có thể không muốn Hibernate truy cập trực tiếp
 vào trường.
+
+
+[5.1.2] custom việc truy cập thuộc tính
+Persistence engine truy cập các thuộc tính của một lớp through(thông qua) fields directly(trực tiếp) hoặc inderectly(gián tiếp) 
+thông qua các phương thức getter và setter. Một entity được annotation sẽ thừa hưởng mặc định từ vị trí của annotation @Id 
+bắt buộc. 
+Ví dụ, nếu bạn đã khai báo @Id trên một trường, chứ không phải là một phương thức getter, tất cả các annotation ánh xạ khác 
+cho đối tượng đó được mong đợi ở các trường. Các annotation không bao giờ nằm trên các phương thức setter.
+
+Chiến lược truy cập mặc định không chỉ áp dụng cho một lớp đối tượng duy nhất. Bất kỳ lớp @Embedded nào đều thừa hưởng 
+chiến lược truy cập mặc định hoặc được khai báo một cách rõ ràng từ lớp gốc đối tượng sở hữu của nó. Chúng tôi sẽ bàn
+về các thành phần nhúng sau trong chương này. Hơn nữa, Hibernate truy cập bất kỳ thuộc tính nào của @MappedSuperclass
+với chiến lược truy cập mặc định hoặc được khai báo một cách rõ ràng từ lớp đối tượng được ánh xạ.
+Chương 6 sẽ bàn về vấn đề kế thừa.
+Đặc tả JPA cung cấp annotation @Access để ghi đè hành vi mặc định, với các tham số AccessType.FIELD và AccessType.PROPERTY.
+Nếu bạn đặt @Access ở mức class/entity, Hibernate truy cập tất cả các thuộc tính của lớp theo chiến lược được chọn.
+Sau đó, bạn đặt bất kỳ annotation ánh xạ nào khác, bao gồm cả @Id, trên các trường hoặc phương thức getter tương ứng.
+Bạn cũng có thể sử dụng annotation @Access để ghi đè chiến lược truy cập của từng thuộc tính cụ thể. Hãy khám phá điều này
+thông qua ví dụ sau.
+
+PATH: /model/src/main/java/org/jpwh/model/advanced/Item.java
+
+@Entity
+public class Item {
+    @Id         // [1] @Id is on a field.
+    @GeneratedValue(generator = Constants.ID_GENERATOR)
+    protected Long id;
+
+    @Access(AccessType.PROPERTY)        // [2] Chuyển thuộc tính sang quyền truy cập runtime
+    @Column(name = "ITEM_NAME")
+    protected String name;
+
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {      // [3] Được gọi khi loading/storing
+        this.name =
+                !name.startsWith("AUCTION: ") ? "AUCTION: " + name : name;
+    }
+}
+
+[1] Đối tượng "Item" mặc định sử dụng truy cập thông qua trường (field).
+Chú thích "@Id" được đặt trên một trường (field).
+[2] Cài đặt "@Access(AccessType.PROPERTY)" trên trường "name" chuyển thuộc tính
+cụ thể này sang truy cập trong thời gian chạy thông qua các phương thức getter/setter
+bởi nhà cung cấp JPA.
+[3] Hibernate gọi getName() và setName() khi tải và lưu trữ các mục (items).
+
+Lưu ý rằng vị trí của các chú thích ánh xạ khác như @Column không thay đổi - chỉ cách các
+thể hiện được truy cập trong thời gian chạy thay đổi.
+Bây giờ hãy nghịch lại: nếu chiến lược truy cập mặc định (hoặc được xác định rõ) của đối
+tượng là thông qua các phương thức getter và setter của thuộc tính,
+khi có @Access(AccessType.FIELD) trên một phương thức getter, Hibernate sẽ yêu cầu truy cập
+trực tiếp vào trường. Tất cả thông tin ánh xạ khác vẫn phải nằm trên phương thức getter,
+chứ không phải trên trường.
+
+
+[Hibernate Feature]
+Hibernate có một extension ít khi cần thiết: trình truy cập thuộc tính `noop`.
+Điều này nghe có vẻ lạ lẫm, nhưng nó cho phép bạn tham chiếu đến một thuộc tính ảo trong
+các truy vấn. Điều này hữu ích nếu bạn có một cột cơ sở dữ liệu mà bạn chỉ muốn sử dụng
+trong các truy vấn JPA. Ví dụ, hãy nói rằng bảng cơ sở dữ liệu ITEM có một cột VALIDATED
+và ứng dụng Hibernate của bạn sẽ không truy cập vào cột này thông qua mô hình miền.
+Đó có thể là một cột kế thừa hoặc một cột được duy trì bởi một ứng dụng khác hoặc kích hoạt
+cơ sở dữ liệu. Tất cả bạn muốn là tham chiếu đến cột này trong một truy vấn JPA như
+`select i from Item i where i.validated = true` hoặc `select i.id, i.validated from Item i`.
+Lớp Item trong mô hình miền Java của bạn không có thuộc tính này; do đó không có nơi để đặt
+các chú thích. Cách duy nhất để ánh xạ một thuộc tính ảo như vậy là thông qua một tệp
+siêu dữ liệu nguyên gốc hbm.xml:
+
+<hibernate-mapping>
+    <class name="Item">
+        <id name="id">
+            ...
+        </id>
+        <property name="validated"
+                    column="VALIDATED"
+                    access="noop"/>
+    </class>
+</hibernate-mapping>
+
+Đoạn ánh xạ này thông báo cho Hibernate rằng bạn muốn truy cập thuộc tính ảo Item#validated,
+được ánh xạ vào cột `VALIDATED`, trong các truy vấn; nhưng để đọc/ghi giá trị tại runtime,
+bạn muốn "no operation" trên một instance của Item. Lớp không có thuộc tính đó. Hãy nhớ rằng tệp
+ánh xạ nguyên gốc như vậy phải hoàn chỉnh: bất kỳ chú thích nào trên lớp `Item` bây giờ đều bị bỏ qua!
+
+Nếu không có chiến lược truy cập `build-in = {"getter, setter", "field"}` nào phù hợp, bạn có thể tự
+định nghĩa chiến lược truy cập thuộc tính custom của riêng bạn bằng cách thực hiện giao diện
+`org.hibernate.property.PropertyAccessor`.
+Sau đó: bạn enable(kích hoạt) một trình truy cập custom bằng cách đặt tên đầy đủ của nó trong một chú thích
+mở rộng Hibernate: @org.hibernate.annotations.AttributeAccessor("my.custom.Accessor").
+Trong đó `my.custom.Accessor` là chiến lược truy cập thuộc tính của bạn.
+Lưu ý rằng AttributeAccessor là mới trong Hibernate 4.3 và thay thế cho org.hibernate.annotations.AccessType
+đã bị loại bỏ, cái mà thường gây nhầm lẫn với đối tượng liệt kê javax.persistence.AccessType trong JPA.
+
+Một số thuộc tính không ánh xạ vào một cột. Cụ thể, thuộc tính tạo ra giá trị của nó từ một biểu thức SQL.
+
+
+[Hibernate Feature]
+5.1.3 Using derived properties
+
+Giá trị của một thuộc tính được tính toán tại thời gian chạy bằng cách đánh giá một biểu thức SQL được khai báo bằng
+annotation @org.hibernate.annotations.Formula;
+xem ví dụ tiếp theo.
+
+Two read-only derived properties
+
+@org.hibernate.annotations.Formula(
+    "substr(DESCRIPTION, 1, 12) || '...'"
+)
+protected String shortDescription;
+
+@org.hibernate.annotations.Formula(
+    "(select avg(b.AMOUNT) from BID b where b.ITEM_ID = ID)"
+)
+protected BigDecimal averageBidAmount;
+
+Các SQL formulas được cung cấp được đánh giá mỗi khi thực thể Item được lấy ra từ cơ sở dữ liệu
+và không xảy ra tại bất kỳ thời điểm nào khác, do đó kết quả có thể bị lỗi thời nếu các thuộc tính khác
+được sửa đổi. Các thuộc tính không bao giờ xuất hiện trong các câu lệnh SQL INSERT hoặc UPDATE,
+chỉ xuất hiện trong các câu lệnh SELECT. Quá trình đánh giá diễn ra trong cơ sở dữ liệu;
+Hibernate nhúng biểu thức SQL vào mệnh đề SELECT khi load instance.
+
+Các formulas có thể tham chiếu đến các column của bảng cơ sở dữ liệu, có thể gọi các hàm SQL và thậm chí
+có thể bao gồm các SQL subselects. Trong ví dụ trước, hàm SUBSTR() được gọi, cũng như toán tử nối chuỗi ||.
+Biểu thức SQL được chuyển đến cơ sở dữ liệu cơ bản nguyên gốc; nếu bạn không cẩn thận, bạn có thể phụ thuộc
+vào các toán tử hoặc từ khóa cụ thể cho từng nhà sản xuất và ràng buộc dữ liệu ánh xạ của bạn với một
+sản phẩm cơ sở dữ liệu cụ thể. Lưu ý rằng tên cột không đủ điều kiện đề cập đến các cột của bảng thuộc lớp
+mà thuộc tính được tính toán.
+
+Cơ sở dữ liệu đánh giá các biểu thức SQL trong các formulas chỉ khi Hibernate lấy một instance entity từ cơ sở dữ liệu.
+Hibernate cũng hỗ trợ một biến thể của formulas gọi là `column transformers`, cho phép bạn viết một biểu thức SQL
+tùy chỉnh cho việc đọc và ghi giá trị của một thuộc tính.
+
+[Hibernate Feature]
+
+5.1.4 Transforming column values
+
+Hãy giả sử bạn có một cột cơ sở dữ liệu có tên là `IMPERIALWEIGHT`, lưu trữ trọng lượng của một sản phẩm (Item)
+bằng đơn vị pound. Tuy nhiên, ứng dụng của bạn có thuộc tính Item#metricWeight được tính bằng đơn vị kilogram,
+do đó bạn cần chuyển đổi giá trị của cột cơ sở dữ liệu khi đọc và ghi dòng dữ liệu từ và vào bảng ITEM.
+Bạn có thể thực hiện điều này bằng một phần mở rộng của Hibernate: annotation @org.hibernate.annotations.ColumnTransformer.
+
+@Column(name = "IMPERIALWEIGHT")
+@org.hibernate.annotations.ColumnTransformer(
+     read = "IMPERIALWEIGHT / 2.20462",
+     write = "? * 2.20462"
+)
+protected double metricWeight;
+
+
+Khi đọc một dòng từ bảng ITEM, Hibernate nhúng biểu thức IMPERIALWEIGHT / 2.20462, vì vậy phép tính xảy ra trong
+cơ sở dữ liệu và Hibernate trả về giá trị metric trong kết quả cho tầng ứng dụng. Đối với việc ghi vào cột,
+Hibernate đặt giá trị metric lên giá trị đặt chỗ bắt buộc và duy nhất (dấu hỏi), và biểu thức SQL của bạn tính toán
+giá trị thực sự để chèn hoặc cập nhật.
+
+Hibernate cũng áp dụng bộ chuyển đổi cột trong các ràng buộc truy vấn. Ví dụ, truy vấn sau đây lấy tất cả các sản phẩm
+có trọng lượng là hai kilogram:
+
+List<Item> result =
+    em.createQuery("select i from Item i where i.metricWeight = :w")
+        .setParameter("w", 2.0)
+        .getResultList();
+
+Câu SQL thực tế được thực thi bởi Hibernate cho truy vấn này chứa điều kiện sau đây trong mệnh đề WHERE:
+// ...
+where
+    i.IMPERIALWEIGHT / 2.20462=?
+
+Lưu ý rằng cơ sở dữ liệu của bạn có thể sẽ không thể sử dụng một chỉ mục cho ràng buộc này;
+bạn sẽ thấy một quét toàn bộ bảng, bởi vì trọng lượng cho tất cả các hàng ITEM phải được tính toán để đánh giá
+ràng buộc này.
+
+Một loại thuộc tính đặc biệt khác dựa vào các giá trị được tạo ra bởi cơ sở dữ liệu.
+
+[Hibernate Feature]
+[5.1.5] Generated and default property values
+
+Cơ sở dữ liệu đôi khi tạo ra một giá trị thuộc tính, thường khi bạn chèn một hàng (row) lần đầu tiên.
+Ví dụ về các giá trị được tạo ra bởi cơ sở dữ liệu là một dấu thời gian tạo ra (creation timestamp),
+giá mặc định cho một sản phẩm, và một trigger chạy cho mỗi lần sửa đổi.
+
+Thường, các ứng dụng sử dụng Hibernate cần làm mới các thể hiện (instances) chứa bất kỳ thuộc tính nào
+mà cơ sở dữ liệu tạo ra giá trị cho chúng sau khi lưu dữ liệu. Điều này có nghĩa bạn phải thực hiện một lượt truy vấn
+khác đến cơ sở dữ liệu để đọc giá trị sau khi chèn hoặc cập nhật một hàng. Tuy nhiên, đánh dấu các thuộc tính như
+là được tạo ra (generated) cho phép ứng dụng chuyển trách nhiệm này cho Hibernate. Cơ bản, mỗi khi Hibernate thực hiện
+một lệnh SQL INSERT hoặc UPDATE cho một thực thể (entity) đã khai báo generated properties, nó sẽ thực hiện ngay sau đó
+một lệnh SQL SELECT để lấy giá trị được tạo ra.
+
+Bạn đánh dấu các thuộc tính được tạo ra bằng chú thích @org.hibernate.annotations.Generated.
+
+Database-generated property values
+
+@Temporal(TemporalType.TIMESTAMP)
+@Column(insertable = false, updatable = false)
+@org.hibernate.annotations.Generated (
+    org.hibernate.annotations.GenerationTime.ALWAYS
+)
+protected Date lastModified;
+
+@Column(insertable = false)
+@org.hibernate.annotations.ColumnDefault("1.00")
+@org.hibernate.annotations.Generated (
+    org.hibernate.annotations.GenerationTime.INSERT
+)
+protected BigDecimal initialPrice;
+
+Các cài đặt có sẵn cho GenerationTime là ALWAYS và INSERT. Với ALWAYS, Hibernate làm mới đối tượng thực thể sau mỗi
+SQL UPDATE hoặc INSERT. Ví dụ giả định rằng một trigger database sẽ duy trì thuộc tính lastModified hiện tại.
+Thuộc tính cũng nên được đánh dấu là chỉ đọc, với các tham số updatable và insertable của @Column.
+Nếu cả hai tham số này được đặt thành false, cột(s) của thuộc tính sẽ không bao giờ xuất hiện trong các câu lệnh INSERT
+hoặc UPDATE, và bạn để cho cơ sở dữ liệu tạo ra giá trị.
+
+Với GenerationTime.INSERT, việc làm mới chỉ xảy ra sau một SQL INSERT, để lấy giá trị mặc định được cung cấp bởi cơ sở
+dữ liệu. Hibernate cũng ánh xạ thuộc tính như không thể chèn. Chú thích Hibernate @ColumnDefault đặt giá trị mặc định
+của cột khi Hibernate export (xuất) và tạo ra DDL schema SQL.
+
+Timestamps frequently (thường) là các giá trị được tạo tự động, bằng cách sử dụng cơ sở dữ liệu, như trong ví dụ trước đó,
+hoặc bởi ứng dụng. Hãy xem xét kỹ hơn về chú thích @Temporal mà bạn thấy trong ví dụ 5.4.
+
+[5.1.6] Temporal properties
+
+Thuộc tính lastModified trong ví dụ cuối cùng có kiểu dữ liệu là java.util.Date và một trigger database trên SQL INSERT
+đã tạo ra giá trị cho nó. Đặc tả JPA yêu cầu bạn phải đánh dấu các thuộc tính thời gian với @Temporal để khai báo độ
+chính xác của kiểu dữ liệu SQL của cột được ánh xạ. Các loại thời gian Java bao gồm java.util.Date, java.util.Calendar,
+java.sql.Date, java.sql.Time và java.sql.Timestamp. Hibernate cũng hỗ trợ các lớp trong gói java.time có sẵn trong JDK 8.
+(Thực tế, annotation này không cần thiết nếu một bộ chuyển đổi được áp dụng hoặc có thể áp dụng cho thuộc tính.
+Bạn sẽ thấy chuyển đổi lại sau trong chương này.)
+
+Dưới đây là một ví dụ tuân thủ JPA: một thuộc tính timestamp "mục này đã được tạo vào" thông thường được lưu một lần
+nhưng không bao giờ được cập nhật.
+
+
+@Temporal(TemporalType.TIMESTAMP) <- JPA nói rằng chú thích @Temporal là bắt buộc,
+                                     nhưng Hibernate mặc định sử dụng
+                                     kiểu TIMESTAMP nếu không có nó.
+@Column(updatable = false)
+@org.hibernate.annotations.CreationTimestamp
+protected Date createdOn;
+
+// Java 8 API
+// protected Instant reviewedOn;
+
+
+Các tùy chọn TemporalType có sẵn là DATE, TIME và TIMESTAMP, xác định phần nào của giá trị thời gian nên được lưu trữ trong
+cơ sở dữ liệu.
+
+[Hibernate Feature]
+Hibernate mặc định sử dụng TemporalType.TIMESTAMP khi không có chú thích @Temporal nào được sử dụng.
+Hơn nữa, bạn đã sử dụng chú thích @CreationTimestamp của Hibernate để đánh dấu thuộc tính này. Đây là một phiên bản
+tương tự với chú thích @Generated từ phần trước: nó cho biết cho Hibernate để tạo giá trị thuộc tính tự động.
+Trong trường hợp này, Hibernate đặt giá trị là thời gian hiện tại trước khi INSERT đối tượng thực thể vào cơ sở dữ liệu.
+Một chú thích tích hợp tương tự khác là @UpdateTimestamp. Bạn cũng có thể viết và cấu hình các bộ tạo giá trị tùy chỉnh,
+chạy trong ứng dụng hoặc cơ sở dữ liệu.
+
+Hãy xem xét org.hibernate.annotations.GeneratorType và ValueGenerationType.
+
+Một loại thuộc tính đặc biệt khác là enumeration (kiểu liệt kê).
+
