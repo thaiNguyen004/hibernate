@@ -12,3 +12,16 @@ Một lớp được tạo thành trong biểu đồ UML, chẳng hạn như l�
 
 [5.2.1] The database schema
 
+Hãy ánh xạ một composition relationship như vậy với Address như một value type, với cùng ngữ nghĩa như String hoặc BigDecimal, 
+và User như một thực thể. Trước hết, hãy xem xét schema SQL mà bạn đang nhắm tới, trong hình 5.2.
+Chỉ có một bảng được ánh xạ, là USERS, cho thực thể User. Bảng này nhúng tất cả chi tiết của các thành phần, trong đó một hàng 
+duy nhất chứa một người dùng cụ thể và địa chỉ nhà và địa chỉ thanh toán của họ. Nếu một thực thể khác có một tham chiếu đến 
+một Address ví dụ như
+
+Shipment#deliveryAddress, thì bảng SHIPMENT cũng sẽ có tất cả các cột cần thiết để lưu trữ một Address.
+Mô hình này phản ánh ngữ nghĩa value type: một địa chỉ cụ thể không thể được chia sẻ; nó không có danh tính riêng của nó. 
+Khóa chính của nó là định danh cơ sở dữ liệu ánh xạ của thực thể sở hữu. Một thành phần nhúng có vòng đời phụ thuộc: khi thực thể 
+sở hữu được lưu, thực thể thành phần cũng được lưu. Khi thực thể sở hữu được xóa, thực thể thành phần cũng được xóa. Hibernate 
+thậm chí không cần thực hiện bất kỳ SQL đặc biệt nào cho điều này; tất cả dữ liệu đều nằm trong một hàng duy nhất.
+Có “nhiều lớp hơn số bảng” là cách Hibernate hỗ trợ các mô hình miêu tả chi tiết trong lĩnh vực. 
+Hãy viết các lớp và ánh xạ cho cấu trúc này.
