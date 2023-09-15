@@ -1,0 +1,14 @@
+Cho đến nay, các lớp domain model bạn đã ánh xạ đều là các lớp thực thể (entity classes),
+mỗi lớp có một vòng đời riêng và danh tính riêng. Tuy nhiên, lớp User có một loại mối quan hệ đặc biệt với lớp Address,
+như được hiển thị trong hình 5.1.
+
+Trong ngữ cảnh của `object-modeling`, mối quan hệ này là một loại (aggregation) - một mối quan hệ `part-of (thuộc về)`.
+Aggregation (tổng hợp) là một dạng mạnh mẽ của mối quan hệ, nó có một số ý nghĩa bổ sung liên quan đến vòng đời của các
+đối tượng. Trong trường hợp này, bạn có một hình thức thậm chí còn mạnh mẽ hơn, (composition), trong đó vòng đời của
+phần (part) hoàn toàn phụ thuộc vào vòng đời của toàn bộ (whole).
+
+Một lớp được tạo thành trong biểu đồ UML, chẳng hạn như lớp Address, thường là một ứng viên tiềm năng cho kiểu giá trị
+(value type) trong ánh xạ object/relational của bạn.
+
+[5.2.1] The database schema
+
