@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> c3196b672251a8a638d0d604464dad1368b17648
 Cho đến nay, các lớp domain model bạn đã ánh xạ đều là các lớp thực thể (entity classes),
 mỗi lớp có một vòng đời riêng và danh tính riêng. Tuy nhiên, lớp User có một loại mối quan hệ đặc biệt với lớp Address,
 như được hiển thị trong hình 5.1.
@@ -12,3 +16,151 @@ Một lớp được tạo thành trong biểu đồ UML, chẳng hạn như l�
 
 [5.2.1] The database schema
 
+<<<<<<< HEAD
+=======
+Cho đến nay, các lớp domain model bạn đã ánh xạ đều là các lớp thực thể (entity classes),
+mỗi lớp có một vòng đời riêng và danh tính riêng. Tuy nhiên, lớp User có một loại mối quan hệ đặc biệt với lớp Address,
+như được hiển thị trong hình 5.1.
+
+Trong ngữ cảnh của `object-modeling`, mối quan hệ này là một loại (aggregation) - một mối quan hệ `part-of (thuộc về)`.
+Aggregation (tổng hợp) là một dạng mạnh mẽ của mối quan hệ, nó có một số ý nghĩa bổ sung liên quan đến vòng đời của các
+đối tượng. Trong trường hợp này, bạn có một hình thức thậm chí còn mạnh mẽ hơn, (composition), trong đó vòng đời của
+phần (part) hoàn toàn phụ thuộc vào vòng đời của toàn bộ (whole).
+
+Một lớp được tạo thành trong biểu đồ UML, chẳng hạn như lớp Address, thường là một ứng viên tiềm năng cho kiểu giá trị
+(value type) trong ánh xạ object/relational của bạn.
+
+[5.2.1] The database schema
+
+Hãy ánh xạ một composition relationship như vậy với Address như một value type, với cùng ngữ nghĩa như String hoặc BigDecimal, 
+và User như một thực thể. Trước hết, hãy xem xét schema SQL mà bạn đang nhắm tới, trong hình 5.2.
+Chỉ có một bảng được ánh xạ, là USERS, cho thực thể User. Bảng này nhúng tất cả chi tiết của các thành phần, trong đó một hàng 
+duy nhất chứa một người dùng cụ thể và địa chỉ nhà và địa chỉ thanh toán của họ. Nếu một thực thể khác có một tham chiếu đến 
+một Address ví dụ như
+
+Shipment#deliveryAddress, thì bảng SHIPMENT cũng sẽ có tất cả các cột cần thiết để lưu trữ một Address.
+Mô hình này phản ánh ngữ nghĩa value type: một địa chỉ cụ thể không thể được chia sẻ; nó không có danh tính riêng của nó. 
+Khóa chính của nó là định danh cơ sở dữ liệu ánh xạ của thực thể sở hữu. Một thành phần nhúng có vòng đời phụ thuộc: khi thực thể 
+sở hữu được lưu, thực thể thành phần cũng được lưu. Khi thực thể sở hữu được xóa, thực thể thành phần cũng được xóa. Hibernate 
+thậm chí không cần thực hiện bất kỳ SQL đặc biệt nào cho điều này; tất cả dữ liệu đều nằm trong một hàng duy nhất.
+Có “nhiều lớp hơn số bảng” là cách Hibernate hỗ trợ các mô hình miêu tả chi tiết trong lĩnh vực. 
+Hãy viết các lớp và ánh xạ cho cấu trúc này.
+
+
+5.2.2 Making classes embeddable
+
+Java không có khái niệm về composition (sự kết hợp) - một lớp hoặc thuộc tính không thể được đánh dấu là một thành phần hoặc 
+chu kỳ cuộc sống của thành phần. Sự khác biệt duy nhất so với một entity là định danh cơ sở dữ liệu: một lớp thành phần không 
+có danh tính riêng lẻ; do đó, lớp thành phần không cần thuộc tính định danh hoặc ánh xạ định danh. Nó là một POJO đơn giản, 
+như bạn có thể thấy trong ví dụ dưới đây.
+
+PATH: /model/src/main/java/org/jpwh/model/simple/Address.java
+
+@Embeddable
+public class Address {
+  
+  @NotNull
+  @Column(nullable = false)
+  protected String street;
+  
+  @NotNull
+  @Column(nullable = false, length = 5)
+  protected String zipcode;
+  
+  @NotNull
+  @Column(nullable = false)
+  protected String city;
+  
+  protected Address() {
+  }
+  
+  public Address(String street, String zipcode, String city) {
+    this.street = street;
+    this.zipcode = zipcode;
+    this.city = city;
+  }
+  
+  public String getStreet() {
+    return street;
+  }
+  
+  public void setStreet(String street) {
+    this.street = street;
+  }
+
+  public String getZipcode() {
+    return zipcode;
+  }
+  
+  public void setZipcode(String zipcode) {
+    this.zipcode = zipcode;
+  }
+  
+  public String getCity() {
+    return city;
+  }
+  
+  public void setCity(String city) {
+    this.city = city;
+  }
+}
+
+→ Thay vì sử dụng @Entity, POJO thành phần này được đánh dấu bằng @Embeddable. Nó không có thuộc tính định danh.
+→ Hibernate gọi constructor không tham số này để tạo một thể hiện và sau đó điền dữ liệu trực tiếp vào các trường.
+→ Bạn có thể có thêm các constructor (có quyền truy cập public) để thuận tiện.
+
+Các thuộc tính của một embeddable class mặc định đều là persistent, giống như các thuộc tính của một lớp thực thể 
+persistent. Bạn có thể cấu hình ánh xạ thuộc tính bằng các chú thích giống như @Column hoặc @Basic. Các thuộc tính 
+của lớp Address ánh xạ tới các cột STREET, ZIPCODE và CITY và được ràng buộc bằng NOT NULL.
+
+Vấn đề: Hibernate Validator không tạo ra các ràng buộc NOT NULL
+Tại thời điểm viết này, vẫn còn một vấn đề chưa được giải quyết với Hibernate Validator: 
+Hibernate sẽ không ánh xạ các ràng buộc @NotNull lên các thuộc tính của thành phần nhúng thành ràng buộc NOT NULL 
+khi tạo cấu trúc cơ sở dữ liệu của bạn. Hibernate chỉ sử dụng @NotNull trên các thuộc tính của thành phần của bạn 
+trong thời gian chạy, cho Bean Validation. Bạn phải ánh xạ thuộc tính bằng @Column(nullable = false) để tạo ra 
+ràng buộc trong cấu trúc cơ sở dữ liệu. Cơ sở dữ liệu lỗi của Hibernate đang theo dõi vấn đề này với mã HVAL-3.
+
+Hibernate detects (phát hiện) rằng lớp Address được chú thích bằng @Embeddable; các cột STREET, ZIPCODE và CITY 
+được ánh xạ vào bảng USERS, bảng của đối tượng sở hữu. Khi chúng ta nói về việc truy cập thuộc tính trước đây trong 
+chương này, chúng ta đã đề cập rằng các thành phần nhúng thừa hưởng chiến lược truy cập từ đối tượng sở hữu của chúng. 
+Điều này có nghĩa là Hibernate sẽ truy cập vào các thuộc tính của lớp Address bằng cùng một chiến lược như cho các 
+thuộc tính User. Thừa kế này cũng ảnh hưởng đến vị trí của các chú thích ánh xạ trong các lớp thành phần nhúng. 
+Các quy tắc như sau:
+- Nếu @Entity sở hữu của một thành phần nhúng được ánh xạ bằng cách truy cập trường (field access), hoặc tự động 
+với @Id trên một trường hoặc rõ ràng với @Access(AccessType.FIELD) trên lớp, tất cả các chú thích ánh xạ của lớp 
+thành phần nhúng cần nằm trên các trường của lớp thành phần. Hibernate mong đợi các chú thích nằm trên các trường 
+của lớp Address và đọc/ghi trực tiếp vào các trường trong thời gian chạy. Các phương thức getter và setter trên Address 
+là tùy chọn.
+
+- Nếu @Entity sở hữu của một thành phần nhúng được ánh xạ bằng cách truy cập thuộc tính (property access), hoặc tự động 
+với @Id trên một phương thức getter hoặc rõ ràng với @Access(AccessType.PROPERTY) trên lớp, tất cả các chú thích ánh xạ 
+của lớp thành phần nhúng cần nằm trên phương thức getter của lớp thành phần. Hibernate sau đó đọc và ghi giá trị bằng cách gọi 
+các phương thức getter và setter trên lớp thành phần nhúng.
+
+- Nếu thuộc tính nhúng của lớp đối tượng sở hữu - ví dụ: User#homeAddress trong ví dụ trước đó - được đánh dấu với 
+@Access(AccessType.FIELD), Hibernate mong đợi các chú thích nằm trên các trường của lớp Address và truy cập các trường 
+trong thời gian chạy.
+
+- Nếu thuộc tính nhúng của lớp đối tượng sở hữu - ví dụ: User#homeAddress trong ví dụ trước đó - được đánh dấu với
+@Access(AccessType.PROPERTY), Hibernate mong đợi các chú thích nằm trên phương thức getter của lớp Address
+và truy cập các phương thức getter và setter trong thời gian chạy.
+
+- Nếu @Access được ánh xạ trực tiếp vào lớp thành phần nhúng, Hibernate sẽ sử dụng chiến lược đã chọn để đọc các 
+chú thích ánh xạ trên lớp thành phần nhúng và truy cập trong thời gian chạy.
+
+Còn một điểm quan trọng nữa cần nhớ: không có cách thanh lịch để biểu diễn một tham chiếu `null` đến một `Address`. 
+Hãy xem xét xem điều gì sẽ xảy ra nếu các cột STREET, ZIPCODE và CITY có thể chứa giá trị null. Khi Hibernate tải 
+một đối tượng User mà không có thông tin địa chỉ nào, thì điều gì sẽ được trả về khi gọi `someUser.getHomeAddress()`? 
+Hibernate sẽ trả về giá trị null trong trường hợp này. Hibernate cũng lưu trữ thuộc tính nhúng null dưới dạng các 
+giá trị NULL trong tất cả các cột đã ánh xạ của thành phần. Do đó, nếu bạn lưu trữ một User với một Address "trống" 
+(bạn có một thể hiện Address nhưng tất cả các thuộc tính của nó đều là null), thì không có thể hiện Address nào sẽ 
+được trả về khi bạn tải User. Điều này có thể khá khó hiểu; ngược lại, có lẽ bạn không nên có các cột có khả năng 
+chứa giá trị null và nên tránh sử dụng logic tam phân.
+
+Bạn nên ghi đè các phương thức equals() và hashCode() của lớp Address và so sánh các thể hiện theo giá trị. 
+Điều này không quan trọng đến mức cần thiết miễn là bạn không cần so sánh các thể hiện với nhau: ví dụ, bằng cách đặt 
+chúng vào một HashSet. Chúng ta sẽ thảo luận về vấn đề này sau, trong ngữ cảnh của các bộ sưu tập; xem phần 7.2.1.
+
+Trong một kịch bản thực tế hơn, một người dùng có thể có các địa chỉ riêng biệt cho các mục đích khác nhau. 
+Hình 5.1 đã thể hiện một mối quan hệ hợp thành bổ sung giữa User và Address: billingAddress (địa chỉ thanh toán).
+>>>>>>> c3196b672251a8a638d0d604464dad1368b17648
