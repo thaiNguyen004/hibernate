@@ -341,3 +341,33 @@ Hãy xem xét org.hibernate.annotations.GeneratorType và ValueGenerationType.
 
 Một loại thuộc tính đặc biệt khác là enumeration (kiểu liệt kê).
 
+5.1.7 Mapping enumerations
+
+Một `enumeration type` là một biểu thức phổ biến trong Java, trong đó một lớp có một số hằng số (nhỏ) các trường không thay đổi.
+Ví dụ, trong CaveatEmptor, bạn có thể áp dụng điều này cho các phiên đấu giá:
+
+public enum AuctionType {
+    HIGHEST_BID,
+    LOWEST_BID,
+    FIXED_PRICE
+}
+
+Bây giờ bạn có thể đặt auctionType thích hợp cho mỗi Item:
+
+@NotNull
+@Enumerated(EnumType.STRING) // Defaults to ORDINAL
+protected AuctionType auctionType = AuctionType.HIGHEST_BID;
+
+Khi bạn lưu trữ một giá trị enum mà không sử dụng @Enumerated annotation với Hibernate, Hibernate sẽ lưu trữ
+ORDINAL position của giá trị đó vào cơ sở dữ liệu. Tuy nhiên, điều này có thể gây vấn đề nếu bạn thay đổi enum
+bằng cách thêm hoặc xóa phần tử, vì các giá trị đã lưu trữ có thể không còn ánh xạ đúng với vị trí mới của các phần
+tử enum.
+Do đó, sử dụng @Enumerated với EnumType.STRING là một cách an toàn hơn để lưu trữ giá trị enum, bằng cách lưu trữ tên
+của giá trị enum thay vì ORDINAL position.
+
+Điều này hoàn thành hành trình của chúng ta về các thuộc tính cơ bản và tùy chọn ánh xạ của chúng. Cho đến nay, chúng tôi
+đã hiển thị các thuộc tính của các loại được cung cấp bởi JDK như String, Date và BigDecimal. Domain model của bạn cũng
+có các lớp giá trị tùy chỉnh, đó là những lớp với mối quan hệ sở thích trong biểu đồ UML.
+
+
+
