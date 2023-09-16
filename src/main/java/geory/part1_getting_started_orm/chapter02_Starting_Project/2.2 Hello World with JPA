@@ -269,3 +269,23 @@ kèm với ngữ cảnh tồn tại mà nó đã được nạp vào.
 
 4 Khi hoàn tất giao dịch, Hibernate kiểm tra ngữ cảnh tồn tại để xác định trạng thái "dirty" và thực thi tự động câu 
 lệnh SQL UPDATE để đồng bộ hóa trạng thái trong bộ nhớ với trạng thái cơ sở dữ liệu.
+
+
+Ngôn ngữ truy vấn bạn thấy trong ví dụ này không phải là SQL, đó là Java Persistence Query Language (JPQL). 
+Mặc dù trong ví dụ đơn giản này không có sự khác biệt về cú pháp, nhưng "Message" trong chuỗi truy vấn không 
+đề cập đến tên bảng trong cơ sở dữ liệu, mà đề cập đến tên persistent class. Nếu bạn ánh xạ lớp này thành một 
+bảng khác, truy vấn vẫn sẽ hoạt động.
+
+Hãy chú ý cách Hibernate phát hiện sự thay đổi trong thuộc tính "text" của message và tự động cập nhật cơ sở dữ liệu. 
+Điều này chính là tính năng kiểm tra tự động (automatic dirty-checking) của JPA đang hoạt động. Nó giúp bạn tiết kiệm 
+công sức không cần yêu cầu persistence manager của bạn cập nhật cơ sở dữ liệu khi bạn sửa đổi trạng thái của một thể hiện 
+trong một giao dịch.
+
+Bạn đã hoàn thành ứng dụng Hibernate và JPA đầu tiên của bạn. Có thể bạn đã nhận thấy rằng chúng tôi ưa thích viết ví dụ 
+dưới dạng các executable tests, với (assertions) kiểm tra kết quả đúng của mỗi thao tác. Chúng tôi đã lấy tất cả các ví dụ 
+trong cuốn sách này từ test code, để bạn (và chúng tôi) có thể đảm bảo rằng chúng hoạt động đúng cách. Thật không may, điều 
+này cũng có nghĩa là bạn cần nhiều hơn một dòng mã để tạo EntityManagerFactory khi khởi động môi trường kiểm tra. 
+Chúng tôi đã cố gắng giữ việc thiết lập kiểm tra càng đơn giản càng tốt. Bạn có thể tìm mã trong org.jpwh.env.JPASetup và 
+org.jpwh.env.JPATest; sử dụng nó như một điểm khởi đầu để viết hệ thống test của riêng bạn.
+
+Trước khi làm việc trên các ví dụ ứng dụng thực tế hơn, hãy nhanh chóng xem qua native Hibernate bootstrap và configuration API.
