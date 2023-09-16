@@ -1,0 +1,543 @@
+3.3 Domain model metadata
+Metadata là thông tin về data, vì vậy Metadata domain model là thông tin về domain model của bạn. 
+Ví dụ, khi bạn sử dụng Java reflection API để khám phá tên của các lớp trong domain model của bạn 
+hoặc tên của các thuộc tính của chúng, bạn đang truy cập vào Metadata domain model.
+
+Các công cụ ORM cũng yêu cầu Metadata để chỉ định sự ánh xạ giữa các lớp và bảng, thuộc tính và cột, 
+các mối quan hệ và các khóa ngoại, kiểu dữ liệu Java và kiểu dữ liệu SQL, và cứ tiếp tục. 
+ORM metadata điều chỉnh quá trình biến đổi giữa các hệ thống kiểu khác nhau và biểu diễn mối quan hệ 
+trong hệ thống hướng đối tượng và SQL. JPA có một API Metadata, mà bạn có thể gọi để lấy thông tin 
+chi tiết về các khía cạnh liên quan đến persistence của domain model của bạn, chẳng hạn như tên của 
+các persistence entities và attributes. Đầu tiên, công việc của bạn là một kỹ sư là tạo ra và 
+maintain (duy trì) thông tin này.
+
+JPA tiêu chuẩn hóa hai tùy chọn Metadata: annotations trong mã Java và các tệp mô tả XML bên ngoài. 
+Hibernate có một số tiện ích mở rộng cho chức năng cơ bản, cũng có sẵn dưới dạng annotation và/hoặc 
+tệp mô tả XML. Thông thường, chúng ta ưa thích chú thích hoặc tệp XML làm nguồn chính cho Metadata 
+ánh xạ. Sau khi đọc phần này, bạn sẽ có thông tin cơ bản để đưa ra quyết định có kiến thức cho dự án 
+của bạn.
+
+Chúng tôi cũng sẽ thảo luận về Bean Validation (JSR 303) và cách nó cung cấp tính năng xác thực theo 
+cách khai báo cho các lớp domain model của bạn (hoặc bất kỳ lớp nào khác). Dự án Hibernate Validator 
+là phiên bản tham chiếu của thông số kỹ thuật này. Hầu hết các kỹ sư ngày nay ưa thích annotation 
+Java là cơ chế chính để khai báo Metadata.
+
+3.3.1 Metadata dựa trên Annotation
+Ưu điểm lớn của các annotations là đặt dữ liệu dạng siêu dữ liệu (metadata) cùng với thông tin mô tả nó, 
+thay vì tách riêng về mặt vật lý thành một tệp khác. Dưới đây là một ví dụ.
+
+PATH: /model/src/main/java/org/jpwh/model/simple/Item.java
+
+import javax.persistence.Entity; 
+@Entity
+public class Item {
+}
+
+Bạn có thể tìm thấy các JPA mapping annotation tiêu chuẩn trong gói javax.persistence. 
+Ví dụ này khai báo lớp Item là một đối tượng persistence sử dụng chú thích @javax.persistence.Entity. 
+Tất cả các thuộc tính của nó hiện được automatic persistence với một chiến lược mặc định. Điều đó có 
+nghĩa là bạn có thể load và store các instance của Item và tất cả các thuộc tính của lớp đều là một phần 
+của trạng thái quản lý.
+
+(Nếu bạn đã theo dõi chương trước, bạn có thể đã thấy thiếu chú thích @Id bắt buộc
+và thuộc tính định danh. Nếu bạn muốn thử ví dụ về Item, bạn sẽ phải thêm một thuộc tính định danh. 
+Chúng ta sẽ thảo luận về các thuộc tính định danh lại trong chương tiếp theo, trong phần 4.2.)
+
+
+Lớp của bạn có phụ thuộc vào JPA không?
+Có, nhưng đó là một phụ thuộc chỉ ở thời điểm biên dịch. 
+Bạn cần có các thư viện JPA trên classpath của bạn khi biên dịch mã nguồn của lớp domain model dữ liệu của bạn. 
+Java Persistence API không cần phải nằm trên classpath khi bạn tạo một instance của lớp: 
+ví dụ, trong ứng dụng máy tính để bàn không thực thi bất kỳ mã JPA nào. Chỉ khi bạn truy cập các annotations
+thông qua reflection tại thời điểm runtime (như Hibernate làm nội bộ khi đọc metadata của bạn) thì bạn cần có 
+các gói trên đường dẫn lớp.
+
+Khi các chú thích Java Persistence chuẩn không đủ, một nhà cung cấp JPA có thể cung cấp các chú thích bổ sung.
+
+SỬ DỤNG PHẦN MỞ RỘNG CỦA NHÀ CUNG CẤP
+Ngay cả khi bạn ánh xạ hầu hết mô hình ứng dụng của mình bằng các chú thích tương thích với JPA từ gói javax.persistence, 
+bạn sẽ phải sử dụng các phần mở rộng của nhà cung cấp tại một số điểm nào đó. Ví dụ, một số tùy chỉnh tinh chỉnh hiệu suất 
+mà bạn mong đợi có sẵn trong phần mềm persistence chất lượng cao chỉ có sẵn dưới dạng các chú thích cụ thể cho Hibernate. 
+Đây chính là cách các nhà cung cấp JPA cạnh tranh, vì vậy bạn không thể tránh được các chú thích từ các gói khác — có lý 
+do bạn đã chọn Hibernate.
+Dưới đây là mã nguồn thực thể Item với một tùy chọn ánh xạ chỉ có sẵn trong Hibernate:
+
+import javax.persistence.Entity;
+
+@Entity
+@org.hibernate.annotations.Cache(
+    usage = org.hibernate.annotations.CacheConcurrencyStrategy.READ_WRITE
+)
+public class Item {
+}
+
+Chúng tôi ưu tiên việc đặt tiền tố cho các chú thích Hibernate với tên gói đầy đủ là "org.hibernate.annotations". 
+Điều này được coi là một thực hành tốt, vì bạn có thể dễ dàng nhận biết được metadata nào thuộc về JPA theo đặc tả 
+và metadata nào thuộc về nhà cung cấp cụ thể. Bạn cũng có thể dễ dàng tìm kiếm mã nguồn của mình với từ khoá 
+"org.hibernate.annotations" và nhận được một cái nhìn toàn diện về tất cả các chú thích phi chuẩn trong ứng dụng của 
+bạn chỉ trong một kết quả tìm kiếm duy nhất. Nếu bạn chuyển đổi nhà cung cấp Java Persistence của mình, bạn chỉ cần 
+thay thế các phần mở rộng cụ thể của nhà cung cấp, nơi bạn có thể mong đợi sẽ có một tập tính năng tương tự với hầu 
+hết các triển khai JPA trưởng thành. Tất nhiên, chúng tôi hy vọng rằng bạn sẽ không bao giờ phải làm điều này và thực tế 
+thì điều này không xảy ra thường xuyên, nhưng bạn nên sẵn sàng cho trường hợp đó.
+
+Các chú thích trên các lớp chỉ bao gồm metadata áp dụng cho lớp cụ thể đó. Bạn thường cần metadata ở một cấp độ cao hơn, 
+cho một gói toàn bộ hoặc thậm chí là toàn bộ ứng dụng.
+
+METADATA CHUNG CHO ANNOTATION TOÀN CỤC
+Chú thích @Entity ánh xạ một lớp cụ thể. JPA và Hibernate cũng có các annotation cho metadata toàn cục. 
+Ví dụ, @NamedQuery có phạm vi toàn cục; bạn không áp dụng nó cho một lớp cụ thể. Bạn nên đặt annotation này ở đâu?
+
+Mặc dù có thể đặt các chú thích toàn cục như vậy trong tệp nguồn của một lớp (bất kỳ lớp nào cũng được, thực sự, ở đầu tệp), 
+chúng tôi muốn giữ metadata toàn cục trong một tệp riêng biệt. Chú thích cấp gói là một sự lựa chọn tốt; 
+chúng được đặt trong một tệp có tên là package-info.java trong một thư mục gói cụ thể. Bạn có thể thấy ví dụ về các khai 
+báo truy vấn có tên toàn cục trong đoạn mã sau.
+
+PATH: /model/src/main/java/org/jpwh/model/querying/package-info.java
+
+@org.hibernate.annotations.NamedQueries({
+    @org.hibernate.annotations.NamedQuery(
+        name = "findItemsOrderByName",
+        query = "select i from Item i order by i.name asc"
+    )
+    ,
+    @org.hibernate.annotations.NamedQuery(
+        // Tìm Mặt Hàng Mua Ngay Giá lớn hơn
+        name = "findItemBuyNowPriceGreaterThan",
+        query = "select i from Item i where i.buyNowPrice > :price",
+        timeout = 60,
+        comment = "Custom SQL comment"
+    )
+})
+
+Nếu bạn chưa từng sử dụng các chú thích cấp gói trước đây, cú pháp của tệp này với các khai báo gói và
+import ở cuối tệp có lẽ mới đối với bạn. Có một lý do mà ví dụ mã trước đó chỉ bao gồm các chú thích từ
+gói Hibernate và không có chú thích Java Persistence. Chúng tôi đã bỏ qua chú thích chuẩn JPA
+@org.javax.persistence.NamedQuery và sử dụng tùy chọn Hibernate. Các chú thích JPA không có khả năng
+áp dụng cho gói - chúng tôi không biết tại sao. Trên thực tế, JPA không cho phép chú thích trong tệp
+package-info.java. Các chú thích Hibernate nguyên bản cung cấp cùng, và đôi khi thậm chí nhiều hơn,
+chức năng, vì vậy điều này không nên là một vấn đề quá lớn. Nếu bạn không muốn sử dụng các chú thích
+Hibernate, bạn sẽ phải đặt các chú thích JPA ở đầu của bất kỳ lớp nào
+(bạn có thể có một lớp MyNamedQueries trống trơn như một phần của mô hình miền dữ liệu của bạn) hoặc sử
+dụng một tệp XML, như bạn sẽ thấy sau trong phần này.
+Chú thích sẽ là công cụ chính của chúng tôi trong toàn bộ cuốn sách này để xác định siêu dữ liệu ORM,
+và có nhiều điều để học về chủ đề này. Trước khi chúng ta xem xét một số kiểu ánh xạ thay thế với tệp XML,
+hãy sử dụng một số chú thích đơn giản để cải thiện các lớp mô hình miền dữ liệu với các quy tắc xác minh.
+
+
+3.3.2 Applying Bean Validation rules
+
+Hầu hết các ứng dụng chứa nhiều kiểm tra tính toàn vẹn dữ liệu. Bạn đã thấy điều gì xảy ra khi vi phạm một 
+trong những ràng buộc tính toàn vẹn dữ liệu đơn giản nhất: bạn nhận được một NullPointerException khi bạn 
+mong đợi một giá trị có sẵn. Các ví dụ khác bao gồm thuộc tính có giá trị kiểu chuỗi không được trống 
+(hãy nhớ, chuỗi trống không phải là null), một chuỗi phải khớp với một mẫu biểu thức chính quy cụ thể và 
+một giá trị số hoặc ngày phải nằm trong một khoảng cụ thể.
+
+Những quy tắc business này ảnh hưởng đến mọi lớp trong ứng dụng: mã giao diện người dùng phải hiển thị 
+thông báo lỗi chi tiết và địa chỉ. Các lớp business và lớp persistence phải kiểm tra giá trị đầu vào nhận 
+được từ máy khách trước khi chuyển chúng đến lớp dữ liệu. Cơ sở dữ liệu SQL phải là người xác minh cuối cùng, 
+cuối cùng đảm bảo tính toàn vẹn của dữ liệu bền vững.
+
+Ý tưởng đằng sau Bean Validation là việc khai báo các quy tắc như "Thuộc tính này không thể là null" hoặc 
+"Số này phải nằm trong khoảng cụ thể" dễ dàng hơn và ít dễ gây lỗi hơn so với việc viết các thủ tục if-then-else 
+lặp đi lặp lại. Hơn nữa, việc khai báo những quy tắc này trên thành phần trung tâm của ứng dụng của bạn, 
+triển khai domain model, cho phép kiểm tra tính toàn vẹn ở mọi lớp trong hệ thống. Sau đó, các quy tắc sẽ 
+sẵn sàng cho các lớp presentation và lớp persistence. Nếu bạn xem xét cách ràng buộc tính toàn vẹn dữ liệu 
+không chỉ ảnh hưởng đến mã ứng dụng Java của bạn mà còn đến cơ sở dữ liệu SQL của bạn - đó là một bộ quy tắc tính 
+toàn vẹn khác - bạn có thể nghĩ về các ràng buộc Bean Validation như là dữ liệu ORM bổ sung.
+
+Hãy xem xét lớp domain model Item được mở rộng sau đây.
+
+import javax.validation.constraints.Future;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+@Entity
+public class Item {
+     
+    @NotNull 
+    @Size(
+        min = 2,
+        max = 255,
+        message = "Name is required, maximum 255 characters."
+    )
+    protected String name;
+  
+    @Future
+    protected Date auctionEnd;
+}
+
+Bạn thêm hai thuộc tính nữa - name một item và auctionEnd ( ngày đấu giá kết thúc) - khi một phiên đấu giá kết thúc. 
+Cả hai đều là ứng cử viên điển hình cho các ràng buộc bổ sung: bạn muốn đảm bảo rằng tên luôn có mặt và có thể đọc 
+được bởi con người (tên một ký tự không có nhiều ý nghĩ), nhưng nó không nên quá dài - cơ sở dữ liệu SQL của bạn sẽ 
+hiệu quả nhất với chuỗi độ dài biến đổi lên đến 255 ký tự, và giao diện người dùng của bạn cũng có một số ràng buộc 
+về không gian nhãn hiển thị. 
+Thời gian kết thúc của một phiên đấu giá rõ ràng nên ở trong tương lai. Nếu bạn không cung cấp một error message, 
+một message mặc định sẽ được sử dụng. Các message có thể là các (keys) đến các file properties external (bên ngoài), 
+để đa ngôn ngữ hóa nội dung. Tức là dựa vào keys có thể hiển thị các message với nhiều dạng ngôn ngữ khác nhau mà
+không cần thay đổi mã nguồn.
+
+Bộ máy kiểm tra tính hợp lệ (validation engine) sẽ truy cập trực tiếp vào các trường nếu bạn đánh dấu các trường đó. 
+Nếu bạn ưa thích các cuộc gọi thông qua các phương thức truy cập, hãy đánh dấu phương thức getter với các ràng buộc 
+validate, chứ không phải phương thức setter. Sau đó, các ràng buộc sẽ là một phần của API của lớp và được bao gồm 
+trong tài liệu Javadoc của nó, làm cho việc triển khai domain model dễ hiểu hơn. Lưu ý rằng điều này độc lập với 
+việc truy cập bởi nhà cung cấp JPA; tức là, Hibernate Validator có thể gọi các phương thức truy cập, trong khi 
+Hibernate ORM có thể gọi trực tiếp các trường.
+
+Bean Validation không giới hạn ở các annotation build-in; bạn có thể tạo ra các constaint và annotation custom của 
+riêng mình. Với một ràng buộc tùy chỉnh, bạn có thể sử dụng cả annotation cấp lớp và kiểm tra nhiều giá trị thuộc tính 
+cùng một lúc trên một instance của lớp. 
+
+Đoạn mã kiểm tra sau đây cho thấy cách bạn có thể kiểm tra tính toàn vẹn của một thể hiện Item một cách thủ công.
+
+
+Testing an Item instance for constraint violations
+Kiểm tra một instance Item cho các ràng buộc vi phạm (violations)
+PATH: /examples/src/test/java/org/jpwh/test/simple/ModelOperations.java
+
+
+ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+Validator validator = factory.getValidator();
+Item item = new Item();
+item.setName("Some Item");
+item.setAuctionEnd(new Date());
+Set<ConstraintViolation<Item>> violations = validator.validate(item);
+// So sánh kết quả với giá trị kỳ vọng là 1
+assertEquals(1, violations.size());
+ConstraintViolation<Item> violation = violations.iterator().next();
+String failedPropertyName =
+ violation.getPropertyPath().iterator().next().getName();
+assertEquals(failedPropertyName, "auctionEnd");
+if (Locale.getDefault().getLanguage().equals("en"))
+ assertEquals(violation.getMessage(), "must be in the future");
+
+
+Chúng tôi sẽ không giải thích mã này chi tiết nhưng đưa nó ra để bạn khám phá. Bạn hiếm khi viết mã kiểm tra kiểu này; 
+hầu hết thời gian, khía cạnh này được xử lý tự động bởi giao diện người dùng và persistence framework của bạn. Do đó, 
+quan trọng để tìm tích hợp Bean Validation khi chọn một framework giao diện người dùng. Ví dụ, phiên bản 2 trở lên của 
+JSF tự động tích hợp với Bean Validation.
+
+Hibernate, như yêu cầu từ bất kỳ nhà cung cấp JPA nào, cũng tự động tích hợp với Hibernate Validator nếu thư viện này 
+có sẵn trên classpath và cung cấp các tính năng sau đây:
+- Bạn không cần phải kiểm tra thủ công các entity trước khi truyền chúng cho Hibernate để lưu trữ.
+- Hibernate nhận biết các ràng buộc trên các lớp persistence domain model và kích hoạt kiểm tra trước khi thực hiện 
+thao tác chèn hoặc cập nhật vào cơ sở dữ liệu. Khi kiểm tra thất bại, Hibernate sẽ ném ra một (Ngoại lệ ràng buộc vi phạm) 
+ConstraintViolationException, chứa thông tin về việc error validate, đến mã gọi các thao tác quản lý sự tồn tại.
+- Công cụ Hibernate để tự động tạo schema (lược đồ) SQL hiểu được nhiều ràng buộc và tạo ra các ràng buộc tương đương 
+SQL DDL cho bạn. Ví dụ, một chú thích @NotNull dịch thành một ràng buộc SQL NOT NULL, và một quy tắc @Size(n) xác định 
+số ký tự trong một cột được định kiểu VARCHAR(n). Bạn có thể kiểm soát hành vi này của Hibernate với phần tử <validation-mode> 
+trong tệp cấu hình persistence.xml của bạn. Chế độ mặc định là AUTO, vì vậy Hibernate chỉ kiểm tra nếu nó tìm thấy một nhà 
+cung cấp Bean Validation (như Hibernate Validator) trên classpath của ứng dụng đang chạy. Với chế độ CALLBACK, kiểm tra sẽ 
+luôn xảy ra và bạn sẽ nhận được lỗi triển khai nếu bạn quên đóng gói một nhà cung cấp Bean Validation. Chế độ NONE tắt 
+kiểm tra tự động bởi nhà cung cấp JPA.
+
+Bạn sẽ lại thấy các annotation Bean Validation sau này trong cuốn sách này; bạn cũng sẽ tìm thấy chúng trong bộ mã ví dụ. 
+Tại điểm này, chúng tôi có thể viết nhiều hơn về Hibernate Validator, nhưng chúng tôi chỉ sẽ lặp lại những gì đã có trong 
+hướng dẫn tham khảo tuyệt vời của dự án. Hãy xem và tìm hiểu thêm về các tính năng như validation group và API metadata 
+để khám phá các ràng buộc. Tiêu chuẩn Java Persistence và Bean Validation chấp nhận annotation một cách mạnh mẽ. 
+Các nhóm chuyên gia đã nhận thức được lợi ích của tệp mô tả triển khai XML trong một số tình huống, đặc biệt là đối với 
+configuration metadata thay đổi với mỗi triển khai (each deployment).
+
+3.3.3 Externalizing metadata with XML file
+
+Bạn có thể thay thế hoặc ghi đè lên mọi annotation trong JPA bằng một phần tử mô tả XML. 
+Nói cách khác, bạn không cần phải sử dụng các annotation nếu bạn không muốn hoặc nếu việc giữ siêu dữ liệu ánh xạ riêng biệt 
+khỏi mã nguồn có lợi cho thiết kế hệ thống của bạn vì bất kỳ lý do gì.
+
+XML metadata with JPA
+Dưới đây là một ví dụ về một phần tử mô tả XML JPA cho một persistence unit cụ thể.
+
+<entity-mappings
+     version="2.1"
+     xmlns="http://xmlns.jcp.org/xml/ns/persistence/orm"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence/orm
+         http://xmlns.jcp.org/xml/ns/persistence/orm_2_1.xsd">
+
+    // First, statement below is global metadata
+    <persistence-unit-metadata>
+        // Below, Ignore (bỏ qua) all annotations and all mapping metadata in XML file
+        <xml-mapping-metadata-complete>
+
+        // Some default settings
+        <persistence-unit-default>
+            /*
+                Chiến lược thoát (escape) tất cả các column, table, và tất cả các tên khác
+                ví dụ nếu SQL của bạn cso tên là từ khóa USER thì phải sử dụng chiến lược escape để
+                làm cho SQL không bị nhầm lẫn với từ USER từ hệ thống.
+            */
+            <delimited-identifier/>
+        </persistence-unit-default>
+
+    </persistence-unit-metadata>
+
+    <entity class="org.jpwh.model.simple.Item" access="FIELD">
+         <attributes>
+             <id name="id">
+                 <generated-value strategy="AUTO"/>
+             </id>
+             <basic name="name"/>
+             <basic name="auctionEnd">
+                 <temporal>TIMESTAMP</temporal>
+             </basic>
+         </attributes>
+     </entity>
+</entity-mappings>
+
+
+Nhà cung cấp JPA tự động nhận dạng mô tả này nếu bạn đặt nó trong một tệp META-INF/orm.xml trên classpath 
+của persistence unit. Nếu bạn muốn sử dụng tên khác hoặc nhiều tệp, bạn sẽ phải thay đổi cấu hình của persistence unit 
+trong tệp META-INF/persistence.xml của bạn:
+
+<persistence-unit name="SimpleXMLCompletePU">
+    ...
+    <mapping-file>simple/Mappings.xml</mapping-file>
+    <mapping-file>simple/Queries.xml</mapping-file>
+    ...
+</persistence-unit>
+
+Nếu bạn bao gồm phần tử <xml-mapping-metadata-complete>, nhà cung cấp JPA sẽ bỏ qua tất cả các chú thích trên 
+các lớp domain model của bạn trong persistence unit này và chỉ dựa vào các ánh xạ được định nghĩa trong mô tả XML. 
+Bạn có thể (một cách dư thừa trong trường hợp này) kích hoạt tính năng này trên cấp độ thực thể bằng cách sử dụng 
+<metadata-complete="true"/>. Nếu được kích hoạt, nhà cung cấp JPA sẽ cho rằng bạn đã ánh xạ tất cả các thuộc tính 
+của thực thể trong XML và rằng nó nên bỏ qua tất cả các annotation cho thực thể cụ thể này.
+
+Thay vào đó, nếu bạn không muốn bỏ qua mà muốn override lên các annotation metadata, bạn không nên đánh dấu các 
+mô tả XML như "complete" và đặt tên lớp và thuộc tính cần ghi đè:
+
+<entity class="org.jpwh.model.simple.Item">
+     <attributes>
+         <basic name="name">
+            <!-- Override annotations here --> 
+            <column name="ITEM_NAME"/>
+         </basic>
+     </attributes>
+</entity>
+
+
+Ở đây, bạn ánh xạ thuộc tính `name` vào cột `ITEM_NAME`; mặc định, thuộc tính này sẽ ánh xạ vào cột `NAME`. 
+Hibernate bây giờ sẽ bỏ qua bất kỳ chú thích hiện có nào từ các gói javax.persistence.annotation và org.hibernate.annotations 
+trên thuộc tính `name` của lớp Item. Tuy nhiên, Hibernate không bỏ qua các chú thích Bean Validation và vẫn áp dụng 
+chúng để kiểm tra tự động và tạo lược đồ!
+Tất cả các chú thích khác trên lớp Item cũng được nhận dạng. Lưu ý rằng bạn không chỉ định một chiến lược truy cập 
+trong ánh xạ này, vì vậy truy cập trường hoặc phương thức truy cập được sử dụng, tùy thuộc vào vị trí của chú thích @Id trong Item. 
+(Chúng tôi sẽ quay lại chi tiết này trong chương tiếp theo.)
+Chúng tôi sẽ không nói nhiều về các mô tả XML JPA trong cuốn sách này. Cú pháp của các tài liệu này là một bản phản chiếu 1:1 
+của cú pháp chú thích JPA, vì vậy bạn không nên gặp bất kỳ vấn đề nào khi viết chúng. Chúng tôi sẽ tập trung vào khía cạnh quan trọng: 
+các mapping strategies (chiến lược ánh xạ). 
+Cú pháp được sử dụng để ghi lại siêu dữ liệu là phụ.
+Rất tiếc, giống như nhiều lược đồ khác trong thế giới Java EE, tệp orm_2_0.xsd của JPA không cho phép các phần tử và thuộc tính 
+từ một không gian tên khác trong các tài liệu ánh xạ XML JPA. Do đó, việc sử dụng các tiện ích mở rộng của nhà cung cấp và các tính 
+năng native của Hibernate đòi hỏi phải quay lại cú pháp XML khác.
+
+Để sử dụng các tính năng mở rộng hoặc tính năng riêng của Hibernate, bạn cần sử dụng một cú pháp XML khác, không phải là cú pháp 
+chuẩn JPA. Điều này đặc biệt quan trọng khi bạn cần sử dụng các tính năng đặc biệt của Hibernate mà không thể được thực hiện bằng 
+cú pháp JPA tiêu chuẩn.
+
+HIBERNATE XML MAPPING FILES
+
+Trước khi JDK 5 giới thiệu chú thích (annotations), định dạng tệp ánh xạ XML nguyên bản của Hibernate đã tồn tại. 
+Theo quy ước, bạn đặt tên cho các tệp này với hậu tố .hbm.xml. Dưới đây là một ví dụ về một tài liệu ánh xạ 
+Hibernate XML cơ bản:
+
+<?xml version="1.0"?>
+<hibernate-mapping
+     xmlns="http://www.hibernate.org/xsd/orm/hbm"
+     package="org.jpwh.model.simple"
+     default-access="field">  // Declare metadata [1]
+
+    <class name="Item"> // Entity class mapping
+         <id name="id">
+             <generator class="native"/>
+         </id>
+         <property name="name"/>
+         <property name="auctionEnd" type="timestamp"/>
+    </class>
+
+    <query name="findItemsHibernate">select i from Item i</query> // Externalized queries
+
+    <database-object> // Lược đồ phụ trợ DDL
+         <create>create index ITEM_NAME_IDX on ITEM(NAME)</create>
+         <drop>drop index if exists ITEM_NAME_IDX</drop>
+    </database-object>
+</hibernate-mapping>
+
+[1]. Các tài liệu XML Hibernate được sử dụng để định nghĩa mapping metadata cho các đối tượng Java trong ứng dụng của bạn. 
+Dưới đây là một số điểm quan trọng về việc sử dụng tài liệu XML Hibernate:
+
+- Metadata được khai báo trong một phần tử gốc `<hibernate-mapping>`. Các thuộc tính như package và default-access áp dụng 
+cho tất cả các mapping trong tệp này. Bạn có thể bao gồm nhiều ánh xạ lớp thực thể như bạn muốn.
+
+- Tài liệu XML này khai báo một không gian tên XML mặc định cho tất cả các phần tử; đây là một tùy chọn mới trong Hibernate 5. 
+Nếu bạn có các tệp ánh xạ hiện có cho Hibernate 4 hoặc phiên bản cũ hơn với khai báo loại tài liệu XML, bạn có thể tiếp tục sử dụng chúng.
+
+- Mặc dù bạn có thể khai báo ánh xạ cho nhiều lớp trong cùng một tệp ánh xạ bằng cách sử dụng nhiều phần tử `<class>`, nhiều dự án 
+Hibernate cũ hơn tổ chức với một tệp ánh xạ cho mỗi lớp thực thể. Quy ước là đặt tên tệp giống với tên và gói của lớp được ánh xạ, 
+ví dụ: my/model/Item.hbm.xml cho lớp my.model.Item.
+
+- Một ánh xạ class trong tài liệu XML Hibernate là một ánh xạ "đầy đủ"; nghĩa là bất kỳ siêu dữ liệu ánh xạ khác nào cho lớp đó, 
+có sử dụng chú thích hoặc tài liệu XML JPA, sẽ gây ra lỗi "ánh xạ trùng lặp" khi khởi động ứng dụng. Nếu bạn ánh xạ một lớp trong 
+tài liệu XML Hibernate, khai báo này phải bao gồm tất cả chi tiết ánh xạ. Bạn không thể ghi đè lên từng thuộc tính cá nhân hoặc 
+mở rộng ánh xạ hiện có. Ngoài ra, bạn phải liệt kê và ánh xạ tất cả các thuộc tính cố định của lớp thực thể trong tài liệu XML Hibernate. 
+Nếu bạn không ánh xạ một thuộc tính, Hibernate coi nó là trạng thái transient. Điều này khác biệt so với ánh xạ JPA, trong đó chỉ cần 
+chú thích @Entity là tất cả các thuộc tính của một lớp trở nên cố định.
+
+- Tài liệu XML gốc của Hibernate không còn là sự lựa chọn chính cho việc khai báo hầu hết metadata ORM của một dự án. 
+Đa số kỹ sư hiện nay ưa thích chú thích (annotations). Tài liệu XML gốc chủ yếu được sử dụng để truy cập các tính năng đặc biệt của 
+Hibernate mà không có sẵn dưới dạng chú thích hoặc để dễ dàng duy trì trong các tệp XML (ví dụ, vì nó là siêu dữ liệu cấu hình phụ thuộc 
+vào triển khai). Bạn không bắt buộc phải có bất kỳ phần tử `<class>` nào trong tệp ánh xạ XML Hibernate. Do đó, tất cả siêu dữ liệu 
+trong các tệp này có thể là toàn cục cho persistence unit, chẳng hạn như chuỗi truy vấn (bao gồm cả SQL native), định nghĩa kiểu tùy chỉnh, 
+SQL DDL phụ cho các sản phẩm DBMS cụ thể, bộ lọc ngữ cảnh cố định động, và nhiều tính năng khác.
+
+Khi chúng tôi thảo luận về các tính năng cao cấp và native của Hibernate sau này, chúng tôi sẽ hướng dẫn bạn cách khai báo chúng 
+trong các tệp XML Hibernate. Như đã đề cập trước đó, trọng tâm của bạn nên là hiểu bản chất của mapping strategy, và hầu hết các ví dụ 
+của chúng tôi sẽ sử dụng annotation JPA và Hibernate để diễn đạt các chiến lược này.
+
+
+Các phương pháp chúng tôi đã mô tả cho đến nay giả định rằng tất cả ORM metadata được biết đến vào thời gian phát triển (hoặc triển khai). 
+Giả sử rằng một số thông tin không được biết đến trước khi ứng dụng bắt đầu. 
+
+Liệu bạn có thể can thiệp vào mapping metadata một cách tự động trong runtime ứng dụng không? 
+Chúng tôi cũng đã đề cập đến JPA metadata API để truy cập các chi tiết persistence-unit. Nó hoạt động như thế nào và khi nào nó hữu ích?
+
+
+3.3.4 Accessing metadata at runtime
+
+Hệ quả của JPA cung cấp các giao diện lập trình để truy cập metamodel của các lớp persistence. Có hai phiên bản của API này. Một phiên bản 
+có dynamic (tính động) hơn và tương tự như reflection cơ bản trong Java. Tùy chọn thứ hai là static metamodel, thường được tạo ra bởi 
+một trình biên dịch annotation Java 6. Đối với cả hai tùy chọn, việc truy cập read-only; bạn không thể thay đổi dữ liệu metadata trong 
+runtime ứng dụng.
+
+Hibernate cũng cung cấp một API metamodel riêng biệt hỗ trợ cả truy cập đọc và ghi và cung cấp nhiều thông tin chi tiết hơn về ORM. 
+Chúng tôi không bao quát API gốc này (có trong org.hibernate.cfg.Configuration) trong cuốn sách vì nó đã bị loại bỏ và không có API 
+thay thế khi viết sách này. Vui lòng tham khảo tài liệu Hibernate để cập nhật thông tin mới nhất về tính năng này.
+
+a, THE DYNAMIC METAMODEL API IN JAVA PERSISTENCE
+
+Đôi khi, ví dụ khi bạn muốn viết một số mã custom validation hoặc mã UI generic, bạn muốn truy cập chương trình vào các thuộc tính 
+bền vững của một thực thể. Bạn muốn biết đối tượng domain model của bạn có các lớp và thuộc tính bền vững nào một cách động. 
+Mã trong ví dụ tiếp theo sẽ hướng dẫn cách đọc dữ liệu siêu dữ liệu bằng các giao diện Java Persistence.
+
+Obtaining entity type information with the Metamodel API
+PATH: /examples/src/test/java/org/jpwh/test/simple/AccessJPAMetamodel.java
+
+Metamodel mm = entityManagerFactory.getMetamodel();
+Set<ManagedType<?>> managedTypes = mm.getManagedTypes();
+assertEquals(managedTypes.size(), 1);
+
+ManagedType itemType = managedTypes.iterator().next();
+assertEquals(
+     itemType.getPersistenceType(),
+     Type.PersistenceType.ENTITY
+);
+
+Bạn có thể lấy Siêu mô hình (Metamodel) từ EntityManagerFactory hoặc, nếu thuận tiện hơn, bằng cách gọi phương thức 
+EntityManager#getMetamodel(). Set chứa các loại được quản lý (managed types) chứa thông tin về tất cả các thực thể 
+persistence và các lớp nhúng (embedded classes) (chúng ta sẽ thảo luận về chúng trong chương tiếp theo). Trong ví dụ này, 
+chỉ có một loại: thực thể Item. Điều này giúp bạn khám phá sâu hơn và tìm hiểu thêm về từng thuộc tính.
+
+Obtaining entity attribute information with the Metamodel API
+PATH: /examples/src/test/java/org/jpwh/test/simple/AccessJPAMetamodel.java
+
+SingularAttribute nameAttribute =
+     itemType.getSingularAttribute("name"); // Entity attribute
+assertEquals(
+     nameAttribute.getJavaType(),
+     String.class
+);
+assertEquals(
+     nameAttribute.getPersistentAttributeType(),
+     Attribute.PersistentAttributeType.BASIC
+);
+assertFalse(
+     nameAttribute.isOptional()
+);
+SingularAttribute auctionEndAttribute =
+     itemType.getSingularAttribute("auctionEnd"); // Entity attribute
+assertEquals(
+     auctionEndAttribute.getJavaType(),
+     Date.class
+);
+assertFalse(
+     auctionEndAttribute.isCollection()
+);
+assertFalse(
+     auctionEndAttribute.isAssociation()
+);
+
+
+Các thuộc tính của thực thể được truy cập bằng một chuỗi: name và auctionEnd. Điều này rõ ràng không an toàn về kiểu dữ liệu 
+và nếu bạn thay đổi tên các thuộc tính, mã này sẽ trở nên không hoạt động và lỗi thời. Những chuỗi này không tự động được 
+bao gồm trong các hoạt động tái cấu trúc của môi trường phát triển tích hợp (IDE) của bạn.
+
+
+JPA cũng cung cấp một siêu mô hình kiểu tĩnh an toàn về kiểu dữ liệu (static type-safe metamodel).
+
+b, USING A STATIC METAMODEL
+Java, ít nhất là đến phiên bản 8, không hỗ trợ trực tiếp cho các thuộc tính (properties) cấp cao. Bạn không thể truy cập 
+các trường (fields) hoặc phương thức truy cập (accessor methods) của một bean một cách an toàn về kiểu dữ liệu, mà chỉ có 
+thể sử dụng tên của chúng, bằng cách sử dụng chuỗi. Điều này đặc biệt phiền toái khi sử dụng JPA criteria querying, một 
+giải pháp an toàn về kiểu dữ liệu thay thế cho các ngôn ngữ truy vấn dựa trên chuỗi. Dưới đây là một ví dụ:
+
+CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+
+CriteriaQuery<Item> query =
+                    cb.createQuery(Item.class); // Truy vấn này <=> "SELECT i FROM Item i";
+Root<Item> fromItem = query.from(Item.class);
+query.select(fromItem);
+
+List<Item> items =
+         entityManager.createQuery(query)
+             .getResultList();
+assertEquals(items.size(), 2);
+
+
+Truy vấn này trả về tất cả các mục trong cơ sở dữ liệu; ở đây có hai mục. Nếu bạn muốn giới hạn kết quả này và chỉ trả về 
+các mục có tên cụ thể, bạn phải sử dụng một biểu thức "like", so sánh thuộc tính "name" của từng mục với mẫu được đặt 
+trong một tham số.
+
+Path<String> namePath = fromItem.get("name"); // “where i.name like :pattern”;
+query.where(
+     cb.like(
+         namePath, // Phải là object Path<String> cho "like" operation
+         cb.parameter(String.class, "pattern")
+     )
+);
+items =
+     entityManager.createQuery(query)
+         .setParameter("pattern", "%some item%") // Ký tự đại diện
+         .getResultList();
+assertEquals(items.size(), 1);
+assertEquals(items.iterator().next().getName(), "This is some item");
+
+Chú ý rằng việc tìm kiếm namePath yêu cầu sử dụng chuỗi tên. Đây là nơi tính an toàn về kiểu dữ liệu của truy vấn criteria 
+bị phá vỡ. Bạn có thể đổi tên lớp Entity Item bằng các công cụ tái cấu trúc của IDE của bạn, và truy vấn vẫn hoạt động. 
+Tuy nhiên, ngay khi bạn chỉnh sửa thuộc tính Item#name, bạn cần phải điều chỉnh mã thủ công. 
+May mắn thay, bạn sẽ phát hiện điều này khi kiểm tra thất bại.
+
+Một phương pháp tốt hơn nhiều, an toàn cho việc tái cấu trúc và phát hiện không phù hợp tại thời điểm biên dịch, 
+chứ không phải thời điểm chạy, đó là siêu mô hình kiểu tĩnh an toàn về kiểu dữ liệu (type-safe static metamodel):
+
+@javax.persistence.metamodel.StaticMetamodel(Item.class)
+public abstract class Item_ {
+     public static volatile SingularAttribute<Item, Long> id;
+     public static volatile SingularAttribute<Item, String> name;
+     public static volatile SingularAttribute<Item, Date> auctionEnd;
+}
+
+Bạn có thể viết lớp này bằng tay hoặc, như được thiết kế bởi người thiết kế của API này, có thể được tạo tự động bằng công cụ 
+xử lý chú thích (annotation processing tool - apt) của trình biên dịch Java. Hibernate JPA2 Metamodel Generator 
+(một phần riêng biệt của dự án Hibernate) sử dụng điểm mở rộng này. Mục đích duy nhất của nó là tạo ra các lớp metamodel kiểu tĩnh 
+từ các lớp bền vững được quản lý của bạn. Bạn có thể tải xuống tệp JAR của nó và tích hợp nó vào IDE của bạn (hoặc cấu hình Maven của bạn, 
+như trong mã ví dụ trong cuốn sách này). Nó sẽ tự động chạy mỗi khi bạn biên dịch (hoặc chỉnh sửa, tùy thuộc vào IDE) lớp Entity Item và 
+tạo ra lớp siêu mô hình Item_ tương ứng.
+
+Công cụ xử lý chú thích (APT) là gì?
+Java bao gồm command-line (tiện ích dòng lệnh) gọi là APT, hoặc công cụ xử lý annotation, được sử dụng để tìm và chạy các trình xử lý 
+annotation dựa trên các annotation được tìm thấy trong mã nguồn. Một trình xử lý annotation sử dụng các giao diện lập trình ứng dụng gợi ý 
+(APIs) để xử lý các chú thích trong chương trình (JSR 175). Các API APT cung cấp một cách xem chương trình tại thời điểm biên dịch, 
+trong dạng tệp nguồn, và là chế độ chỉ đọc. Nó cho phép các trình xử lý chú thích mô hình hóa hệ thống kiểu Java. Các 
+trình xử lý annotation có thể tạo ra mã nguồn và tệp mới đầu tiên, sau đó APT có thể biên dịch chúng cùng với mã nguồn gốc.
+
+Mặc dù bạn đã thấy một số cấu trúc ánh xạ trong các phần trước, tuy nhiên, chúng tôi chưa giới thiệu các cấu trúc ánh xạ lớp và thuộc tính 
+phức tạp hơn. Bây giờ bạn nên quyết định chiến lược ánh xạ nào bạn muốn sử dụng trong dự án của mình - chúng tôi đề xuất sử dụng chú thích 
+(annotations), và chỉ sử dụng XML khi cần thiết - sau đó, bạn có thể đọc thêm về cấu trúc ánh xạ lớp và thuộc tính trong chương tiếp theo.
+

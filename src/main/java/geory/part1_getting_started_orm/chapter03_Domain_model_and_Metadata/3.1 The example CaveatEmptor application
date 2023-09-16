@@ -1,0 +1,188 @@
+"Hello World" example trong chương trước đã giới thiệu bạn về Hibernate; tất nhiên, nó không hữu ích để hiểu yêu cầu
+của các ứng dụng thế giới thực với mô hình dữ liệu phức tạp. Trong phần còn lại của cuốn sách, chúng tôi sử dụng một
+ứng dụng minh họa phức tạp hơn nhiều - CaveatEmptor, một hệ thống đấu giá trực tuyến - để thể hiện Hibernate và Java Persistence.
+(Caveat emptor có nghĩa là "Hãy cẩn thận khi mua".)
+
+Các tính năng mới chính trong JPA 2
+ Một nhà cung cấp JPA hiện tích hợp tự động với một nhà cung cấp Bean Validation. Khi dữ liệu được lưu trữ, nhà cung cấp
+tự động xác minh các ràng buộc trên các lớp persistent. Cụ thể như sau:
+{1. **JPA (Java Persistence API)**: JPA là một chuẩn API trong lập trình Java được sử dụng để tương tác với cơ sở dữ liệu
+từ Java. Nó cung cấp một cách tiện lợi để ánh xạ các đối tượng Java thành bản ghi trong cơ sở dữ liệu và ngược lại.
+JPA giúp đơn giản hóa việc truy cập cơ sở dữ liệu và quản lý dữ liệu trong các ứng dụng Java.
+
+2. **Bean Validation**: Bean Validation là một cơ chế trong Java cho phép xác minh dữ liệu trên các đối tượng Java.
+Nó cho phép bạn đặt ra các ràng buộc và kiểm tra dữ liệu để đảm bảo tính nhất quán và đúng đắn của dữ liệu trước
+khi lưu trữ hoặc xử lý nó. Bean Validation thường được sử dụng để kiểm tra dữ liệu nhập từ người dùng hoặc từ bất kỳ
+nguồn dữ liệu nào trước khi nó được xử lý hoặc lưu trữ.
+
+Có một sự kết hợp giữa hai công nghệ này. Khi dữ liệu được lưu trữ bằng JPA (được ánh xạ từ đối tượng Java vào cơ
+sở dữ liệu), nhà cung cấp JPA đã tích hợp tự động với một nhà cung cấp Bean Validation. Điều này có nghĩa là trước
+khi lưu trữ dữ liệu vào cơ sở dữ liệu, hệ thống sẽ tự động xác minh các ràng buộc (constraints) đã được định nghĩa
+trên các đối tượng persistent (đối tượng Java) để đảm bảo rằng dữ liệu này tuân thủ các quy tắc kiểm tra được đặt
+ra trong ràng buộc.
+Ví dụ, nếu bạn có một lớp đối tượng Java và đã định nghĩa các ràng buộc trên các trường của nó (ví dụ: kiểm tra độ
+dài của chuỗi, kiểm tra giá trị số hợp lệ, v.v.), khi bạn cố gắng lưu trữ một đối tượng của lớp này bằng JPA, nhà
+cung cấp JPA sẽ tự động kiểm tra xem dữ liệu này có tuân thủ các ràng buộc hay không trước khi lưu trữ vào cơ sở dữ liệu.
+Điều này giúp đảm bảo tính nhất quán và đúng đắn của dữ liệu trong hệ thống của bạn.
+
+ Giao diện Metamodel đã được thêm vào. Bạn có thể thu thập (rất tiếc là không thể thay đổi) names, properties và
+mapping metadata (siêu dữ liệu ánh xạ) của các lớp trong một persistence unit.
+
+Chúng ta sẽ bắt đầu cuộc thảo luận về ứng dụng bằng cách giới thiệu một layered application artchitecture(kiến trúc ứng dụng theo lớp).
+Sau đó, bạn sẽ tìm hiểu cách xác định các business entities (thực thể kinh doanh) của một lĩnh vực vấn đề.
+
+Bạn sẽ tạo ra một conceptual model (mô hình khái niệm) về những thực thể này và các thuộc tính của chúng, được gọi là
+một mô hình miền (domain model), và bạn sẽ triển khai nó bằng Java bằng cách tạo các persistence classes.
+
+- Chúng ta sẽ dành một ít thời gian để khám phá chính xác những lớp Java này nên trông như thế nào và chúng thuộc
+về đâu trong một kiến trúc ứng dụng theo lớp điển hình.
+- Chúng ta cũng sẽ xem xét capabilities persistence (khả năng bền vững) của các lớp và cách khía cạnh này ảnh hưởng
+đến thiết kế và triển khai.
+- Chúng ta sẽ thêm Bean Validation, giúp xác minh tự động tính toàn vẹn của dữ liệu domain model không chỉ cho
+thông tin persistence mà còn cho tất cả các logic business.
+
+Sau đó, chúng ta sẽ khám phá các mapping metadata options - cách bạn thông báo cho Hibernate cách các class persistence
+của bạn và các thuộc tính của chúng liên quan đến bảng và cột của cơ sở dữ liệu. Điều này có thể đơn giản như thêm
+các Annotation trực tiếp vào mã nguồn Java của các lớp hoặc viết tài liệu XML mà bạn sau đó triển khai cùng với các
+lớp Java biên dịch mà Hibernate truy cập vào thời gian chạy. Sau khi đọc chương này, bạn sẽ biết cách thiết kế các
+phần persistence của domain model của bạn trong các dự án thực tế phức tạp và mapping metadata options của bạn nên
+ưu tiên và sử dụng chủ yếu. Hãy bắt đầu với ứng dụng ví dụ.
+
+3.1
+Ứng dụng ví dụ CaveatEmptor là một ứng dụng đấu giá trực tuyến mô tả các kỹ thuật ORM và chức năng của Hibernate.
+Bạn có thể tải mã nguồn của ứng dụng từ trang web www.jpwh.org. Chúng tôi sẽ không tập trung quá nhiều vào giao diện
+người dùng trong cuốn sách này (nó có thể dựa trên web hoặc là một ứng dụng khách đa nền tảng);
+
+thay vào đó, chúng tôi sẽ tập trung vào mã data access. Khi cần đưa ra quyết định thiết kế về mã data access có ảnh hưởng
+đến giao diện người dùng, chúng tôi tự nhiên sẽ xem xét cả hai khía cạnh.
+
+Để hiểu về các vấn đề thiết kế liên quan đến ORM, hãy giả sử rằng ứng dụng CaveatEmptor chưa tồn tại và bạn đang xây dựng
+nó từ đầu. Hãy bắt đầu bằng cách xem xét kiến trúc của nó.
+
+3.1.1 Kiến trúc theo lớp
+Với bất kỳ ứng dụng phức tạp nào, thường có ý nghĩa để tổ chức các classes theo concern các vấn đề. Persistence là một vấn đề;
+các vấn đề khác bao gồm presentation, workflow và logic business. Một object-oriented artchitecture (kiến trúc theo hướng đối tượng)
+điển hình bao gồm các lớp mã đại diện cho các concern.
+
+Cross-cutting concerns
+Còn có những vấn đề được gọi là cross-cutting concerns, có thể được thực hiện một cách tổng quát - ví dụ như bằng mã framework.
+Những quan concern cắt thông thường bao gồm việc đăng nhập, xác thực và đánh dấu giao dịch.
+
+Một kiến trúc theo lớp định nghĩa các interface giữa mã nguồn triển khai các concern khác nhau, cho phép thay đổi cách
+triển khai một vấn đề mà không gây rối lớn cho mã trong các lớp khác. Lớp được xác định loại các phụ thuộc giữa các lớp
+cùng xuất hiện. Các quy tắc là như sau:
+
+- Layers sẽ giao tiếp từ trên xuống dưới. Một layer chỉ phụ thuộc vào giao diện của lớp ngay phía dưới nó.
+- Mỗi lớp không biết về bất kỳ lớp nào khác ngoại trừ lớp ngay phía dưới nó.
+
+Các hệ thống khác nhau tổ chức các concern theo cách khác nhau, do đó họ định nghĩa các lớp khác nhau. Kiến trúc ứng dụng
+cấp cao, đã được kiểm chứng, thường sử dụng ba lớp: presentation, một cho logic business và một cho persistence, như được
+hiển thị trong hình 3.1.
+
+ Lớp giao diện (Presentation layer) - Phần trên cùng của kiến trúc này chứa logic giao diện người dùng. Mã nguồn chịu
+trách nhiệm cho việc hiển thị và kiểm soát điều hướng trang và màn hình nằm trong lớp giao diện. Mã Presentation
+có thể truy cập trực tiếp các entity business của domain model chung và hiển thị chúng trên màn hình, cùng với các
+control để thực hiện các hành động. Trong một số kiến trúc, các trường hợp của entity business có thể không truy cập
+trực tiếp bởi mã presentation: ví dụ, nếu lớp presentation không chạy trên cùng máy tính với phần còn lại của hệ thống.
+Trong trường hợp như vậy, lớp giao diện có thể yêu cầu một mô hình truyền dữ liệu đặc biệt riêng của nó, đại diện chỉ cho
+một phần con của domain model.
+
+ Lớp logic kinh doanh (Business layer) - Dạng cụ thể của lớp tiếp theo thay đổi rộng rãi giữa các ứng dụng. Thường được đồng tình
+rằng lớp logic business chịu trách nhiệm thực hiện các nghiệp vụ hoặc yêu cầu hệ thống mà người dùng hiểu là một phần của problem domain.
+Lớp này thường bao gồm một loại controlling component (thành phần kiểm soát) nào đó - mã nguồn biết khi nào nên gọi business rule.
+Trong một số hệ thống, lớp này có biểu diễn nội bộ riêng của các entities trong lĩnh vực business.
+Hoặc nó có thể dựa vào một triển khai domain model được chia sẻ với các lớp khác của ứng dụng.
+
+ Lớp bền vững (Persistence layer) - Lớp này bao gồm một nhóm các lớp và thành phần chịu trách nhiệm lưu trữ dữ liệu vào và truy xuất
+dữ liệu từ một hoặc nhiều kho dữ liệu. Lớp này cần một mô hình của các thực thể trong lĩnh vực kinh doanh mà bạn muốn duy trì
+trạng thái bền vững. Lớp bền vững là nơi chủ yếu để sử dụng JPA và Hibernate.
+
+ Cơ sở dữ liệu (Database) - Cơ sở dữ liệu thường là một phần bên ngoài, được sử dụng bởi nhiều ứng dụng. Đó là biểu diễn cố định thực sự
+của trạng thái hệ thống. Nếu sử dụng cơ sở dữ liệu SQL, cơ sở dữ liệu bao gồm một lược đồ (schema) và có thể chứa các thủ tục lưu trữ
+(stored procedures) để thực hiện logic kinh doanh gần dữ liệu.
+
+ Các lớp trợ giúp và tiện ích (Helper and utility classes) - Mọi ứng dụng đều có một tập hợp các lớp trợ giúp hoặc tiện ích hạ tầng được
+sử dụng trong mọi lớp của ứng dụng (như các lớp Exception để xử lý lỗi). Những thành phần hạ tầng chia sẻ này không tạo thành một lớp bởi
+vì chúng không tuân theo các quy tắc về sự phụ thuộc giữa các lớp trong một kiến trúc theo lớp.
+
+Bây giờ, khi bạn đã có kiến trúc cấp cao, bạn có thể tập trung vào vấn đề business.
+
+
+3.1.2 Phân tích lĩnh vực kinh doanh
+Ở giai đoạn này, bạn, với sự giúp đỡ của các chuyên gia về lĩnh vực, phân tích các vấn đề kinh doanh mà hệ thống phần mềm của bạn cần giải quyết,
+xác định các thực thể chính có liên quan và các tương tác của chúng. Mục tiêu chủ đạo sau phía sau việc phân tích và thiết kế mô hình lĩnh vực là
+để nắm bắt bản chất của thông tin kinh doanh cho mục đích ứng dụng.
+Các thực thể thường là các khái niệm được người dùng hệ thống hiểu: payment (thanh toán), customer (khách hàng), order (đơn hàng), item (mặt hàng),
+bid (đặt giá), và nhiều thứ khác. Một số thực thể có thể là sự trừu tượng hơn của những điều ít cụ thể mà người dùng nghĩ về, chẳng hạn như một thuật
+toán giá, nhưng ngay cả những thứ này thường cũng có thể được hiểu bởi người dùng. Bạn có thể tìm thấy tất cả các thực thể này trong góc nhìn conceptual
+về business, đôi khi được gọi là một business model.
+
+Từ business model này, các kỹ sư và kiến trúc sư phần mềm hướng đối tượng tạo ra một mô hình hướng đối tượng, vẫn ở mức khái niệm (không có mã Java).
+Mô hình này có thể đơn giản như hình ảnh tinh thần tồn tại chỉ trong tâm trí của người phát triển, hoặc nó có thể phức tạp như biểu đồ lớp UML.
+Hình 3.2 cho thấy một mô hình đơn giản được thể hiện bằng UML.
+
+Mô hình này chứa các thực thể mà bạn có thể tìm thấy trong bất kỳ hệ thống thương mại điện tử tiêu chuẩn nào: danh mục, mặt hàng và người dùng.
+Mô hình về lĩnh vực vấn đề này đại diện cho tất cả các thực thể và mối quan hệ của chúng (và có thể cả thuộc tính của chúng). Chúng ta gọi đây
+là mô hình hướng đối tượng của các entity từ problem domain, chỉ bao gồm những thực thể mà người dùng quan tâm đến, đó là domain model.
+Đó là một cái nhìn trừu tượng về thế giới thực.
+
+Thay vì một mô hình hướng đối tượng, các kỹ sư và kiến trúc sư có thể bắt đầu thiết kế ứng dụng bằng một data model (mô hình dữ liệu)
+(có thể được biểu diễn bằng biểu đồ mối quan hệ thực thể - entity-relationship diagram). Thông thường, chúng ta nói rằng, về mặt bền vững,
+không có nhiều sự khác biệt giữa hai cách tiếp cận này; chúng chỉ là các điểm khởi đầu khác nhau. Cuối cùng, ngôn ngữ mô hình hóa
+bạn sử dụng là phụ thuộc; chúng ta quan tâm nhất đến cấu trúc và mối quan hệ của các entity business.
+Chúng ta quan tâm đến các quy tắc cần phải được áp dụng để đảm bảo tính toàn vẹn của dữ liệu (ví dụ: sự đa dạng của các mối quan hệ)
+và các thủ tục mã nguồn được sử dụng để thao tác dữ liệu.
+
+Ở phần tiếp theo, chúng tôi sẽ hoàn thành việc phân tích domain model của CaveatEmptor. Domain model kết quả sẽ là chủ đề trung tâm của cuốn sách này.
+
+
+3.1.3 The CaveatEmptor domain model
+Trang web CaveatEmptor đấu giá nhiều loại sản phẩm khác nhau, từ thiết bị điện tử đến vé máy bay. Cuộc đấu giá diễn ra theo chiến lược đấu giá theo kiểu Anh:
+người dùng tiếp tục đặt giá cho một mặt hàng cho đến khi kết thúc thời gian đấu giá cho mặt hàng đó, và người đặt giá cao nhất chiến thắng.
+
+Trong mọi cửa hàng, hàng hóa được phân loại theo loại và được nhóm với các hàng hóa tương tự vào các phần và kệ. Danh mục đấu giá yêu cầu một loại hình
+nào đó của các danh mục mặt hàng để một người mua có thể duyệt qua các danh mục này hoặc tìm kiếm theo tùy ý bằng danh mục và thuộc tính mặt hàng.
+Danh sách các mặt hàng xuất hiện trong trình duyệt danh mục và màn hình kết quả tìm kiếm. Chọn một mặt hàng từ danh sách đưa người mua đến chế
+độ xem chi tiết mặt hàng, nơi một mặt hàng có thể có hình ảnh đính kèm.
+
+Một phiên đấu giá bao gồm một chuỗi các bids (lượt đặt giá), và một trong số đó là lượt đặt giá chiến thắng. Chi tiết người dùng bao gồm name,
+address và billing information (thông tin thanh toán).
+
+Kết quả của phân tích này, tổng quan cấp cao về domain model, được hiển thị trong hình 3.3.
+Hãy thảo luận ngắn gọn về một số tính năng thú vị của mô hình này.
+
+Mỗi mặt hàng chỉ có thể được đấu giá một lần, vì vậy bạn không cần làm cho Item distinct (riêng biệt) khỏi các thực thể đấu giá nào. Thay vào đó,
+bạn có một thực thể mặt hàng đấu giá duy nhất được đặt tên là Item. Do đó, Lượt đặt giá (Bid) liên quan trực tiếp đến Item. Bạn mô hình thông tin
+Address của Người dùng (User) thành một lớp riêng biệt, một User có thể có ba địa chỉ, cho nhà, thanh toán và giao hàng. Bạn cho phép người dùng
+có nhiều Chi tiết thanh toán (BillingDetails). Các lớp con của một lớp trừu tượng đại diện cho các chiến lược thanh toán khác nhau
+(cho phép mở rộng trong tương lai).
+
+Ứng dụng có thể chứa một Danh mục (Category) bên trong một Danh mục khác, và cứ thế. Một mối quan hệ đệ quy, từ thực thể Danh mục (Category) đến
+chính nó, biểu diễn mối quan hệ này. Lưu ý rằng một Danh mục (Category) cụ thể có thể có nhiều danh mục con nhưng tối đa chỉ có một danh mục cha.
+Mỗi Mặt hàng (Item) thuộc ít nhất một Danh mục (Category).
+
+Biểu diễn này không phải là domain model hoàn chỉnh mà chỉ là các lớp cần có capable persistence (khả năng bền vững).
+Bạn muốn store (lưu trữ) và load các instance của Category, Item, User và các thực thể khác. Chúng tôi đã đơn giản hóa tổng quan cấp cao này một chút;
+chúng tôi có thể giới thiệu thêm các lớp khác sau hoặc thay đổi chúng một chút khi cần cho các ví dụ phức tạp hơn.
+
+Chắc chắn rằng các thực thể trong domain model nên đóng gói trạng thái và hành vi. Ví dụ, thực thể Người dùng (User) nên xác định tên và địa chỉ của
+một khách hàng và logic cần thiết để tính toán chi phí giao hàng cho các mặt hàng (đối với khách hàng cụ thể này).
+
+Có thể có các lớp khác trong domain model có chỉ có các instance runtime tạm thời. Hãy xem xét class (WinningBidStrategy) đóng gói việc người đặt
+giá cao nhất thắng cuộc trong một phiên đấu giá. Điều này có thể được gọi bởi mã class logic business (controller) khi kiểm tra trạng thái của một
+phiên đấu giá. Tại một số điểm, bạn có thể phải xác định cách tính thuế cho các mặt hàng đã bán hoặc cách hệ thống có thể phê duyệt một tài khoản
+người dùng mới. Chúng tôi không coi những quy tắc kinh doanh hoặc hành vi domain model như là không quan trọng;
+thay vào đó, vấn đề này chủ yếu là không gian đối tượng đối diện với vấn đề về persistence.
+
+Bây giờ khi bạn đã có một thiết kế ứng dụng (mặc dù còn thô sơ) với một domain model, bước tiếp theo là thực hiện nó bằng Java.
+
+Lưu ý:
+ORM (Object-Relational Mapping) thường thích hợp cho các ứng dụng dựa trên một domain model phong phú. Nếu ứng dụng của bạn không
+thực hiện các business rule (quy tắc kinh doanh) phức tạp hoặc các tương tác phức tạp giữa các thực thể (hoặc nếu bạn chỉ có một số
+ít thực thể), bạn có thể không cần một domain model. Nhiều vấn đề đơn giản và một số vấn đề không hề đơn giản cũng rất thích hợp
+cho các giải pháp được tập trung vào table-oriented, trong đó ứng dụng được thiết kế dựa trên mô hình dữ liệu của cơ sở dữ liệu
+thay vì dựa trên object-oriented domain model, thường với logic được thực thi trong cơ sở dữ liệu (thủ tục lưu trữ).
+Một khía cạnh khác để xem xét là đường cong học tập: một khi bạn thành thạo với Hibernate, bạn có thể sử dụng nó cho tất cả các
+ứng dụng, ngay cả khi chỉ cần một công cụ đơn giản để tạo truy vấn SQL và ánh xạ kết quả. Nếu bạn chỉ mới học ORM, một trường hợp
+sử dụng không quá phức tạp có thể không đủ để xứng đáng với thời gian và công sức bạn đã đầu tư.
+
