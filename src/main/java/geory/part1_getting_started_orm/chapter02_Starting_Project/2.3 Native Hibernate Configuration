@@ -39,4 +39,98 @@ PATH: /examples/src/test/java/org/jpwh/helloworld/HelloWorldHibernate.java
                 .applySetting("hibernate.hbm2ddl.auto", "create-drop");
         ServiceRegistry serviceRegistry = (ServiceRegistry) serviceRegistryBuilder.build();
 
+1 Builder này giúp bạn tạo bảng ServiceRegistry không thay đổi thông qua các cuộc gọi phương thức nối tiếp.
+2 Configure ServiceRegistry bằng cách áp dụng các thiết lập. Nếu bạn muốn externalization cấu hình bảng ServiceRegistry 
+của bạn, bạn có thể nạp các thiết lập từ một tệp properties trên classpath bằng cách sử dụng `StandardServiceRegistryBuilder#loadProperties(file)`. 
+Khi đã xây dựng và làm cho ServiceRegistry không thay đổi, bạn có thể chuyển sang giai đoạn tiếp theo: 
+thông báo cho Hibernate về các persistent classes nào thuộc về mapping metadata của bạn. 
+Cấu hình metadata source như sau:
+
+PATH: /examples/src/test/java/org/jpwh/helloworld/HelloWorldHibernate.java
+
+MetadataSources metadataSource = new MetadataSources(serviceRegistry);    [1] Yêu cầu ServiceRegistry
+
+metadataSources.addAnnotatedClass(             [2] Adds persistent classes to metadata sources
+    org.jpwh.model.helloworld.Message.class
+);
+
+// Add hbm.xml mapping files
+// metadataSources.addFile(...);
+
+// Read all hbm.xml mapping files from a JAR
+// metadataSources.addJar(...);
+
+MetadataBuilder metadataBuilder = metadataSources.getMetadataBuilder();
+
+1 Builder này giúp bạn tạo ServiceRegistry không thay đổi thông qua các cuộc gọi phương thức nối tiếp.
+2 Cấu hình ServiceRegistry bằng cách áp dụng các thiết lập. 
+
+API MetadataSources có nhiều phương thức để thêm nguồn ánh xạ; hãy kiểm tra Javadoc để biết thêm thông tin. 
+Giai đoạn tiếp theo của quy trình khởi động là xây dựng tất cả các siêu dữ liệu cần thiết cho Hibernate, 
+với MetadataBuilder bạn đã có từ nguồn siêu dữ liệu.
+
+Sau đó, bạn có thể truy vấn siêu dữ liệu để tương tác với cấu hình đã hoàn chỉnh của Hibernate theo cách lập trình, 
+hoặc tiếp tục và xây dựng SessionFactory cuối cùng:
+
+PATH: /examples/src/test/java/org/jpwh/helloworld/HelloWorldHibernate.java
+
+Metadata  metadata = metadataBuilder.build();
+assertEquals(metadata.getEntityBindings().size(), 1);
+SessionFactory sessionFactory = metadata.buildSessionFactory();
+
+Tạo một EntityManagerFactory từ một SessionFactory
+Tại thời điểm viết, Hibernate không có API thuận tiện để xây dựng một EntityManagerFactory theo cách lập trình. 
+Bạn có thể sử dụng một API internal cho mục đích này: org.hibernate.jpa.internal.EntityManagerFactoryImpl 
+có một constructor chấp nhận một SessionFactory.
+
+Hãy xem xét xem cấu hình này có hoạt động không bằng cách lưu trữ và tải một thông báo bằng phiên bản native của 
+Hibernate tương đương với EntityManager, tức là org.hibernate.Session. Bạn có thể tạo một Session bằng SessionFactory 
+và bạn phải đóng nó giống như bạn phải đóng EntityManager của riêng bạn. Hoặc, sử dụng một tính năng khác của Hibernate, 
+bạn có thể để Hibernate quản lý việc tạo và đóng phiên với SessionFactory#getCurrentSession().
+
+PATH: /examples/src/ test/java/org/jpwh/helloworld/HelloWorldHibernate.java
+
+EntityTransaction trans = em.getTransaction();        [1] Accesses EntityTransaction
+trans.begin();
+
+Session session =                                     [2] Gets org.hibernate.Session
+            sessionFactory.getCurrentSession();
+
+Message message = new Message();
+message.setText("Hello World");
+session.persist(message);                             [3] Hibernate API and JPA are similar (tương tự)
+trans.commit();                                       [4] Commits transaction
+
+
+1 - Lấy quyền truy cập vào giao dịch tiêu chuẩn API UserTransaction và bắt đầu một giao dịch trên luồng thực thi này.
+
+2 - Mỗi khi bạn gọi getCurrentSession() trong cùng một luồng, bạn sẽ nhận được cùng một org.hibernate.Session. 
+Nó tự động liên kết với giao dịch đang diễn ra và tự động đóng khi giao dịch đó hoàn thành hoặc rollback.
+
+3 - Giao diện native của Hibernate rất giống với Java Persistence API tiêu chuẩn, và hầu hết các phương thức có các tên giống nhau.
+
+4 - Hibernate đồng bộ hóa phiên với cơ sở dữ liệu và tự động đóng phiên "hiện tại" khi giao dịch liên kết được commit.
+
+
+PATH: /examples/src/test/java/org/jpwh/helloworld/HelloWorldHibernate.java
+
+EntityTransaction trans = em.getTransaction();
+trans.begin();
+
+List<Message> message =              [1] Criteria (tiêu chuẩn) query
+    sessionFactory.getCurrentSession().createCriterial(
+        Message.class
+    ).list();    
+// SELECT * FROM MESSAGE
+
+trans.commit();
+
+1 - Một truy vấn tiêu chí Hibernate là một cách lập trình kiểu an toàn để biểu thị các truy vấn, được tự động dịch sang SQL. 
+Hầu hết các ví dụ trong cuốn sách này không sử dụng SessionFactory hoặc API Session. Đôi khi, khi một tính năng cụ thể chỉ có sẵn 
+trong Hibernate, chúng tôi sẽ hướng dẫn bạn cách unwrap() giao diện native dựa trên API tiêu chuẩn.
+
+
+
+
+
 
