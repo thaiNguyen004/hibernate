@@ -179,3 +179,113 @@ Khi ứng dụng của bạn bắt đầu, nó nên tạo EntityManagerFactory; 
 Bây giờ, bạn có thể làm việc với cơ sở dữ liệu trong một unit được xác định -
 một transaction - và lưu trữ một Message.
 
+
+package org.jpwh.helloworld;
+
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.EntityTransaction;
+import javax.persistence.Persistence;
+import javax.transaction.TransactionManager;
+import javax.transaction.UserTransaction;
+
+import org.jpwh.model.helloworld.Message;
+import org.testng.*;
+
+import java.util.List;
+
+public class HelloWorldJPA {
+
+    /*Về sau thử @Test sau*/
+    public void storeLoadMessage() throws Exception {
+        EntityManagerFactory emf =
+                Persistence.createEntityManagerFactory("HelloWorldPU");
+
+        try {
+            {
+                /*
+                    Bắt đầu một phiên làm việc mới với cơ sở dữ liệu bằng cách tạo một đối tượng EntityManager,
+                    đây là ngữ cảnh của bạn cho tất cả các thao tác liên quan đến sự tồn tại dữ liệu.
+                */
+                EntityManager em = emf.createEntityManager();  [2] Create EntityManager
+
+                /*
+                    Nhận quyền truy cập vào EntityTransaction và bắt đầu một giao dịch trên luồng thực thi hiện tại
+                */
+                EntityTransaction et = em.getTransaction();
+
+                /*
+                    Tạo một instance mới của class domain model dữ liệu được ánh xạ `Message` và
+                    đặt thuộc tính `text` của nó.
+                */
+                Message message = new Message(); [3] Creates Message
+                message.setText("Hello World");
+
+                em.persist(message);  [4] Makes instance persistent
+                et.commit();   [5] Commit Transaction
+                em.close();  [6] Close EntityManager
+            }
+
+            {
+                EntityManager em = emf.createEntityManager();
+                EntityTransaction et = em.getTransaction(); [1] Transaction boundary
+
+                et.begin();
+                List<Message> messages =
+                        em.createQuery("SELECT m FROM Message m", Message.class).getResultList();  [2] Execute query
+
+                messages.get(0).setText("Take me to your leader");  [3] Change property value
+                et.commit();   [4] Execute update
+                // UPDATE MESSAGE set TEXT = 'Take me to your leader!' where ID = 1
+                em.close();
+            }
+        } finally {
+            emf.close();
+        }
+    }
+}
+
+
+2 Bắt đầu một phiên làm việc mới với cơ sở dữ liệu bằng cách tạo một EntityManager. Đây là ngữ cảnh của bạn cho 
+tất cả các thao tác liên quan đến sự tồn tại dữ liệu.
+
+3 Tạo một instance của lớp mô hình miền dữ liệu được ánh xạ là Message và đặt thuộc tính text của nó.
+4 Đăng ký instance tạm thời với ngữ cảnh tồn tại của bạn; bạn khiến nó trở nên bền vững. Hibernate hiện đã biết 
+rằng bạn muốn lưu dữ liệu đó, nhưng nó không nhất thiết phải gọi cơ sở dữ liệu ngay lập tức.
+
+5 Hoàn tất giao dịch. Hibernate tự động kiểm tra ngữ cảnh tồn tại và thực thi câu lệnh SQL INSERT cần thiết.
+6 Nếu bạn tạo một EntityManager, bạn phải đóng nó.
+Để giúp bạn hiểu cách Hibernate hoạt động, chúng tôi hiển thị các câu lệnh SQL được tạo và thực thi tự động trong 
+các chú thích mã nguồn khi chúng xảy ra. Hibernate chèn một hàng vào bảng MESSAGE, với một giá trị được tạo tự động 
+cho cột khóa chính ID và giá trị TEXT. Sau này, bạn có thể tải dữ liệu này bằng truy vấn cơ sở dữ liệu:
+
+PATH: /examples/src/test/java/org/jpwh/helloworld/HelloWorldJPA.java
+Truy vấn cơ sở dữ liệu
+
+1 Mọi tương tác với cơ sở dữ liệu của bạn nên diễn ra trong giới hạn giao dịch rõ ràng, ngay cả khi bạn chỉ đang đọc dữ liệu.
+2 Thực hiện một truy vấn để lấy tất cả các phiên bản của lớp Message từ cơ sở dữ liệu.
+3 Bạn có thể thay đổi giá trị của một thuộc tính. Hibernate phát hiện điều này tự động vì Message đã được load vẫn đính 
+kèm với ngữ cảnh tồn tại mà nó đã được nạp vào.
+
+4 Khi hoàn tất giao dịch, Hibernate kiểm tra ngữ cảnh tồn tại để xác định trạng thái "dirty" và thực thi tự động câu 
+lệnh SQL UPDATE để đồng bộ hóa trạng thái trong bộ nhớ với trạng thái cơ sở dữ liệu.
+
+
+Ngôn ngữ truy vấn bạn thấy trong ví dụ này không phải là SQL, đó là Java Persistence Query Language (JPQL). 
+Mặc dù trong ví dụ đơn giản này không có sự khác biệt về cú pháp, nhưng "Message" trong chuỗi truy vấn không 
+đề cập đến tên bảng trong cơ sở dữ liệu, mà đề cập đến tên persistent class. Nếu bạn ánh xạ lớp này thành một 
+bảng khác, truy vấn vẫn sẽ hoạt động.
+
+Hãy chú ý cách Hibernate phát hiện sự thay đổi trong thuộc tính "text" của message và tự động cập nhật cơ sở dữ liệu. 
+Điều này chính là tính năng kiểm tra tự động (automatic dirty-checking) của JPA đang hoạt động. Nó giúp bạn tiết kiệm 
+công sức không cần yêu cầu persistence manager của bạn cập nhật cơ sở dữ liệu khi bạn sửa đổi trạng thái của một thể hiện 
+trong một giao dịch.
+
+Bạn đã hoàn thành ứng dụng Hibernate và JPA đầu tiên của bạn. Có thể bạn đã nhận thấy rằng chúng tôi ưa thích viết ví dụ 
+dưới dạng các executable tests, với (assertions) kiểm tra kết quả đúng của mỗi thao tác. Chúng tôi đã lấy tất cả các ví dụ 
+trong cuốn sách này từ test code, để bạn (và chúng tôi) có thể đảm bảo rằng chúng hoạt động đúng cách. Thật không may, điều 
+này cũng có nghĩa là bạn cần nhiều hơn một dòng mã để tạo EntityManagerFactory khi khởi động môi trường kiểm tra. 
+Chúng tôi đã cố gắng giữ việc thiết lập kiểm tra càng đơn giản càng tốt. Bạn có thể tìm mã trong org.jpwh.env.JPASetup và 
+org.jpwh.env.JPATest; sử dụng nó như một điểm khởi đầu để viết hệ thống test của riêng bạn.
+
+Trước khi làm việc trên các ví dụ ứng dụng thực tế hơn, hãy nhanh chóng xem qua native Hibernate bootstrap và configuration API.
