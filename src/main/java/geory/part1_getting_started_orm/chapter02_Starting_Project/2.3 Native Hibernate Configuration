@@ -1,0 +1,42 @@
+Mặc dù cấu hình cơ bản (và chi tiết) đã được tiêu chuẩn hóa trong JPA, bạn không thể truy cập tất cả các tính năng cấu
+hình của Hibernate bằng các thuộc tính trong persistence.xml. Lưu ý rằng hầu hết các ứng dụng, thậm chí là những ứng dụng
+phức tạp, không cần những tùy chọn cấu hình đặc biệt như vậy và do đó không cần truy cập API bootstrap mà chúng tôi hiển thị
+trong phần này.
+Nếu bạn không chắc chắn, bạn có thể bỏ qua phần này và quay lại sau, khi bạn cần mở rộng các bộ chuyển đổi loại Hibernate,
+thêm các hàm SQL tùy chỉnh, và vân vân.
+
+Tương đương native của EntityManagerFactory tiêu chuẩn trong JPA là org.hibernate.SessionFactory.
+Thường bạn có một SessionFactory cho mỗi ứng dụng và nó có cùng cặp ánh xạ lớp với cấu hình kết nối cơ sở dữ liệu.
+API bootstrap native của Hibernate được chia thành một số giai đoạn, mỗi giai đoạn cung cấp cho bạn quyền truy cập vào
+một số khía cạnh của cấu hình. Trong hình thức compact (cô đọng) nhất, việc xây dựng một SessionFactory trông giống
+như sau:
+
+PATH: /examples/src/test/java/org/jpwh/helloworld/HelloWorldHibernate.java
+
+SessionFactory sessionFactory = new MetadataSources(
+    new StandardServiceRegistryBuilder()
+        .configure("hibernate.cfg.xml").build()
+).buildMetadata().buildSessionFactory();
+
+
+Đoạn mã này tải tất cả cài đặt từ một tệp cấu hình Hibernate. Nếu bạn có một dự án Hibernate hiện có, thì bạn có khả năng
+có tệp này trên classpath của bạn. Tương tự như persistence.xml, tệp cấu hình này chứa thông tin kết nối cơ sở dữ liệu,
+cũng như danh sách các lớp bền và các thuộc tính cấu hình khác.
+
+Hãy phân tích đoạn mã bootstrap này và xem xét API chi tiết hơn. Trước hết, tạo một ServiceRegistry:
+
+PATH: /examples/src/test/java/org/jpwh/helloworld/HelloWorldHibernate.java
+        StandardServiceRegistryBuilder serviceRegistryBuilder
+                = new StandardServiceRegistryBuilder();             [1] Builder
+
+        serviceRegistryBuilder                                      [2] Configures service registry
+                .applySetting("hibernate.connection.driver_class", "com.mysql.cj.jdbc.Driver")
+                .applySetting("hibernate.connection.url", "jdbc:mysql://localhost:3306/HelloWorld")
+                .applySetting("hibernate.connection.username", "root")
+                .applySetting("hibernate.connection.password", "123456")
+                .applySetting("hibernate.format_sql", "true")
+                .applySetting("hibernate.use_sql_comments", "true")
+                .applySetting("hibernate.hbm2ddl.auto", "create-drop");
+        ServiceRegistry serviceRegistry = (ServiceRegistry) serviceRegistryBuilder.build();
+
+
