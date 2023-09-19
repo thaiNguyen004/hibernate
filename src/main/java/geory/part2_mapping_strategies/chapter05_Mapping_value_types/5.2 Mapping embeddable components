@@ -178,13 +178,22 @@ public class User implements Serializable {
 ...
 }
 
-Annotation `@Embedded` thực sự không cần thiết !!!. Đó là một sự lựa chọn thay thế cho @Embeddable: đánh dấu hoặc lớp thành phần hoặc thuộc tính trong lớp thực thể chứa (cả hai không gây hại nhưng cũng không có lợi ích). @Annotation @Embedded hữu ích nếu bạn muốn ánh xạ một lớp thành phần bên thứ ba mà không có mã nguồn và không có chú thích, mà sử dụng các phương thức getter/setter đúng (như các JavaBeans thông thường).
+Annotation `@Embedded` thực sự không cần thiết !!!. Đó là một sự lựa chọn thay thế cho @Embeddable: đánh dấu hoặc lớp 
+component hoặc thuộc tính trong lớp thực thể chứa (cả hai không gây hại nhưng cũng không có lợi ích). 
+@Annotation @Embedded hữu ích nếu bạn muốn ánh xạ một lớp thành phần bên thứ ba mà không có mã nguồn và không có 
+chú thích, mà sử dụng các phương thức getter/setter đúng (như các JavaBeans thông thường).
 
-@Annotation @AttributeOverrides ghi đè một cách lựa chọn các ánh xạ thuộc tính của lớp nhúng; trong ví dụ này, bạn ghi đè lên tất cả ba thuộc tính và cung cấp tên cột khác nhau. Bây giờ bạn có thể lưu trữ hai thể hiện Address trong bảng USERS, mỗi thể hiện trong một bộ cột khác nhau (kiểm tra lại cấu trúc bảng trong hình 5.2).
+@Annotation @AttributeOverrides ghi đè một cách lựa chọn các ánh xạ thuộc tính của lớp nhúng; trong ví dụ này, bạn ghi 
+đè lên tất cả ba thuộc tính và cung cấp tên cột khác nhau. Bây giờ bạn có thể lưu trữ hai thể hiện Address trong bảng 
+USERS, mỗi thể hiện trong một bộ cột khác nhau (kiểm tra lại cấu trúc bảng trong hình 5.2).
 
-Mỗi @Annotation @AttributeOverride cho một thuộc tính thành phần là "hoàn chỉnh": bất kỳ chú thích JPA hoặc Hibernate nào trên thuộc tính bị ghi đè đều bị bỏ qua. Điều này có nghĩa là các chú thích @Column trên lớp Address bị bỏ qua - tất cả các cột BILLING_* đều có thể NULL! (Bean Validation vẫn nhận ra chú thích @NotNull trên thuộc tính thành phần, tuy nhiên; Hibernate chỉ ghi đè các chú thích liên quan đến lưu trữ.)
+Mỗi @AttributeOverride cho một thuộc tính thành phần là "hoàn chỉnh": bất kỳ chú thích JPA hoặc Hibernate nào trên 
+thuộc tính bị ghi đè đều bị bỏ qua. Điều này có nghĩa là các chú thích @Column trên lớp Address bị bỏ qua - tất cả 
+các cột BILLING_* đều có thể NULL! (Bean Validation vẫn nhận ra chú thích @NotNull trên thuộc tính thành phần, 
+tuy nhiên; Hibernate chỉ ghi đè các chú thích liên quan đến lưu trữ.)
 
-Bạn có thể cải thiện sự tái sử dụng của mô hình miền của bạn hơn nữa và làm cho nó tinh vi hơn bằng cách lồng các thành phần nhúng.
+Bạn có thể cải thiện sự tái sử dụng của mô hình miền của bạn hơn nữa và làm cho nó tinh vi hơn bằng cách lồng 
+các thành phần nhúng (nesting embedded components). 
 
 
 
