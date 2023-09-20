@@ -1,0 +1,224 @@
+5.3 Ánh xạ kiểu Java và SQL bằng bộ chuyển đổi
+Cho đến nay, bạn đã giả định rằng Hibernate sẽ chọn đúng kiểu SQL khi bạn ánh xạ một thuộc tính java.lang.String.
+Tuy nhiên, ánh xạ đúng giữa kiểu Java và SQL là gì, và làm thế nào bạn có thể kiểm soát nó?
+
+[5.3.1] Built-in types
+
+Bất kỳ nhà cung cấp JPA nào cũng phải hỗ trợ một tập hợp tối thiểu các chuyển đổi kiểu từ Java sang SQL;
+bạn đã thấy danh sách này ở đầu chương này, trong phần 5.1. Hibernate hỗ trợ tất cả các ánh xạ này, cũng như một số
+adapter bổ sung mà không phải là tiêu chuẩn nhưng lại hữu ích trong thực tế.
+Trước hết, các kiểu nguyên thủy của Java và tương đương SQL của chúng.
+
+CÁC KIỂU NGUYÊN THỦY VÀ SỐ
+Các kiểu tích hợp sẵn được hiển thị trong bảng 5.1 ánh xạ các kiểu nguyên thủy của Java và bọc của chúng vào các kiểu
+chuẩn SQL tương ứng. Chúng tôi cũng đã bao gồm một số kiểu số khác.
+
+Name            Java type                       ANSI SQL Type
+integer         int, java.lang.Integer          INTEGER
+long            long, java.lang.Long            BIGINT
+short           short, java.lang.Short          SMALLINT
+float           float, java.lang.Float          FLOAT
+double          double, java.lang.Double        DOUBLE
+byte            byte, java.lang.Byte            TINYINT
+boolean         boolean, java.lang.Boolean      BOOLEAN
+big_decimal     java.math.BigDecimal            NUMERIC
+big_integer     java.math.BigInteger            NUMERIC
+
+Các name này đề cập đến Hibernate cụ thể; bạn sẽ cần chúng sau này khi tùy chỉnh ánh xạ kiểu.
+
+Bạn có thể đã nhận thấy rằng sản phẩm DBMS của bạn không hỗ trợ một số kiểu SQL được đề cập. Các tên kiểu SQL này là các
+tên kiểu chuẩn ANSI. Hầu hết các nhà cung cấp DBMS bỏ qua phần này của tiêu chuẩn SQL, thường là do hệ thống kiểu cũ
+của họ đã tồn tại trước tiêu chuẩn. Nhưng JDBC cung cấp một sự trừu tượng một phần về các kiểu dữ liệu cụ thể của nhà cung cấp,
+cho phép Hibernate làm việc với các kiểu chuẩn ANSI khi thực hiện các câu lệnh DML như INSERT và UPDATE.
+Đối với việc tạo schema cụ thể cho sản phẩm, Hibernate chuyển từ kiểu chuẩn ANSI sang một `kiểu cụ thể` của nhà cung cấp
+phù hợp bằng cách sử dụng dialect SQL được cấu hình. Điều này có nghĩa là bạn thường không cần phải lo lắng về các kiểu
+dữ liệu SQL nếu bạn để Hibernate tạo schema cho bạn.
+
+Nếu bạn có một schema hiện có và/hoặc bạn cần biết kiểu dữ liệu gốc cho DBMS của bạn, hãy xem nguồn của dialect SQL
+được cấu hình. Ví dụ, H2Dialect đi kèm với Hibernate chứa ánh xạ từ kiểu ANSI NUMERIC sang kiểu DECIMAL cụ thể của nhà cung cấp:
+registerColumnType(Types.NUMERIC, "decimal($p,$s)").
+
+Kiểu SQL NUMERIC hỗ trợ các thiết lập chính xác và tỷ lệ thập phân. Thiết lập chính xác và tỷ lệ mặc định, cho một
+thuộc tính BigDecimal, ví dụ, là NUMERIC(19,2). Để ghi đè lên điều này cho việc tạo schema, áp dụng chú thích @Column
+trên thuộc tính và đặt các tham số precision và scale của nó.
+Tiếp theo là các kiểu mà ánh xạ thành chuỗi trong cơ sở dữ liệu.
+
+Name            Java type                               ANSI SQL type
+string          java.lang.String                        VARCHAR
+character       char[], Character[], java.lang.String   CHAR
+yes_no          boolean, java.lang.Boolean              CHAR(1), 'Y' or 'N'
+true_false      boolean, java.lang.Boolean CHAR(1),     'T' or 'F'
+class           java.lang.Class                         VARCHAR
+locale          java.util.Locale                        VARCHAR
+timezone        java.util.TimeZone                      VARCHAR
+currency        java.util.Currency                      VARCHAR
+
+Hệ thống kiểu của Hibernate chọn một kiểu dữ liệu SQL phụ thuộc vào độ dài được khai báo của một giá trị chuỗi:
+nếu thuộc tính String của bạn được chú thích bằng @Column(length = ...) hoặc @Length của Bean Validation, Hibernate sẽ
+chọn kiểu dữ liệu SQL phù hợp với độ dài chuỗi đã cho. Sự lựa chọn này cũng phụ thuộc vào dialect SQL được cấu hình.
+Ví dụ, đối với MySQL, độ dài lên đến 65,535 sẽ tạo ra một cột VARCHAR thông thường (VARCHAR(length)) khi schema được tạo
+bởi Hibernate. Đối với độ dài lên đến 16,777,215, sẽ tạo ra một kiểu dữ liệu MEDIUMTEXT cụ thể cho MySQL, và độ dài lớn
+hơn sử dụng kiểu LONGTEXT. Độ dài mặc định của Hibernate cho tất cả thuộc tính java.lang.String là 255, vì vậy mà không
+có ánh xạ khác, một thuộc tính String sẽ ánh xạ thành một cột VARCHAR(255). Bạn có thể tùy chỉnh lựa chọn kiểu này bằng
+cách mở rộng lớp của SQL dialect của bạn; đọc tài liệu và mã nguồn của dialect để tìm hiểu thêm chi tiết cho sản phẩm DBMS của bạn.
+
+Thông thường, cơ sở dữ liệu cho phép quốc tế hóa (internationalization) của văn bản với một bộ ký tự mặc định hợp lý (UTF-8)
+cho toàn bộ cơ sở dữ liệu hoặc ít nhất là toàn bộ bảng. Đây là cài đặt cụ thể cho từng DBMS. Nếu bạn cần kiểm soát
+chi tiết hơn và muốn chuyển sang các kiểu cột NVARCHAR, NCHAR, hoặc NCLOB, hãy chú thích ánh xạ thuộc tính của bạn bằng
+@org.hibernate.annotations.Nationalized.
+
+Ngoài ra, có một số bộ chuyển đổi đặc biệt tích hợp cho các cơ sở dữ liệu cổ điển hoặc các DBMS với hệ thống kiểu giới hạn,
+chẳng hạn như Oracle. Hệ thống quản lý cơ sở dữ liệu Oracle thậm chí không có kiểu dữ liệu chân thực (truth-valued ),
+kiểu dữ liệu duy nhất cần thiết theo mô hình quan hệ. Do đó, nhiều schema Oracle hiện có đại diện cho giá trị Boolean
+bằng các ký tự Y/N hoặc T/F. Hoặc và đây là giá trị mặc định trong ngôn ngữ SQL Oracle của Hibernate một cột kiểu NUMBER(1,0)
+được mong đợi và được tạo ra. Một lần nữa, chúng tôi khuyên bạn nên tham khảo dialect SQL của DBMS của bạn nếu bạn muốn
+biết tất cả ánh xạ từ kiểu dữ liệu ANSI sang kiểu cụ thể của nhà cung cấp.
+Tiếp theo là các kiểu ánh xạ thành ngày và giờ trong cơ sở dữ liệu.
+
+Name                Java type                               ANSI SQl Type
+date                java.util.Date, java.sql.Date           DATE
+time                java.util.Date, java.sql.Time           TIME
+timestamp           java.util.Date, java.sql.Timestamp      TIMESTAMP
+calendar            java.util.Calendar                      TIMESTAMP
+calendar_date       java.util.Calendar                      DATE
+duration            java.time.Duration                      BIGINT
+instant             java.time.Instant                       TIMESTAMP
+localdatetime       java.time.LocalDateTime                 TIMESTAMP
+localdate           java.time.LocalDate                     DATE
+localtime           java.time.LocalTime                     TIME
+offsetdatetime      java.time.OffsetDateTime                TIMESTAMP
+offsettime          java.time.OffsetTime                    TIME
+zoneddatetime       java.time.ZonedDateTime                 TIMESTAMP
+
+
+Trong domain model của bạn, bạn có thể chọn biểu diễn dữ liệu ngày và giờ dưới dạng java.util.Date, java.util.Calendar 
+hoặc các lớp con của java.util.Date được định nghĩa trong gói java.sql. Điều này là một vấn đề về sở thích và chúng tôi 
+để quyết định cho bạn - đảm bảo bạn thống nhất. Bạn có thể không muốn ràng buộc domain model với các kiểu từ gói JDBC.
+
+Bạn cũng có thể sử dụng API Java 8 trong gói java.time. Lưu ý rằng điều này chỉ đặc trưng cho Hibernate và không được
+chuẩn hóa trong JPA 2.1.
+
+Hành vi của Hibernate đối với thuộc tính java.util.Date có thể khiến bạn ngạc nhiên ban đầu: khi bạn lưu trữ một java.util.Date,
+Hibernate sẽ không trả về một java.util.Date sau khi load dữ liệu. Nó sẽ trả về một java.sql.Date, một java.sql.Time
+hoặc một java.sql.Timestamp, phụ thuộc vào việc bạn đã ánh xạ thuộc tính với TemporalType.DATE, TemporalType.TIME
+hoặc TemporalType.TIMESTAMP.
+
+Hibernate phải sử dụng lớp con JDBC khi load dữ liệu từ cơ sở dữ liệu vì các kiểu cơ sở dữ liệu có độ chính xác cao hơn so
+với java.util.Date. Một java.util.Date có độ chính xác mili giây, nhưng một java.sql.Timestamp bao gồm thông tin nanogiây
+có thể có trong cơ sở dữ liệu. Hibernate sẽ không cắt bỏ thông tin này để phù hợp với giá trị của java.util.Date.
+Hành vi Hibernate này có thể gây ra vấn đề nếu bạn cố gắng so sánh các giá trị java.util.Date bằng phương thức equals();
+nó không đối xứng với phương thức equals() của lớp con java.sql.Timestamp.
+
+Giải pháp rất đơn giản, và thậm chí không đặc trưng cho Hibernate: không gọi aDate.equals(bDate). Bạn nên luôn so sánh các
+ngày và thời gian bằng cách so sánh mili giây Unix (giả sử bạn không quan tâm đến nanogiây): aDate.getTime() > bDate.getTime(),
+ví dụ, là đúng nếu aDate là một thời gian sau bDate. Hãy cẩn thận: các tập hợp như HashSet cũng gọi phương thức equals().
+Đừng kết hợp các giá trị java.util.Date và java.sql.Date|Time|Timestamp trong một tập hợp như vậy. Bạn sẽ không gặp vấn đề
+này với một thuộc tính Calendar. Nếu bạn lưu trữ một giá trị Calendar, Hibernate sẽ luôn trả về một giá trị Calendar, được
+tạo bằng Calendar.getInstance() (kiểu thực tế phụ thuộc vào khu vực và múi giờ).
+
+Hoặc, bạn có thể viết bộ chuyển đổi riêng của mình, như được hiển thị sau trong chương này, và chuyển đổi bất kỳ instane
+của một kiểu thời gian java.sql nào, được cung cấp bởi Hibernate, thành một thể hiện java.util.Date thuần túy.
+Một bộ chuyển đổi tùy chỉnh cũng là một điểm khởi đầu tốt nếu, ví dụ, một instance Calendar nên có múi giờ không mặc định
+sau khi nạp giá trị từ cơ sở dữ liệu.
+
+Tiếp theo là các kiểu ánh xạ thành dữ liệu nhị phân và giá trị lớn trong cơ sở dữ liệu.
+
+KIỂU BINARY VÀ LARGE VALUE
+Bảng 5.4 liệt kê các kiểu để xử lý dữ liệu nhị phân và giá trị lớn. Lưu ý rằng chỉ kiểu nhị phân được hỗ trợ là kiểu
+của một thuộc tính định danh.
+
+Đầu tiên, hãy xem xét cách Hibernate biểu diễn value large của bạn, dưới dạng dữ liệu nhị phân hoặc văn bản.
+
+Name                Java type                       ANSI SQl type
+binary              byte[], java.lang.Byte[]        VARBINARY
+text                java.lang.String                CLOB
+clob                java.sql.Clob                   CLOB
+blob                java.sql.Blob                   BLOB
+serializable        java.io.Serializable            VARBINARY
+
+Nếu một thuộc tính trong lớp Java persistent của bạn có kiểu byte[], Hibernate sẽ ánh xạ nó thành một cột VARBINARY.
+Kiểu dữ liệu SQL thực sự phụ thuộc vào dialect; ví dụ, trong PostgreSQL, kiểu dữ liệu là BYTEA và trong Oracle DBMS,
+nó là RAW. Trong một số dialect, độ dài được đặt bằng @Column cũng có tác động đến native type được chọn: ví dụ,
+LONG RAW cho độ dài lớn hơn hoặc bằng 2000 trong Oracle.
+
+Một thuộc tính kiểu java.lang.String được ánh xạ thành một cột SQL VARCHAR, và tương tự cho char[] và Character[].
+Như chúng tôi đã thảo luận, một số dialect đăng ký các native type khác nhau tùy thuộc vào độ dài được khai báo.
+
+Trong cả hai trường hợp, Hibernate khởi tạo giá trị thuộc tính ngay lập tức, khi thực thể chứa biến thuộc tính được load.
+Điều này không thuận tiện khi bạn phải làm việc với các giá trị lớn, vì vậy bạn thường muốn ghi đè lên ánh xạ mặc định này.
+JPA specification có một chú thích viết tắt thuận tiện cho mục đích này, đó là @Lob:
+
+@Entity
+public class Item {
+    @Lob
+    protected byte[] image;
+    @Lob
+    protected String description;
+    // ...
+}
+
+Điều này ánh xạ byte[] thành kiểu dữ liệu SQL BLOB và String thành kiểu dữ liệu CLOB. Thật không may, bạn vẫn không có
+khả năng lazy loading với thiết kế này.
+
+Hibernate sẽ phải can thiệp vào quá trình truy cập trường và, ví dụ, tải các byte
+của hình ảnh khi bạn gọi someItem.getImage(). Cách tiếp cận này yêu cầu phải can thiệp vào mã bytecode của các lớp của
+bạn sau khi biên dịch, để tiêm mã bổ sung. Chúng tôi sẽ thảo luận về việc lazy loading thông qua can thiệp và mã bytecode
+trong phần 12.1.3.
+
+Hoặc bạn có thể chuyển đổi kiểu thuộc tính trong lớp Java của bạn. JDBC hỗ trợ trực tiếp các đối tượng vị trí (LOB).
+Nếu thuộc tính Java của bạn là java.sql.Clob hoặc java.sql.Blob, bạn có thể có khả năng lazy loading mà không cần can
+thiệp vào mã bytecode:
+
+@Entity
+public class Item {
+    @Lob
+    protected java.sql.Blob imageBlob;
+
+    @Lob
+    protected java.sql.Clob description;
+    // ...
+}
+
+BLOB/CLOB có ý nghĩa gì?
+Jim Starkey, người đã nảy ra ý tưởng về LOB, nói rằng phòng tiếp thị đã tạo ra các thuật ngữ BLOB và CLOB và rằng chúng
+không có ý nghĩa cụ thể. Bạn có thể hiểu chúng theo bất kỳ cách nào bạn muốn. Chúng tôi ưa thích gọi chúng là
+locator object, như là một gợi ý rằng chúng là những thay thế giúp chúng ta xác định và access (truy cập) vào
+real thing (dữ liệu thực tế).
+
+PATH: /examples/src/test/java/org/jpwh/test/advanced/LazyProperties.java
+Item item = em.find(Item.class, ITEM_ID);
+
+InputStream imageDataStream = item.getImageBlob().getBinaryStream();
+
+ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+StreamUtils.copy(imageDataStream, outStream);
+byte[] imageBytes = outStream.toByteArray();
+
+Nhược điểm là domain model của bạn sẽ bị ràng buộc với JDBC; trong unit tests, bạn không thể truy cập các thuộc tính
+LOB mà không có kết nối cơ sở dữ liệu.
+
+[Hibernate Feature]
+
+Để tạo và đặt một giá trị Blob hoặc Clob, Hibernate cung cấp một số phương thức tiện ích. Ví dụ này đọc byteLength byte từ
+InputStream trực tiếp vào cơ sở dữ liệu, mà không tiêu thụ bộ nhớ tạm thời (temporary memory) - RAM:
+
+Session session = em.unwrap(Session.class);   -> Cần API Hibernate native
+Blob blob = session.getLobHelper()
+            .createBlob(imageInputStream, byteLength);   -> Cần biết số byte bạn muốn đọc từ luồng
+someItem.setImageBlob(blob);
+em.persist(someItem);
+
+
+Cuối cùng, Hibernate cung cấp chuyển đổi ngược cho bất kỳ kiểu thuộc tính nào là java.io.Serializable. Ánh xạ này chuyển
+đổi giá trị của thuộc tính thành một luồng byte được lưu trữ trong một cột VARBINARY. Quá trình serialize và deserialize
+xảy ra khi thực thể chứa thuộc tính được lưu và nạp. Tự nhiên, bạn nên sử dụng chiến lược này một cách cẩn thận vì dữ liệu
+tồn tại lâu hơn ứng dụng. Một ngày nào đó, không ai sẽ biết những byte trong cơ sở dữ liệu của bạn có ý nghĩa gì.
+Serialization đôi khi hữu ích cho dữ liệu tạm thời, chẳng hạn như tùy chọn của người dùng, dữ liệu phiên đăng nhập và
+các thông tin tương tự.
+
+Hibernate sẽ chọn loại adapter phù hợp tùy thuộc vào kiểu Java của thuộc tính của bạn. Nếu bạn không thích ánh xạ mặc định,
+hãy tiếp tục đọc để ghi đè lên nó.
+
+
+[Hibernate Feature]
+SELECTING A TYPE ADAPTER
