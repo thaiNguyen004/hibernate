@@ -195,6 +195,71 @@ tuy nhiên; Hibernate chỉ ghi đè các chú thích liên quan đến lưu tr�
 Bạn có thể cải thiện sự tái sử dụng của mô hình miền của bạn hơn nữa và làm cho nó tinh vi hơn bằng cách lồng 
 các thành phần nhúng (nesting embedded components). 
 
+<<<<<<< HEAD
 
 
+=======
+[5.2.4] Mapping nested embedded components
+
+Hãy xem xét lớp `Address` và cách nó đóng gói các chi tiết địa chỉ: thay vì sử dụng một chuỗi đơn giản để lưu trữ 
+tên thành phố, bạn có thể chuyển thông tin này vào một lớp City mới có khả năng nhúng. Hãy xem biểu đồ mô hình miền 
+đã thay đổi trong hình 5.3. Mô hình SQL mà chúng ta đang nhắm đến cho việc ánh xạ vẫn chỉ có một bảng USERS duy nhất, 
+như được thể hiện trong hình 5.4.
+
+Một lớp là embeddable có thể có một thuộc tính là embedded. Ví dụ `Address` có một thuộc tính là `City`.
+
+PATH: /model/src/main/java/org/jpwh/model/advanced/Address.java
+
+@Embeddable 
+public class Address {
+  @NotNull 
+  @Column (nullable = false)
+  protected String street;
+
+  @NotNull 
+  @AttributeOverrides (
+    @AttributeOverride (
+      name = "name",
+      column = @Column (name = "CITY", nullable = false)
+    )
+  )
+  protected City city;
+  // ...
+}
+
+The embeddable `City` class has only basic properties
+PATH: /model/src/main/java/org/jpwh/model/advanced/City.java
+
+@Embeddable
+public class City {
+  @NotNull
+  @Column (nullable = false, length = 5)
+  protected String zipcode;
+
+  @NotNull
+  @Column (nullable = false)
+  protected String name;
+
+  @NotNull
+  @Column (nullable = false)
+  protected String country;
+
+  //...
+}
+
+Bạn có thể tiếp tục sự lồng ghép này bằng cách tạo một lớp `Country`, ví dụ. Tất cả các thuộc tính được nhúng, 
+bất kể chúng có sâu đến đâu trong sự sắp xếp, đều được ánh xạ vào các cột của bảng của thực thể sở hữu - 
+ở đây là bảng USERS.
+
+Bạn có thể khai báo @AttributeOverrides ở bất kỳ cấp độ nào, như bạn đã làm cho thuộc tính name của lớp City, 
+ánh xạ nó vào cột CITY. Điều này có thể được thực hiện bằng cách sử dụng @AttributeOverride trong Address 
+(như được hiển thị) hoặc sử dụng một lớp thực thể gốc, User. Các thuộc tính lồng nhau có thể được tham chiếu 
+bằng cách sử dụng chú thích dấu chấm: ví dụ, trên User#address, @AttributeOveride(name = "city.name") tham chiếu 
+đến thuộc tính Address#City#name.
+
+Chúng ta sẽ quay lại về các thành phần nhúng sau này, trong phần 7.2. Bạn thậm chí có thể ánh xạ các collections 
+của các thành phần hoặc có tham chiếu từ một thành phần đến một thực thể. Ở đầu chương này, chúng ta đã thảo luận 
+về các thuộc tính cơ bản và cách Hibernate ánh xạ kiểu JDK như java.lang.String, ví dụ, vào một kiểu SQL phù hợp. 
+Hãy tìm hiểu thêm về hệ thống kiểu dữ liệu này và cách các giá trị được chuyển đổi ở một mức thấp hơn.
+>>>>>>> a7b594d501e76f8bd1055377c720852968643e4c
 
