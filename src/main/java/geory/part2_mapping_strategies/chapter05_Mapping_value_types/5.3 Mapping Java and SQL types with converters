@@ -315,7 +315,7 @@ nơi duy nhất tạo ra một phiên bản của nó.
 4 Bạn cần một biểu diễn dạng chuỗi của một số tiền. Triển khai phương thức toString() và một phương thức tĩnh để tạo một 
 phiên bản từ một chuỗi.
 
-Tiếp theo, bạn cập nhật các phần khác của mô hình miền đấu giá và sử dụng MonetaryAmount cho tất cả các thuộc tính liên quan 
+Tiếp theo, bạn cập nhật các phần khác của domain model đấu giá và sử dụng MonetaryAmount cho tất cả các thuộc tính liên quan 
 đến tiền bạc, chẳng hạn như Item#buyNowPrice và Bid#amount.
 
 CHUYỂN ĐỔI GIÁ TRỊ CỦA THUỘC TÍNH CƠ BẢN
@@ -382,12 +382,11 @@ tùy chỉnh cho một số hoặc thậm chí tất cả các thuộc tính jav
 Bạn có thể áp dụng converter cho các thuộc tính của các lớp thực thể, giống như Item#buyNowPrice trong ví dụ trước. Bạn cũng có 
 thể áp dụng chúng cho các thuộc tính của các lớp embeddable.
 
-CHUYỂN ĐỔI CÁC THUỘC TÍNH CỦA CÁC THÀNH PHẦN
+CHUYỂN ĐỔI CÁC PROPERTIES CỦA COMPONENTS
 
-Trong chương này, chúng tôi đã đưa ra lý do cho mô hình miền đấu giá tinh vi. Trước đó, bạn đã tách thông tin địa chỉ của User 
-và ánh xạ lớp nhúng Address.
-
-Hãy tiếp tục quá trình này và giới thiệu việc kế thừa, với một lớp Zipcode trừu tượng như được hiển thị trong hình 5.5.
+Chúng tôi đã đưa ra lý do ủng hộ việc sử dụng các domain model tinh tế trong chương này. Trước đó, bạn đã cô đọng thông tin địa chỉ của 
+User và ánh xạ lớp Address nhúng. Hãy tiếp tục quá trình này và giới thiệu sự kế thừa, với một lớp Zipcode trừu tượng như được 
+hiển thị trong hình 5.5.
 
 Lớp Zipcode là một lớp đơn giản, nhưng đừng quên triển khai tính bằng nhau bằng `value`:
 PATH: /model/src/main/java/org/jpwh/model/advanced/converter/Zipcode.java
@@ -417,7 +416,7 @@ abstract public class Zipcode {
     }
 }
 
-Bây giờ bạn có thể bao đóng các lớp con của miền, sự khác biệt giữa mã bưu điện Đức và Thụy Sĩ, và bất kỳ xử lý nào:
+Bây giờ bạn có thể bao đóng các domain subclasses, sự khác biệt giữa mã bưu điện Đức và Thụy Sĩ, và bất kỳ xử lý nào:
 PATH: /model/src/main/java/org/jpwh/model/advanced/converter/GermanZipcode.java
 public class GermanZipcode extends Zipcode {
     public GermanZipcode(String value) {
@@ -499,3 +498,309 @@ cần xảy ra. Nếu bạn muốn áp dụng một converter tùy chỉnh cho e
 Hãy quay lại hỗ trợ nhiều loại tiền tệ trong CaveatEmptor. Các quản trị cơ sở dữ liệu đã thay đổi cấu trúc lại và yêu cầu bạn cập nhật ứng dụng.
 
 
+[5.3.3] Extending Hibernate with UserTypes
+
+Cuối cùng, bạn đã thêm các cột mới vào cơ sở dữ liệu để hỗ trợ nhiều loại tiền tệ. Bảng ITEM hiện có một cột BUYNOWPRICE_AMOUNT và một cột riêng biệt cho 
+đơn vị tiền tệ của số tiền, BUYNOWPRICE_CURRENCY. Cũng có các cột INITIALPRICE_AMOUNT và INITIALPRICE_CURRENCY. Bạn phải ánh xạ các cột này vào các 
+thuộc tính MonetaryAmount của lớp Item, buyNowPrice và initialPrice.
+
+Lý tưởng, bạn không muốn thay đổi domain model; các thuộc tính đã sử dụng lớp MonetaryAmount. Thật không may, standardized JPA converters không hỗ trợ 
+biến đổi giá trị từ/đến nhiều cột. Một hạn chế khác của trình chuyển đổi JPA là tích hợp với hệ thống truy vấn. Bạn không thể viết truy vấn sau:
+select i from Item i where i.buyNowPrice.amount > 100. Nhờ vào trình chuyển đổi từ phần trước, Hibernate biết cách chuyển đổi một MonetaryAmount 
+thành chuỗi và ngược lại. Tuy nhiên, nó không biết rằng MonetaryAmount có thuộc tính amount, vì vậy nó không thể phân tích một truy vấn như vậy.
+
+Một giải pháp đơn giản sẽ là ánh xạ MonetaryAmount dưới dạng @Embeddable, như đã thảo luận trước đây trong chương này về lớp Address. 
+Mỗi thuộc tính của MonetaryAmount - amount và currency - sẽ ánh xạ vào cột cơ sở dữ liệu tương ứng của nó. Tuy nhiên, quản trị cơ sở dữ liệu của 
+bạn đưa ra yêu cầu thêm một lớp xử lý cho nhu cầu của họ: vì các ứng dụng khác, cũ hơn, cũng truy cập cơ sở dữ liệu, bạn phải chuyển đổi mỗi số tiền 
+sang một đơn vị tiền tệ mục tiêu trước khi lưu trữ nó trong cơ sở dữ liệu. Ví dụ, Item#buyNowPrice nên được lưu trữ bằng đô la Mỹ, và Item#initialPrice 
+nên được lưu trữ bằng Euro. (Nếu ví dụ này có vẻ khó tin, chúng tôi có thể đảm bảo rằng bạn sẽ thấy những thách thức khó khăn hơn trong thực tế. 
+Sự tiến hóa của một mô hình cơ sở dữ liệu được chia sẻ có thể tốn kém, nhưng tất nhiên là cần thiết vì dữ liệu luôn tồn tại lâu hơn ứng dụng.) 
+Hibernate cung cấp một API chuyển đổi native: một điểm mở rộng cho phép truy cập chi tiết và mức thấp hơn cho việc tùy chỉnh.
+
+THE EXTENSION POINTS
+
+Các giao diện mở rộng của Hibernate cho hệ thống kiểu dữ liệu của nó có thể được tìm thấy trong gói org.hibernate.usertype. Dưới đây là danh sách 
+các giao diện có sẵn:
+
+1. UserType: Bạn có thể biến đổi giá trị bằng cách tương tác với JDBC PreparedStatement (khi lưu dữ liệu) và ResultSet (khi nạp dữ liệu). 
+Bằng cách triển khai giao diện này, bạn cũng có thể kiểm soát cách Hibernate lưu trữ và kiểm tra sự thay đổi giá trị. Bộ chuyển đổi cho MonetaryAmount 
+phải triển khai giao diện này.
+
+2. CompositeUserType: Giao diện này mở rộng UserType, cung cấp cho Hibernate thông tin chi tiết hơn về lớp adapted của bạn. Bạn có thể thông báo cho Hibernate 
+rằng thành phần MonetaryAmount có hai thuộc tính: amount và currency. Sau đó, bạn có thể tham chiếu đến các thuộc tính này trong các truy vấn với dấu chấm: 
+ví dụ, select avg(i.buyNowPrice.amount) from Item i.
+
+3. ParameterizedUserType: Giao diện này cung cấp các cài đặt cho bộ chuyển đổi của bạn trong các ánh xạ. Bạn phải triển khai giao diện này cho việc 
+chuyển đổi MonetaryAmount, vì trong một số ánh xạ, bạn muốn chuyển đổi số tiền sang đô la Mỹ và trong các ánh xạ khác sang đô la châu Âu. Bạn chỉ cần viết 
+một bộ chuyển đổi duy nhất và có thể tùy chỉnh cách hoạt động của nó khi ánh xạ một thuộc tính.
+
+4. DynamicParameterizedType: Giao diện này cung cấp một API cài đặt mạnh mẽ hơn cho bạn, cho phép bạn truy cập thông tin động trong bộ chuyển đổi, 
+như tên cột và bảng đã ánh xạ. Bạn có thể sử dụng giao diện này thay vì ParameterizedUserType; không có chi phí hoặc độ phức tạp bổ sung nào.
+
+5. EnhancedUserType: Đây là một giao diện tùy chọn cho các bộ chuyển đổi của các thuộc tính định danh và các bộ phân loại. Không giống như trình 
+chuyển đổi JPA, UserType trong Hibernate có thể là một bộ chuyển đổi cho bất kỳ loại thuộc tính thực thể nào. Vì MonetaryAmount không phải là loại của 
+một thuộc tính định danh hoặc bộ phân loại, bạn sẽ không cần nó.
+
+6. UserVersionType: Đây là một giao diện tùy chọn cho các bộ chuyển đổi của thuộc tính phiên bản.
+
+7. UserCollectionType: Giao diện này ít khi cần thiết và được sử dụng để triển khai các bộ sưu tập tùy chỉnh. Bạn phải triển khai nó để lưu trữ một bộ sưu tập 
+không thuộc JDK và bảo tồn ý nghĩa bổ sung.
+
+Bộ chuyển đổi kiểu tùy chỉnh cho MonetaryAmount sẽ triển khai một số trong những giao diện này.
+
+TRIỂN KHAI GIAO DIỆN USERTYPE
+Bởi vì MonetaryAmountUserType là một lớp lớn, chúng ta sẽ xem xét nó từng bước một. Dưới đây là các giao diện bạn triển khai:
+PATH: /model/src/main/java/org/jpwh/converter/MonetaryAmountUserType.java
+
+public class MonetaryAmountUserType
+    implements CompositeUserType, DynamicParameterizedType {
+    // ...
+}
+
+Trước hết, bạn triển khai giao diện DynamicParameterizedType. Bạn cần cấu hình currency(đơn vị tiền tệ) mục tiêu cho việc chuyển đổi bằng cách xem xét một 
+tham số ánh xạ:
+PATH: /model/src/main/java/org/jpwh/converter/MonetaryAmountUserType.java
+
+protected Currency convertTo;
+public void setParameterValues(Properties parameters) {
+    ParameterType parameterType =
+                (ParameterType) parameters.get(PARAMETER_TYPE);            [1] Truy cập các tham số động
+    String[] columns = parameterType.getColumns();
+    String table = parameterType.getTable();
+    Annotation[] annotations = parameterType.getAnnotationsMethod();
+    String convertToParameter = parameters.getProperty("convertTo");        [2] Xác định target currency
+    this.convertTo = Currency.getInstance(
+        convertToParameter != null ? convertToParameter : "USD"
+    );
+}
+
+
+1 Bạn có thể truy cập một số tham số động ở đây, chẳng hạn như tên của các cột đã ánh xạ, bảng (thực thể) đã ánh xạ, hoặc thậm chí là các chú thích 
+trên trường/getter của thuộc tính đã ánh xạ. Tuy nhiên, trong ví dụ này, bạn không cần chúng.
+
+Cái duy nhất bạn cần sử dụng ở đây là tham số "convertTo" để xác định đơn vị tiền tệ mục tiêu khi lưu giá trị vào cơ sở dữ liệu. Nếu tham số này 
+chưa được thiết lập, hãy mặc định là đô la Mỹ.
+
+Tiếp theo, dưới đây là một số mã mẫu mà bất kỳ UserType nào cũng phải triển khai:
+PATH: /model/src/main/java/org/jpwh/converter/MonetaryAmountUserType.java
+
+public Class returnedClass() {                        [1] Adapts class
+    return MonetaryAmount.class;                
+}
+public boolean isMutable() {                          [2] Enables optimizations 
+    return false;
+}
+public Object deepCopy(Object value) {                [3] Copies value
+    return value;
+}
+public Serializable disassemble(Object value,         [4] Returns Serializable representation (đại diện) 
+                SessionImplementor session) {    
+    return value.toString();
+}
+public Object assemble(Serializable cached,           [5] Creates MonetaryAmount instance 
+                SessionImplementor session, Object owner) {
+    return MonetaryAmount.fromString((String) cached);
+}
+public Object replace(Object original, Object target,  [6] Trả về bản sao của bản gốc
+                SessionImplementor session, Object owner) {
+    return original;
+}
+public boolean equals(Object x, Object y) {            [7] Xác định xem giá trị có thay đổi hay không
+    return x == y || !(x == null || y == null) && x.equals(y);
+}
+public int hashCode(Object x) {
+    return x.hashCode();
+}
+
+
+1. Phương thức `returnedClass` điều chỉnh lớp đã cho, trong trường hợp này là `MonetaryAmount`.
+
+2. Hibernate có thể kích hoạt một số tối ưu hóa nếu biết rằng `MonetaryAmount` là bất biến.
+
+3. Nếu Hibernate cần tạo bản sao của giá trị, nó gọi phương thức này. Đối với các lớp bất biến đơn giản 
+như `MonetaryAmount`, bạn có thể trả về thể hiện đã cho.
+
+4. Hibernate gọi phương thức này khi lưu trữ một giá trị trong bộ nhớ cache cấp hai chung toàn cầu. 
+Bạn cần trả về một biểu diễn có thể Serializable. Đối với `MonetaryAmount`, một biểu diễn String là 
+một giải pháp dễ dàng. Hoặc, vì `MonetaryAmount` có thể Serializable, bạn có thể trả nó trực tiếp.
+
+5. Hibernate gọi phương thức này khi đọc biểu diễn đã được serialized từ bộ nhớ cache cấp hai chung toàn cầu. 
+Bạn tạo một thể hiện `MonetaryAmount` từ biểu diễn String. Hoặc, nếu bạn đã lưu trữ một `MonetaryAmount` đã serialized, 
+bạn có thể trả nó trực tiếp.
+
+6. Điều này được gọi trong các hoạt động `EntityManager#merge()`. Bạn cần trả về một bản sao của giá trị gốc. 
+Hoặc, nếu loại giá trị của bạn là bất biến, như `MonetaryAmount`, bạn có thể trả về giá trị gốc.
+
+7. Hibernate sử dụng tính bằng nhau của giá trị để xác định xem giá trị đã thay đổi và cần cập nhật cơ sở dữ liệu. 
+Bạn dựa vào quy tắc tính bằng bạn đã viết trên lớp `MonetaryAmount`.
+
+
+
+Công việc chính của bộ chuyển đổi diễn ra khi giá trị được nạp và lưu trữ, như được triển khai bằng các phương thức sau:
+PATH: /model/src/main/java/org/jpwh/converter/MonetaryAmountUserType.java
+
+public Object nullSafeGet(ResultSet resultSet,                    [1] Reads ResultSet
+                          String[] names,
+                          SessionImplementor session,
+                          Object owner) throws SQLException {
+    BigDecimal amount = resultSet.getBigDecimal(names[0]);
+    if (resultSet.wasNull())
+        return null;
+    Currency currency =
+                    Currency.getInstance(resultSet.getString(names[1]));
+    return new MonetaryAmount(amount, currency);
+}
+
+public void nullSafeSet(PreparedStatement statement,                [2] Stores MonetaryAmount
+                            Object value,
+                            int index,
+                            SessionImplementor session) throws SQLException {
+    if (value == null) {
+        statement.setNull(
+            index,
+            StandardBasicTypes.BIG_DECIMAL.sqlType());
+        statement.setNull(
+            index + 1,
+            StandardBasicTypes.CURRENCY.sqlType());
+    } else {
+        MonetaryAmount amount = (MonetaryAmount) value;
+        MonetaryAmount dbAmount = convert(amount, convertTo);            // Khi lưu hãy chuyển đổi sang kiểu tiền tệ mục tiêu
+        statement.setBigDecimal(index, dbAmount.getValue());
+        statement.setString(index + 1, convertTo.getCurrencyCode());
+    }
+}
+
+protected MonetaryAmount convert(MonetaryAmount amount,                    [3] Converts currency
+                            Currency toCurrency) {
+    return new MonetaryAmount(
+        amount.getValue().multiply(new BigDecimal(2)),
+        toCurrency
+    );
+}
+
+
+1. Phương thức này được gọi để đọc ResultSet khi giá trị MonetaryAmount cần được lấy từ cơ sở dữ liệu. Bạn lấy giá trị 
+amount và currency như đã cho trong kết quả truy vấn và tạo một thể hiện mới của MonetaryAmount.
+
+2. Phương thức này được gọi khi giá trị MonetaryAmount cần được lưu trữ trong cơ sở dữ liệu. Bạn chuyển đổi giá trị 
+thành đơn vị tiền tệ mục tiêu và sau đó thiết lập amount và currency trên PreparedStatement đã được cung cấp 
+(trừ khi MonetaryAmount là null, trong trường hợp đó bạn gọi setNull() để prepare statement).
+
+3. Ở đây, bạn có thể triển khai bất kỳ quy trình chuyển đổi tiền tệ nào bạn cần. Ví dụ, trong ví dụ này, bạn nhân 
+giá trị lên gấp đôi để bạn có thể dễ dàng kiểm tra xem việc chuyển đổi có thành công không. Bạn sẽ phải thay thế 
+mã này bằng một trình chuyển đổi tiền tệ thực sự trong một ứng dụng thực tế. Đây không phải là một phương thức của API UserType của Hibernate.
+
+Cuối cùng, sau đây là các phương thức cần thiết bởi giao diện CompositeUserType, cung cấp thông tin về các thuộc tính của 
+MonetaryAmount để Hibernate có thể tích hợp lớp với hệ thống truy vấn:
+
+PATH: /model/src/main/java/org/jpwh/converter/MonetaryAmountUserType.java
+public String[] getPropertyNames() {
+    return new String[]{"value", "currency"};
+}
+
+public Type[] getPropertyTypes() {
+    return new Type[]{
+        StandardBasicTypes.BIG_DECIMAL,
+        StandardBasicTypes.CURRENCY
+    };
+}
+
+public Object getPropertyValue(Object component,
+                                    int property) {
+    MonetaryAmount monetaryAmount = (MonetaryAmount) component;
+    if (property == 0)
+        return monetaryAmount.getValue();
+    else
+        return monetaryAmount.getCurrency();
+}
+
+public void setPropertyValue(Object component,
+                                    int property,
+                                    Object value) {
+    throw new UnsupportedOperationException(
+            "MonetaryAmount is immutable"
+    );
+}
+
+MonetaryAmountUserType đã hoàn thành và bạn đã có thể sử dụng nó trong các ánh xạ bằng cách sử dụng tên lớp đầy đủ của nó trong 
+@org.hibernate.annotations.Type, như được hiển thị trong phần "Selecting a type adapter". Annotation này cũng hỗ trợ các tham số, 
+vì vậy bạn có thể đặt đối số convertTo thành đơn vị tiền tệ mục tiêu.
+
+Tuy nhiên, chúng tôi khuyên bạn nên tạo các định nghĩa kiểu (type definitions), gói gọn bộ chuyển đổi của bạn với một số tham số. 
+Điều này giúp quản lý và sử dụng lại kiểu dễ dàng hơn trong toàn bộ ứng dụng của bạn.
+
+
+Sử dụng Định nghĩa Kiểu (Type Definitions):
+Khi bạn cần một bộ chuyển đổi chuyển đổi thành đô la Mỹ và một bộ chuyển đổi chuyển đổi thành Euro, nếu bạn khai báo các tham số 
+này một lần dưới dạng định nghĩa kiểu (type definition), bạn sẽ không phải lặp lại chúng trong các ánh xạ thuộc tính. 
+Một vị trí tốt để định nghĩa kiểu là trong dữ liệu metadata của gói (package metadata), trong tệp package-info.java.
+
+Dưới đây là một ví dụ về cách bạn có thể tạo định nghĩa kiểu trong tệp package-info.java của gói:
+
+PATH: /model/src/main/java/org/jpwh/converter/package-info.java
+
+@org.hibernate.annotations.TypeDefs({
+    @org.hibernate.annotations.TypeDef(
+        name = "monetary_amount_usd",
+        typeClass = MonetaryAmountUserType.class,
+        parameters = {@Parameter(name = "convertTo", value = "USD")}
+    ),
+    @org.hibernate.annotations.TypeDef(
+        name = "monetary_amount_eur",
+        typeClass = MonetaryAmountUserType.class,
+        parameters = {@Parameter(name = "convertTo", value = "EUR")}
+    )
+})
+package org.jpwh.converter;
+import org.hibernate.annotations.Parameter;
+
+
+Bạn đã sẵn sàng sử dụng các bộ chuyển đổi trong các ánh xạ bằng cách sử dụng các tên là "monetary_amount_usd" và "monetary_amount_eur". 
+Bây giờ chúng ta hãy ánh xạ buyNowPrice và initialPrice của Item:
+
+PATH: /model/src/main/java/org/jpwh/model/advanced/usertype/Item.java
+
+@Entity
+public class Item {
+    @NotNull
+    @org.hibernate.annotations.Type(
+        type = "monetary_amount_usd"
+    )
+    @org.hibernate.annotations.Columns(columns = {
+        @Column(name = "BUYNOWPRICE_AMOUNT"),
+        @Column(name = "BUYNOWPRICE_CURRENCY", length = 3)
+    })
+    protected MonetaryAmount buyNowPrice;
+    
+    @NotNull
+    @org.hibernate.annotations.Type(
+        type = "monetary_amount_eur"
+    )
+    @org.hibernate.annotations.Columns(columns = {
+        @Column(name = "INITIALPRICE_AMOUNT"),
+        @Column(name = "INITIALPRICE_CURRENCY", length = 3)
+    })
+    protected MonetaryAmount initialPrice;
+    // ...
+}
+
+
+Nếu UserType chuyển đổi giá trị chỉ cho một cột duy nhất, bạn không cần chú thích @Column. 
+Tuy nhiên, trong trường hợp của MonetaryAmountUserType, bạn truy cập hai cột, vì vậy bạn cần khai báo rõ ràng hai cột trong ánh xạ thuộc tính. 
+Vì JPA không hỗ trợ nhiều chú thích @Column trên một thuộc tính duy nhất, bạn phải nhóm chúng bằng chú thích @org.hibernate.annotations.Columns riêng. 
+Lưu ý rằng thứ tự của các chú thích trở nên quan trọng! Hãy kiểm tra lại mã cho MonetaryAmountUserType; nhiều hoạt động phụ thuộc vào việc truy cập 
+mảng theo chỉ mục. Thứ tự khi truy cập PreparedStatement hoặc ResultSet là giống với thứ tự các cột đã khai báo trong ánh xạ. Hãy cũng lưu ý rằng số 
+lượng cột không liên quan đến sự lựa chọn của bạn giữa UserType và CompositeUserType - chỉ là mong muốn của bạn để tiết lộ các thuộc tính kiểu giá trị 
+cho các truy vấn.
+
+Với MonetaryAmountUserType, bạn đã mở rộng bộ đệm giữa domain model Java và cơ sở dữ liệu SQL. Cả hai biểu diễn bây giờ đều mạnh mẽ hơn đối với các thay đổi, 
+và bạn có thể xử lý ngay cả các yêu cầu khá kỳ cục mà không cần sửa đổi bản chất của các lớp domain model.
+
+5.4 Tóm tắt
+- Chúng ta đã thảo luận về ánh xạ các thuộc tính cơ bản và nhúng của một lớp thực thể.
+- Bạn đã thấy cách ghi đè các ánh xạ cơ bản, cách thay đổi tên của một cột đã ánh xạ và cách sử dụng các thuộc tính tạo ra, mặc định, thời gian và kiểu liệt kê.
+- Chúng ta đã bàn về các lớp thành phần nhúng và cách bạn có thể tạo các domain model tinh tế.
+- Bạn có thể ánh xạ các thuộc tính của nhiều lớp Java trong một sự kết hợp, chẳng hạn như Address và City, vào một bảng thực thể duy nhất.
+- Chúng ta đã xem xét cách Hibernate chọn các bộ chuyển đổi kiểu từ Java sang SQL và các kiểu dữ liệu được tích hợp trong Hibernate.
+- Bạn đã viết một bộ chuyển đổi kiểu tùy chỉnh cho lớp MonetaryAmount bằng các giao diện mở rộng tiêu chuẩn JPA, sau đó một bộ chuyển đổi thấp cấp với API 
+UserType native của Hibernate.
