@@ -83,6 +83,9 @@ Nhiều trong số các thao tác tái cấu trúc tiêu chuẩn được cung c
 điều chỉnh thủ công, vì các quy trình tự động thường không tính đến các điều như @AttributeOverrides. Nó cũng khiến
 việc thực hiện các ràng buộc tích hợp cơ sở dữ liệu áp dụng cho tất cả các lớp con trở nên khó khăn hơn.
 
-Chúng tôi đề xuất tiếp cận này (chỉ) cho tầng cao nhất của phân cấp lớp của bạn, nơi đa hình thường không được yêu cầu và khi sửa đổi lớp cha trong tương lai là không thể. Nó không phù hợp cho mô hình miền CaveatEmptor, nơi các truy vấn và các thực thể khác đề cập đến BillingDetails.
+Chúng tôi đề xuất tiếp cận này (chỉ) cho tầng cao nhất của phân cấp lớp của bạn, nơi đa hình thường không được yêu cầu và 
+khi sửa đổi lớp cha trong tương lai là không thể. Nó không phù hợp cho mô hình miền CaveatEmptor, nơi các truy vấn và 
+các thực thể khác đề cập đến BillingDetails.
 
-Bằng việc sử dụng phép UNION SQL, bạn có thể loại bỏ hầu hết các vấn đề liên quan đến các truy vấn đa hình và các mối quan hệ.
+Với sự trợ giúp của hoạt động SQL UNION, bạn có thể loại bỏ hầu hết các vấn đề với các truy vấn đa hình và mối quan hệ.
+
