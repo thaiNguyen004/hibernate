@@ -661,7 +661,7 @@ khác là các thuộc tính của các loại cha và con: liệu các loại c
 khác biệt so với loại cha của họ. Dưới đây là một số quy tắc nhanh:
 
 - Nếu bạn không cần các quan hệ hoặc truy vấn đa hình, hãy nghiêng về chiến lược bảng cho mỗi lớp cụ thể (table-per-concrete class) -
-tức là, nếu bạn không bao giờ hoặc hiếm khi truy vấn bd từ BillingDetails bd và bạn không có lớp nào có mối quan hệ với
+tức là, nếu bạn không bao giờ hoặc hiếm khi truy vấn `bd from BillingDetails bd` và bạn không có lớp nào có mối quan hệ với
 BillingDetails. Một ánh xạ cơ bản dựa trên UNION với InheritanceType.TABLE_PER_CLASS nên được ưu tiên, bởi vì sau này
 có thể thực hiện các truy vấn và mối quan hệ đa hình (được tối ưu hóa).
 
