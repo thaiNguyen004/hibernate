@@ -1,0 +1,144 @@
+6.4 Table per subclass with joins
+
+Tùy chọn thứ tư là biểu diễn mối quan hệ kế thừa dưới dạng các mối quan hệ khóa ngoại SQL. Mỗi lớp/lớp con khai báo
+persistent properties - bao gồm cả các lớp trừu tượng và thậm chí là các giao diện - đều có một bảng riêng của nó.
+Khác với chiến lược "một bảng cho mỗi lớp cụ thể" mà chúng ta đã ánh xạ trước đó, bảng của một @Entity cụ thể ở đây chỉ
+chứa các cột cho mỗi thuộc tính không được kế thừa, được khai báo bởi chính lớp con, cùng với một khóa chính là cũng
+là một khóa ngoại của bảng lớp cha. Điều này dễ hơn so với bạn nghĩ; hãy xem hình 6.3.
+
+Nếu bạn tạo một thể hiện của lớp con CreditCard và lưu trữ nó, Hibernate sẽ chèn hai hàng dữ liệu vào cơ sở dữ liệu.
+Giá trị của các thuộc tính được khai báo bởi lớp cha BillingDetails được lưu trữ trong một hàng mới của bảng BILLINGDETAILS.
+Chỉ có các giá trị của các thuộc tính được khai báo bởi lớp con được lưu trữ trong một hàng mới của bảng CREDITCARD.
+Khóa chính được chia sẻ bởi hai hàng này liên kết chúng lại với nhau. Sau này, bạn có thể lấy lại thể hiện của lớp con
+này từ cơ sở dữ liệu bằng cách kết hợp bảng lớp con với bảng lớp cha.
+
+Ưu điểm chính của chiến lược này là nó chuẩn hóa schema SQL. Việc phát triển schema và xác định ràng buộc toàn vẹn là đơn giản.
+Một khóa ngoại liên kết với bảng của một lớp con cụ thể có thể đại diện cho một mối quan hệ đa hình đối với lớp con cụ thể đó.
+Sử dụng chiến lược kế thừa JOINED để tạo ánh xạ hệ thống phân cấp bảng cho mỗi lớp con.
+
+
+Listing 6.8 Mapping BillingDetails with JOINED
+PATH: /model/src/main/java/org/jpwh/model/inheritance/joined/BillingDetails.java
+
+@Entity
+@Inheritance(strategy = InheritanceType.JOINED)
+public abstract class BillingDetails {
+    @Id
+    @GeneratedValue(generator = Constants.ID_GENERATOR)
+    protected Long id;
+
+    @NotNull
+    protected String owner;
+    // ...
+}
+
+Lớp gốc BillingDetails được ánh xạ vào bảng BILLINGDETAILS. Lưu ý rằng không cần có cột phân biệt (discriminator)
+trong chiến lược này.
+
+Trong các lớp con, bạn không cần phải chỉ định cột tham gia (join column) nếu cột khóa chính (primary key column) của bảng
+lớp con có (hoặc nên có) cùng tên với cột khóa chính của bảng lớp cha.
+
+Listing 6.9 Mapping BankAccount (concrete class)
+PATH: /model/src/main/java/org/jpwh/model/inheritance/joined/BankAccount.java
+
+@Entity
+public class BankAccount extends BillingDetails {
+    @NotNull
+    protected String account;
+
+    @NotNull
+    protected String bankname;
+
+    @NotNull
+    protected String swift;
+    // ...
+}
+
+Thực thể này không có thuộc tính định danh (identifier property); nó tự động kế thừa thuộc tính ID và cột từ lớp cha,
+và Hibernate biết cách kết hợp các bảng nếu bạn muốn lấy các thể hiện của BankAccount.
+Tất nhiên, bạn có thể chỉ định tên cột một cách rõ ràng nếu cần.
+
+Listing 6.10 Mapping CreditCard
+PATH: /model/src/main/java/org/jpwh/model/inheritance/joined/CreditCard.java
+
+@Entity
+@PrimaryKeyJoinColumn(name = "CREDITCARD_ID")
+public class CreditCard extends BillingDetails {
+     @NotNull
+     protected String cardNumber;
+
+     @NotNull
+     protected String expMonth;
+
+     @NotNull
+     protected String expYear;
+     // ...
+}
+
+Các cột khóa chính của bảng BANKACCOUNT và CREDITCARD cũng đều có một ràng buộc khóa ngoại tham chiếu đến khóa chính của bảng BILLINGDETAILS. Hibernate dựa vào một SQL outer join để thực hiện truy vấn `select bd from BillingDetails bd`:
+
+```sql
+select
+ BD.ID, BD.OWNER,
+ CC.EXPMONTH, CC.EXPYEAR, CC.CARDNUMBER,
+ BA.ACCOUNT, BA.BANKNAME, BA.SWIFT,
+ case
+ when CC.CREDITCARD_ID is not null then 1
+ when BA.ID is not null then 2
+ when BD.ID is not null then 0
+ end
+from
+ BILLINGDETAILS BD
+ left outer join CREDITCARD CC on BD.ID=CC.CREDITCARD_ID
+ left outer join BANKACCOUNT BA on BD.ID=BA.ID
+```
+
+Trong truy vấn này, chúng ta sử dụng các liên kết ngoại với các bảng CREDITCARD và BANKACCOUNT thông qua cột khóa ngoại
+để kết hợp dữ liệu từ các bảng này với bảng BILLINGDETAILS. Khi có một bản ghi tương ứng trong CREDITCARD hoặc BANKACCOUNT,
+dữ liệu từ các cột tương ứng sẽ được lấy ra. Thành phần `case when` được sử dụng để xác định loại bản ghi, trong đó 1 đại diện cho CREDITCARD,
+2 đại diện cho BANKACCOUNT và 0 đại diện cho BILLINGDETAILS.
+
+
+Mệnh đề SQL CASE ... WHEN phát hiện sự tồn tại (hoặc không tồn tại) của các hàng trong các bảng lớp con CREDITCARD và BANKACCOUNT,
+vì vậy Hibernate có thể xác định lớp con cụ thể cho một hàng cụ thể trong bảng BILLINGDETAILS.
+
+Đối với một truy vấn lớp con hẹp như select cc from CreditCard cc, Hibernate sử dụng một inner join:
+
+select
+    CREDITCARD_ID, OWNER, EXPMONTH, EXPYEAR, CARDNUMBER
+from
+    CREDITCARD
+    inner join BILLINGDETAILS on CREDITCARD_ID=ID
+
+
+Mệnh đề SQL CASE ... WHEN phát hiện sự tồn tại (hoặc không tồn tại) của các hàng trong các bảng lớp con
+CREDITCARD và BANKACCOUNT, vì vậy Hibernate có thể xác định lớp con cụ thể cho một hàng cụ thể trong bảng BILLINGDETAILS.
+
+Đối với một truy vấn lớp con hẹp như `select cc from CreditCard cc`, Hibernate sử dụng một inner join:
+
+```sql
+select
+ CREDITCARD_ID, OWNER, EXPMONTH, EXPYEAR, CARDNUMBER
+from
+ CREDITCARD
+ inner join BILLINGDETAILS on CREDITCARD_ID=ID
+```
+
+Như bạn thấy, chiến lược ánh xạ này phức tạp hơn để thực hiện thủ công - thậm chí cả báo cáo tạm thời cũng phức tạp hơn.
+Điều này là một xem xét quan trọng nếu bạn dự định kết hợp mã Hibernate với SQL tự viết.
+
+Hơn nữa, mặc dù chiến lược ánh xạ này có vẻ đơn giản, kinh nghiệm của chúng tôi cho thấy hiệu suất có thể không chấp nhận
+được đối với các hệ thống phân cấp lớp phức tạp. Truy vấn luôn yêu cầu một liên kết qua nhiều bảng, hoặc nhiều sequential reads.
+
+
+Khi sử dụng chiến lược InheritanceType.JOINED trong Hibernate, bạn không cần phải có một cột discriminator đặc biệt trong
+cơ sở dữ liệu, và đặc tả JPA cũng không chứa bất kỳ yêu cầu nào về điều này. Mệnh đề CASE ... WHEN trong câu lệnh SQL SELECT
+là một cách thông minh để phân biệt loại thực thể của mỗi hàng được truy vấn. Tuy nhiên, một số ví dụ JPA bạn có thể tìm thấy
+ở nơi khác sử dụng InheritanceType.JOINED và một ánh xạ @DiscriminatorColumn. Có vẻ như một số nhà cung cấp JPA khác không
+sử dụng các mệnh đề CASE ... WHEN và chỉ dựa vào giá trị discriminator, ngay cả đối với chiến lược InheritanceType.JOINED.
+Hibernate không cần cột discriminator nhưng sử dụng một cột @DiscriminatorColumn được khai báo, ngay cả khi sử dụng chiến
+lược ánh xạ JOINED. Nếu bạn muốn bỏ qua ánh xạ discriminator với JOINED (nó đã bị bỏ qua trong các phiên bản Hibernate cũ hơn),
+bạn có thể bật thuộc tính cấu hình hibernate.discriminator.ignore_explicit_for_joined.
+
+Trước khi chúng tôi hướng dẫn bạn khi nào nên chọn chiến lược nào, hãy xem xét việc kết hợp các chiến lược ánh xạ kế thừa
+trong một class hierarchy (cấu trúc lớp) duy nhất.

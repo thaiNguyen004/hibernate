@@ -1,0 +1,109 @@
+[Hibernate Feature]
+6.6 Inheritance of embeddable classes
+
+Một lớp @Embeddable là một thành phần của đối tượng chủ sở hữu của nó; do đó, các quy tắc thông thường về kế thừa
+đối tượng (entity) được trình bày trong chương này không áp dụng. Như một phần mở rộng của Hibernate, bạn có thể ánh xạ
+một lớp @Embeddable mà kế thừa một số thuộc tính có tính liên tục từ một lớp cha (hoặc giao diện).
+Hãy xem xét hai thuộc tính mới của một món đấu giá: kích thước và trọng lượng.
+
+Kích thước của một món hàng bao gồm chiều rộng, chiều cao và chiều sâu, được biểu thị trong một đơn vị cụ thể và
+biểu tượng của nó, ví dụ, inches (") hoặc centimet (cm). Trọng lượng của một món hàng cũng có một đơn vị đo lường cụ thể,
+ví dụ, pounds (lbs) hoặc kilograms (kg). Để nắm bắt các thuộc tính chung (tên và biểu tượng) của đo lường, bạn định nghĩa
+một lớp cha cho Dimension và Weight được gọi là Measurement.
+
+Listing 6.12 Mapping the Measurement abstract embeddable superclass
+PATH: /model/src/main/java/org/jpwh/model/inheritance/embeddable/Measurement.java
+
+@MappedSuperclass
+public abstract class Measurement {
+    @NotNull
+    protected String name;
+
+    @NotNull
+    protected String symbol;
+    // ...
+}
+
+Sử dụng chú thích @MappedSuperclass trên lớp cha của lớp @Embeddable bạn đang ánh xạ, giống như bạn đã làm cho một
+đối tượng (entity). Các lớp con sẽ kế thừa các thuộc tính của lớp này như là các thuộc tính có tính persistent.
+
+Bạn định nghĩa các lớp con Dimensions và Weight là @Embeddable. Đối với Dimensions, ghi đè tất cả các thuộc tính
+của lớp cha và thêm một tiền tố tên cột.
+
+
+Listing 6.13 Mapping the Dimensions class
+PATH: /model/src/main/java/org/jpwh/model/inheritance/embeddable/Dimensions.java
+
+@Embeddable
+@AttributeOverrides({
+    @AttributeOverride(name = "name",
+        column = @Column(name = "DIMENSIONS_NAME")),
+    @AttributeOverride(name = "symbol",
+        column = @Column(name = "DIMENSIONS_SYMBOL"))
+})
+
+public class Dimensions extends Measurement {
+    @NotNull
+    protected BigDecimal depth;
+
+    @NotNull
+    protected BigDecimal height;
+
+    @NotNull
+    protected BigDecimal width;
+    // ...
+}
+
+Nếu không có việc ghi đè này, một đối tượng (Item) nhúng cả Dimension và Weight sẽ được ánh xạ vào một bảng có tên cột xung đột.
+Dưới đây là lớp Weight; ánh xạ của nó cũng ghi đè tên cột bằng một tiền tố (để đảm bảo tính đồng nhất, chúng tôi tránh
+xung đột với việc ghi đè trước đó).
+
+Listing 6.14 Mapping the Weight class
+PATH: /model/src/main/java/org/jpwh/model/inheritance/embeddable/Weight.java
+
+@Embeddable
+@AttributeOverrides({
+    @AttributeOverride(name = "name",
+        column = @Column(name = "WEIGHT_NAME")),
+    @AttributeOverride(name = "symbol",
+        column = @Column(name = "WEIGHT_SYMBOL"))
+    })
+
+public class Weight extends Measurement {
+    @NotNull
+    @Column(name = "WEIGHT")
+    protected BigDecimal value;
+    // ...
+}
+
+Đối tượng (entity) chủ sở hữu Item xác định hai thuộc tính nhúng có tính persistent thông thường.
+
+Listing 6.15 Mapping the Item class
+PATH: /model/src/main/java/org/jpwh/model/inheritance/embeddable/Item.java
+
+@Entity
+public class Item {
+
+    protected Dimensions dimensions;
+
+    protected Weight weight;
+    // ...
+}
+
+
+Hình 6.5 minh họa cách ánh xạ này. Một lựa chọn khác là bạn có thể ghi đè lên tên cột xung đột của các thuộc tính nhúng
+trong lớp Item, như được hiển thị trong phần 5.2. Tuy nhiên, chúng tôi ưa thích việc ghi đè chúng một lần, trên các lớp
+@Embeddable, để người tiêu dùng của các lớp này không cần phải giải quyết xung đột.
+
+Một điểm rủi ro cần chú ý là việc nhúng một thuộc tính có kiểu lớp cha trừu tượng (như Measurement) vào một đối tượng (entity) (như Item)
+không bao giờ hoạt động. Nhà cung cấp JPA không biết cách lưu trữ và nạp các trường hợp Measurement theo cách đa hình.
+Nó không có thông tin cần thiết để quyết định liệu các giá trị trong cơ sở dữ liệu có phải là các trường hợp
+Dimension hay Weight không, bởi vì không có bộ phân biệt. Điều này có nghĩa là mặc dù bạn có thể cho một lớp
+@Embeddable kế thừa một số thuộc tính có tính liên tục từ một @MappedSuperclass, tham chiếu đến một trường hợp không
+đa hình - nó luôn đặt tên cho một lớp cụ thể.
+
+Hãy so sánh điều này với chiến lược kế thừa thay thế cho các lớp nhúng được hiển thị trong phần "Converting properties of components"
+trong chương 5, mà hỗ trợ đa hình nhưng yêu cầu một số mã custom type-discrimination.
+
+Tiếp theo, chúng tôi sẽ chia sẻ thêm một số mẹo về cách lựa chọn sự kết hợp phù hợp của chiến lược ánh xạ cho các cấu trúc
+lớp trong ứng dụng của bạn.

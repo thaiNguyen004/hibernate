@@ -1,0 +1,94 @@
+6.2 Table per concrete class with unions
+Đầu tiên, hãy xem xét ánh xạ lớp con sử dụng phép ánh xạ UNION với BillingDetails là một lớp trừu tượng (hoặc giao diện),
+giống như phần trước. Trong tình huống này, bạn lại có hai bảng và các cột của lớp cha bị trùng lặp trong cả hai:
+CREDITCARD và BANKACCOUNT. Điều mới là một chiến lược kế thừa được biết đến là TABLE_PER_CLASS, được khai báo trên lớp cha,
+như được hiển thị trong phần tiếp theo.
+
+Mapping BillingDetails with TABLE_PER_CLASS
+PATH: /model/src/main/java/org/jpwh/model/inheritance/tableperclass/BillingDetails.java
+
+@Entity
+@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+public abstract class BillingDetails {
+    @Id
+    @GeneratedValue(generator = Constants.ID_GENERATOR)
+    protected Long id;
+    @NotNull
+
+    protected String owner;
+    // ...
+}
+
+Cần phải có định danh cơ sở dữ liệu và ánh xạ của nó trong lớp cha để chia sẻ nó trong tất cả các lớp con và các bảng của chúng.
+Điều này không còn là tùy chọn nữa, như trong chiến lược ánh xạ trước đó. Cả bảng CREDITCARD và BANKACCOUNT đều có một cột
+khóa chính ID. Tất cả các ánh xạ của lớp cụ thể đều kế thừa các thuộc tính lưu trữ từ lớp cha (hoặc giao diện).
+Chỉ cần có chú thích @Entity trên mỗi lớp con là đủ.
+
+Mapping CreditCard
+PATH: /model/src/main/java/org/jpwh/model/inheritance/tableperclass/CreditCard.java
+
+
+@Entity
+public class CreditCard extends BillingDetails {
+    @NotNull
+    protected String cardNumber;
+
+    @NotNull
+    protected String expMonth;
+
+    @NotNull
+    protected String expYear;
+    // ...
+}
+Hãy nhớ rằng cơ sở dữ liệu SQL vẫn không nhận thức được về kế thừa;
+các bảng vẫn trông giống nhau, như được hiển thị trong hình 6.1.
+
+Lưu ý rằng tiêu chuẩn JPA chỉ định rằng TABLE_PER_CLASS là tùy chọn, vì vậy không phải tất cả các triển khai JPA có
+thể hỗ trợ nó. Cài đặt cũng phụ thuộc vào nhà cung cấp - trong Hibernate, nó tương đương với một ánh xạ <union-subclass>
+trong các tệp siêu dữ liệu XML cổ điển của Hibernate (đừng lo lắng nếu bạn chưa bao giờ sử dụng tệp siêu dữ liệu XML
+của Hibernate cổ điển).
+
+Nếu BillingDetails là một lớp cụ thể, bạn sẽ cần một bảng bổ sung để lưu trữ các thực thể. Chúng tôi cần nhấn mạnh một
+lần nữa rằng vẫn không có mối quan hệ giữa các bảng cơ sở dữ liệu, ngoại trừ việc chúng có một số (rất nhiều) cột giống nhau.
+
+Ưu điểm của chiến lược ánh xạ này trở nên rõ ràng hơn nếu chúng ta xem xét các truy vấn đa hình.
+Ví dụ, truy vấn select bd from BillingDetails bd tạo ra câu lệnh SQL sau:
+
+select
+    ID, OWNER, EXPMONTH, EXPYEAR, CARDNUMBER,
+    ACCOUNT, BANKNAME, SWIFT, CLAZZ_
+    from
+    (   select
+            ID, OWNER, EXPMONTH, EXPYEAR, CARDNUMBER,
+            null as ACCOUNT,
+            null as BANKNAME
+            null as SWIFT,
+            1 as CLAZZ_
+         from
+             CREDITCARD
+         union all
+         select
+             id, OWNER,
+             null as EXPMONTH,
+             null as EXPYEAR,
+             null as CARDNUMBER,
+             ACCOUNT, BANKNAME, SWIFT,
+             2 as CLAZZ_
+         from
+            BANKACCOUNT
+    ) as BILLINGDETAILS
+
+Lệnh `SELECT` này sử dụng một câu lệnh con trong mệnh đề `FROM` để truy xuất tất cả các thực thể của `BillingDetails`
+từ tất cả các bảng lớp cụ thể. Các bảng được kết hợp bằng toán tử `UNION`, và một literal  (trong trường hợp này, là 1 và 2)
+được chèn vào kết quả trung gian; Hibernate đọc điều này để khởi tạo lớp chính xác dựa trên dữ liệu từ một hàng cụ thể.
+Phép UNION yêu cầu các truy vấn được kết hợp phải thực hiện trên các cột giống nhau; do đó, bạn phải đệm và điền vào các cột
+không tồn tại bằng NULL. Bạn có thể tự hỏi liệu truy vấn này có thực sự thực hiện tốt hơn so với hai câu lệnh riêng biệt.
+Ở đây, bạn có thể để trình tối ưu hóa cơ sở dữ liệu tìm kế hoạch thực hiện tốt nhất để kết hợp hàng từ nhiều bảng,
+thay vì gộp hai tập kết quả trong bộ nhớ như công cụ tải đa hình của Hibernate thường làm.
+
+Một lợi ích quan trọng hơn nhiều khác là khả năng xử lý các mối quan hệ đa hình; ví dụ, việc ánh xạ mối quan hệ từ User
+đến BillingDetails bây giờ là có thể. Hibernate có thể sử dụng một truy vấn UNION để mô phỏng một bảng duy nhất như là
+mục tiêu của ánh xạ mối quan hệ. Chúng tôi sẽ trình bày chủ đề này chi tiết hơn sau trong chương này.
+
+Cho đến nay, các chiến lược ánh xạ kế thừa mà chúng tôi đã thảo luận không đòi hỏi xem xét thêm đối với schema SQL.
+Tình hình này thay đổi với chiến lược tiếp theo.
