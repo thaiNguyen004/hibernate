@@ -423,6 +423,23 @@ cùng cơ sở dữ liệu hoặc bất kỳ kích hoạt cơ sở dữ liệu n
 hiệu quả trong tình huống như vậy, nhưng còn có những phần khác để xem xét. Chúng tôi sẽ nói thêm về concurrency và caching
 sau trong cuốn sách này.
 
+Cache cấp 2 trong Hibernate là một cơ chế lưu trữ dữ liệu tạm thời (cache) ở mức cơ sở dữ liệu, giúp tối ưu hóa hiệu
+suất truy vấn dữ liệu từ cơ sở dữ liệu. Hibernate hỗ trợ nhiều loại cache cấp 2, ví dụ: Ehcache, Infinispan,
+và nhiều loại khác.
+
+Khi bạn thực hiện truy vấn dữ liệu từ Hibernate, dữ liệu có thể được lưu trong cache cấp 2 để giảm thiểu số lượng truy
+cập đến cơ sở dữ liệu thực sự. Tuy nhiên, cache cấp 2 không tự động xóa dữ liệu từ cache sau khi dữ liệu trong cơ sở dữ
+liệu đã thay đổi.
+
+Điều này có nghĩa là nếu bạn thay đổi hoặc cập nhật dữ liệu trực tiếp trong cơ sở dữ liệu mà không thông qua Hibernate
+(ví dụ: thông qua một phiên làm việc SQL), cache cấp 2 vẫn giữ lại phiên bản cũ của dữ liệu trong cache. Điều này có thể
+dẫn đến tình huống dữ liệu không đồng bộ giữa cache và cơ sở dữ liệu thực sự.
+
+Để giải quyết vấn đề này, bạn có thể thực hiện xóa cache cấp 2 một cách thủ công khi bạn biết rằng dữ liệu đã thay đổi.
+Hibernate cung cấp các phương thức hoặc cấu hình để xóa cache cấp 2 tại mức đơn vị thực thể hoặc toàn bộ cache tùy thuộc
+vào nhu cầu của bạn.
+
+
 Nếu bạn làm việc trên một schema mới, cách tiếp cận dễ dàng nhất là không bật chế độ database-level cascading
 (xóa tự động của cơ sở dữ liệu) và ánh xạ mối quan hệ thành phần trong mô hình miền dưới dạng emdedded/embeddable. Không phải mối quan hệ thực thể
 Hibernate sau đó có thể thực hiện các hoạt động SQL DELETE hiệu quả để loại bỏ toàn bộ composite. 

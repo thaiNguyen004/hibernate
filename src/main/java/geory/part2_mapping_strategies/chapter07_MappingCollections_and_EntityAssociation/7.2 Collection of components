@@ -94,16 +94,16 @@ bạn đặt các embeddable component vào một Set hoặc sử dụng chúng 
 dựa trên value, không dựa trên định danh. Tốt nhất là bạn nên ghi đè những phương thức này trên mọi lớp @Embeddable;
 tất cả các loại value nên được so sánh "theo value."
 
-Bây giờ hãy xem xét key chính của cơ sở dữ liệu: Hibernate sẽ tạo một lược đồ bao gồm tất cả các cột không cho phép
-value NULL của bảng IMAGE trong một key chính hợp thành. Các cột phải là không cho phép value NULL vì bạn không thể
+Bây giờ hãy xem xét primary key của cơ sở dữ liệu: Hibernate sẽ tạo một lược đồ bao gồm tất cả các cột không cho phép
+value NULL của bảng IMAGE trong một primary key hợp thành. Các cột phải là không cho phép value NULL vì bạn không thể
 xác định điều gì bạn không biết. Điều này phản ánh cách triển khai tính bằng trong lớp Java. Bạn sẽ thấy lược đồ trong
-phần tiếp theo, với thông tin chi tiết hơn về key chính.
+phần tiếp theo, với thông tin chi tiết hơn về primary key.
 
 LƯU Ý: Chúng tôi cần đề cập đến một vấn đề nhỏ với  schema generator (trình tạo lược đồ) của Hibernate: nếu bạn đánh dấu 
 một thuộc tính của đối tượng nhúng với @NotNull thay vì @Column(nullable=false), Hibernate sẽ không tạo ra ràng buộc NOT NULL 
 cho cột của bảng collection. Kiểm tra Bean Validation của một instance hoạt động như mong đợi, chỉ có lược đồ cơ sở dữ 
 liệu thiếu quy tắc tích hợp. Sử dụng @Column(nullable=false) nếu lớp nhúng của bạn được ánh xạ trong một collection
-và thuộc tính đó nên là một phần của key chính.
+và thuộc tính đó nên là một phần của primary key.
 
 Lớp thành phần (component class) hiện đã sẵn sàng, và bạn có thể sử dụng nó trong các collection mappings.
 
@@ -134,15 +134,15 @@ ghi đè tên mặc định cho collection table, mà sẽ mặc định là ITE
 bạn có thể sử dụng @AttributeOverride để tùy chỉnh ánh xạ mà không cần sửa đổi lớp nhúng mục tiêu.
 Hãy xem database schema trong hình 7.7.
 
-Bạn đang ánh xạ một set, vì vậy key chính của collection table là một hợp thành của cột key ngoại ITEM_ID và tất cả
+Bạn đang ánh xạ một set, vì vậy primary key của collection table là một hợp thành của cột key ngoại ITEM_ID và tất cả
 các cột không cho phép value NULL như TITLE, FNAME, WIDTH và HEIGHT.
 
 value ITEM_ID không được bao gồm trong phương thức equals() và hashCode() đã bị ghi đè của Image, như đã thảo luận
 trong phần trước đó. Do đó, nếu bạn kết hợp các hình ảnh của các mặt hàng khác nhau trong một set, bạn sẽ gặp vấn đề về
 tính bằng trong tầng Java. Trong bảng cơ sở dữ liệu, bạn có thể phân biệt rõ ràng giữa các hình ảnh của các mặt hàng khác nhau,
-vì định danh của mặt hàng được bao gồm trong các kiểm tra tính bằng của key chính.
+vì định danh của mặt hàng được bao gồm trong các kiểm tra tính bằng của primary key.
 
-Nếu bạn muốn bao gồm Item trong quy trình tính bằng của Image, để đối xứng với key chính cơ sở dữ liệu, bạn cần một thuộc tính
+Nếu bạn muốn bao gồm Item trong quy trình tính bằng của Image, để đối xứng với primary key cơ sở dữ liệu, bạn cần một thuộc tính
 Image#item. Đây là một con trỏ thụ động, do Hibernate cung cấp khi các instance Image được tải:
 
 PATH: /model/src/main/java/org/jpwh/model/collections/setofembeddables/
@@ -178,11 +178,11 @@ và sau đó sắp xếp giảm dần theo chiều rộng của mỗi hình ản
 @org.hibernate.annotations.OrderBy riêng, mà có một mệnh đề SQL thô, như đã thảo luận trong phần 7.1.8.
 
 Khai báo tất cả các thuộc tính của Image như @NotNull có thể không phải lúc nào bạn cũng muốn. Nếu bất kỳ thuộc tính
-nào là tùy chọn, bạn cần một key chính khác cho bảng set.
+nào là tùy chọn, bạn cần một primary key khác cho bảng set.
 
 Trước đó, bạn đã sử dụng chú thích `@org.hibernate.annotations.CollectionId` để thêm một cột key thay thế vào collection table. 
 Tuy nhiên, loại collection không phải là Set mà là Collection, một bag. Điều này là nhất quán với lược đồ đã được cập nhật:
-Nếu bạn có một cột key chính thay thế, thì cho phép các "value phần tử" trùng lặp. Hãy xem xét điều này thông qua một ví dụ.
+Nếu bạn có một cột primary key thay thế, thì cho phép các "value phần tử" trùng lặp. Hãy xem xét điều này thông qua một ví dụ.
 
 Trước hết, lớp Image có thể có các thuộc tính có value null:
 
@@ -191,7 +191,7 @@ Image.java
 
 @Embeddable
 public class Image {
-    @Column(nullable = true)        // Có thể null nếu bạn có một surrogate primary key (key chính thay thế)
+    @Column(nullable = true)        // Có thể null nếu bạn có một surrogate primary key (primary key thay thế)
     protected String title;
 
     @Column(nullable = false)
@@ -226,12 +226,12 @@ public class Item {
 
 [Hibernate Feature]
 collection table
-Như trước đây, trong phần 7.1.5, bạn khai báo một cột key chính thay thế IMAGE_ID bổ sung bằng chú thích độc quyền
+Như trước đây, trong phần 7.1.5, bạn khai báo một cột primary key thay thế IMAGE_ID bổ sung bằng chú thích độc quyền
 @org.hibernate.annotations.CollectionId. Hình 7.8 hiển thị lược đồ cơ sở dữ liệu.
 
 Tiêu đề (title) của Image có định danh 2 là null.
 
-Tiếp theo, chúng ta sẽ xem xét một cách khác để thay đổi key chính của collection table với một Map.
+Tiếp theo, chúng ta sẽ xem xét một cách khác để thay đổi primary key của collection table với một Map.
 
 
 [7.2.4] Map of component values
@@ -250,7 +250,7 @@ public class Item {
     // ...
 }
 
-key chính của collection table, như được hiển thị trong hình 7.9, bây giờ bao gồm cột key ngoại ITEM_ID
+primary key của collection table, như được hiển thị trong hình 7.9, bây giờ bao gồm cột key ngoại ITEM_ID
 và cột key của map, `FILENAME`.
 
 Lớp embeddable Image có thể ánh xạ tất cả các cột khác, có thể cho phép value NULL:
@@ -260,7 +260,7 @@ mapofstringsembeddables/Image.java
 
 @Embeddable
 public class Image {
-    @Column(nullable = true)        // Có thể là value null; không phải là một phần của key chính.
+    @Column(nullable = true)        // Có thể là value null; không phải là một phần của primary key.
     protected String title;
     protected int width;
     protected int height;
