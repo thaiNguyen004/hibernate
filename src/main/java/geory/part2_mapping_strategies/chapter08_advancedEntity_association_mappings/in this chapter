@@ -1,0 +1,29 @@
+In this chapter
+- Mapping one-to-one entity associations
+- One-to-many mapping options
+- Many-to-many and ternary entity relationships
+Trong chương trước, chúng tôi đã thể hiện một mối quan hệ unidirectional (không đồng hướng) many-to-one, biến nó thành
+bidirectional (đồng hướng) và cuối cùng enabled transitive state changes với tùy chọn cascade. Một lý do chúng tôi bàn 
+luận về entity mappings nâng cao hơn trong một chương riêng biệt là chúng tôi coi một số trong số chúng "hiếm gặp" hoặc
+ít nhất là tùy chọn.
+
+Có thể chỉ sử dụng component mappings và quan hệ thực thể many-to-one (đôi khi là one-to-one)
+mà không cần tới collections! Chúng tôi đã trình bày những lợi ích cụ thể bạn đạt được từ việc ánh xạ collections trong
+chương trước; các quy tắc về khi nên ánh xạ một collections cũng áp dụng cho tất cả các ví dụ trong chương này.
+
+Luôn đảm bảo bạn thực sự cần một collections trước khi bạn thử ánh xạ một collections phức tạp. Hãy bắt đầu với các ánh xạ
+không liên quan đến collections: quan hệ thực thể one-to-one.
+
+
+Các tính năng chính mới trong JPA 2 bao gồm:
+
+1. Many-to-one và one-to-one associations có thể được ánh xạ bằng
+- Intermidiate join table (bảng nối trung gian) / interminate link table (bảng liên kết chung gian)
+
+Điều này có nghĩa là bạn có khả năng ánh xạ các quan hệ many-to-one và one-to-one bằng cách sử dụng một join table
+hoặc link intermediate, giúp quản lý mối quan hệ này một cách linh hoạt hơn.
+
+2. Embeddable component classes có thể có các mối quan hệ unidirectional (không đồng hướng) đến các thực thể,
+thậm chí many-valued với collections.
+
+
