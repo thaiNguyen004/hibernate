@@ -1,0 +1,401 @@
+Mối quan hệ giữa category (Category) và Mặt hàng (Item) là một mối quan hệ many-to-many, như bạn có thể thấy trong hình
+8.13. Trong một hệ thống thực tế, có thể không luôn có mối quan hệ many-to-many. Kinh nghiệm của chúng tôi là hầu như
+luôn có thông tin bổ sung cần phải gắn với mỗi liên kết giữa các trường hợp tương quan. Một số ví dụ bao gồm thời điểm
+mà một Item được thêm vào một Category và User chịu trách nhiệm tạo liên kết đó. Chúng tôi sẽ mở rộng ví dụ sau trong
+phần này để xem xét một trường hợp như vậy. Bạn nên bắt đầu với một mối quan hệ many-to-many thông thường và đơn giản hơn.
+
+[8.3.1] Unidirectional and bidirectional many-to-many associations
+
+Bảng nối (join table) trong cơ sở dữ liệu đại diện cho một mối quan hệ many-to-many thông thường, mà một số nhà phát triển
+còn gọi là bảng liên kết (link table) hoặc bảng quan hệ (association table). Hình 8.14 hiển thị một mối quan hệ
+many-to-many với một link table.
+
+Bảng nối CATEGORY_ITEM có hai cột, cả hai đều có ràng buộc khóa ngoại đến bảng CATEGORY và ITEM, tương ứng.
+Khóa chính của nó là một khóa hợp thành từ cả hai cột. Bạn chỉ có thể liên kết một category (Category) và Mặt hàng (Item)
+cụ thể một lần, nhưng bạn có thể liên kết cùng một mặt hàng với nhiều category khác nhau.
+
+Trong JPA, bạn ánh xạ các mối quan hệ many-to-many bằng cách sử dụng @ManyToMany trên một collection (collection).
+
+PATH: /model/src/main/java/org/jpwh/model/associations/
+manytomany/bidirectional/Category.java
+
+@Entity
+public class Category {
+    @ManyToMany(cascade = CascadeType.PERSIST)
+    @JoinTable(
+        name = "CATEGORY_ITEM",
+        joinColumns = @JoinColumn(name = "CATEGORY_ID"),
+        inverseJoinColumns = @JoinColumn(name = "ITEM_ID")
+    )
+    protected Set<Item> items = new HashSet<Item>();
+    // ...
+}
+
+Như thường lệ, bạn có thể kích hoạt CascadeType.PERSIST để làm cho việc lưu dữ liệu dễ dàng hơn. Khi bạn tham chiếu đến
+một Mặt hàng (Item) mới từ collection, Hibernate sẽ làm cho nó trở thành đối tượng đã lưu trữ. Bây giờ, hãy làm cho
+mối quan hệ này trở thành một mối quan hệ song hướng (bidirectional) (nếu bạn không cần, bạn không phải làm điều này):
+
+PATH: /model/src/main/java/org/jpwh/model/associations/manytomany/
+bidirectional/Item.java
+
+@Entity
+public class Item {
+    @ManyToMany(mappedBy = "items")
+    protected Set<Category> categories = new HashSet<Category>();
+    // ...
+}
+
+Như với bất kỳ ánh xạ song hướng nào, một bên được "mapping by" bên kia. Collection Item#categories là một collection
+effectively read-only; Hibernate sẽ phân tích nội dung của bên Category#items khi lưu trữ dữ liệu. Tiếp theo, bạn tạo
+hai category (categories) và hai mặt hàng (items) và liên kết chúng với multiplicity many-to-many:
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+ManyToManyBidirectional.java
+
+Category someCategory = new Category("Some Category");
+Category otherCategory = new Category("Other Category");
+
+Item someItem = new Item("Some Item");
+Item otherItem = new Item("Other Item");
+
+someCategory.getItems().add(someItem);
+someItem.getCategories().add(someCategory);
+
+someCategory.getItems().add(otherItem);
+otherItem.getCategories().add(someCategory);
+
+otherCategory.getItems().add(someItem);
+someItem.getCategories().add(otherCategory);
+
+em.persist(someCategory);
+em.persist(otherCategory);
+
+Vì bạn đã kích hoạt tính năng `persistent transitive`, việc lưu các category làm cho toàn bộ mạng lưới các instance
+trở nên persistent. Tuy nhiên, các tùy chọn cascade ALL, REMOVE và xóa bỏ đối tượng mồ côi (orphan deletion) (xem phần 7.3.3)
+không có ý nghĩa đối với các mối quan hệ many-to-many. Điều này là điểm tốt để kiểm tra xem bạn có hiểu về các entity
+và entity không. Hãy cố gắng đưa ra những câu trả lời hợp lý về tại sao những loại cascade này không có ý nghĩa đối với
+mối quan hệ many-many.
+
+Bạn có thể sử dụng một danh sách (List) thay vì một tập hợp (Set), hoặc thậm chí là một bag. Set phù hợp hoàn hảo với 
+cơ sở dữ liệu, vì không thể có các liên kết trùng lặp giữa Category và Item. Một bag ngụ ý sự tồn tại của các phần tử trùng lặp, 
+vì vậy bạn cần một khóa chính khác cho bảng liên kết. Annotation @CollectionId độc quyền của Hibernate có thể cung cấp điều này, 
+như được thể hiện trong phần 7.1.5. Một trong những chiến lược many-to-many thay thế mà chúng tôi sẽ thảo luận trong một 
+thời điểm sau là một lựa chọn tốt hơn nếu bạn cần hỗ trợ các liên kết trùng lặp.
+
+Bạn có thể ánh xạ các collection có chỉ Item như một danh sách (List) bằng @ManyToMany thông thường, nhưng chỉ trên một phía.
+Hãy nhớ rằng trong mối quan hệ hai chiều, một phía phải được "ánh xạ bởi" phía còn lại, có nghĩa là giá trị của nó bị bỏ qua
+khi Hibernate đồng bộ hóa với cơ sở dữ liệu. Nếu cả hai phía đều là danh sách, bạn chỉ có thể làm cho chỉ Item của một phía
+trở nên persistent.
+
+Một ánh xạ @ManyToMany thông thường ẩn đi bảng liên kết; không có lớp Java tương ứng, chỉ có một số thuộc tính collection.
+Vì vậy, mỗi khi có người nói, "Bảng liên kết của tôi có nhiều cột chứa thông tin về liên kết" - và, theo kinh nghiệm của
+chúng tôi, ai đó luôn nói điều này sớm hay muộn - bạn cần ánh xạ thông tin này vào một lớp Java.
+
+[8.3.2] Many-to-many with an intermediate entity
+
+Bạn luôn có thể biểu diễn một mối quan hệ many-to-many dưới dạng hai mối quan hệ many-to-one đến một lớp trung gian.
+Bạn không ẩn đi bảng liên kết mà biểu diễn nó bằng một lớp Java. Mô hình này thường dễ mở rộng hơn, vì vậy chúng ta thường
+không sử dụng các mối quan hệ many-to-many thông thường trong ứng dụng. Đó là một công việc lớn để thay đổi mã sau này,
+khi không thể tránh khỏi việc thêm nhiều cột vào bảng liên kết; vì vậy trước khi ánh xạ một @ManyToMany như đã được thể
+hiện trong phần trước, hãy xem xét lựa chọn thay thế được hiển thị trong hình 8.15.
+
+Hãy tưởng tượng bạn cần ghi lại một số thông tin mỗi khi thêm một Item (Item) vào một Category (Category). CategorizedItem
+ghi lại thời gian và người dùng tạo ra liên kết. Mô hình này yêu cầu thêm các cột bổ sung trên bảng liên kết, như bạn có
+thể thấy trong hình 8.16.
+
+Listing 8.4 Mapping a many-to-many relationship with CategorizedItem
+
+PATH: /model/src/main/java/org/jpwh/model/associations/manytomany/linkentity/
+CategorizedItem.java
+
+@Entity
+@Table(name = "CATEGORY_ITEM")
+@org.hibernate.annotations.Immutable        <- Declares class immutable [1]
+public class CategorizedItem {
+
+    @Embeddable
+    public static class Id implements Serializable {        <- Encapsulates khóa composite (tổng hợp) [2]
+        @Column(name = "CATEGORY_ID")
+        protected Long categoryId;
+
+        @Column(name = "ITEM_ID")
+        protected Long itemId;
+
+        public Id() {}
+
+        public Id(Long categoryId, Long itemId) {
+            this.categoryId = categoryId;
+            this.itemId = itemId;
+        }
+
+        public boolean equals(Object o) {
+            if (o != null && o instanceof Id) {
+                Id that = (Id) o;
+                return this.categoryId.equals(that.categoryId)
+                                && this.itemId.equals(that.itemId);
+            }
+            return false;
+        }
+
+        public int hashCode() {
+            return categoryId.hashCode() + itemId.hashCode();
+        }
+
+    }
+
+    @EmbeddedId             // Ánh xạ thuộc tính định danh và các cột khóa hợp thành [3]
+    protected Id id = new Id();
+
+    @Column(updatable = false)
+    @NotNull
+    protected String addedBy;       // [4] Maps username
+
+    @Column(updatable = false)
+    @NotNull
+    protected Date addedOn = new Date();  // [5] Maps timestamp
+
+    @ManyToOne
+    @JoinColumn(
+        name = "CATEGORY_ID",
+        insertable = false, updatable = false)
+    protected Category category;        // [6] Maps category
+
+    @ManyToOne
+    @JoinColumn(
+        name = "ITEM_ID",
+        insertable = false, updatable = false)   // [7] Maps item
+    protected Item item;
+
+    public CategorizedItem(String addedByUsername, Category category, Item item) {
+        this.addedBy = addedByUsername;
+        this.category = category;
+        this.item = item;
+
+        this.id.categoryId = category.getId();
+        this.id.itemId = item.getId();
+
+        category.getCategorizedItems().add(this);
+        item.getCategorizedItems().add(this);
+    }
+    // ...
+}
+
+Đây là một phần mã lớn với một số annotation mới. Đầu tiên, đây là một lớp thực thể bất biến (immutable), vì vậy bạn sẽ
+không bao giờ cập nhật các thuộc tính sau khi tạo ra. Hibernate có thể thực hiện một số tối ưu hóa, chẳng hạn như tránh
+dirty checking trong quá trình flushing dữ liệu của ngữ cảnh persistent, nếu bạn khai báo lớp là bất biến (immutable).
+
+Một lớp thực thể cần có một thuộc tính định danh. Khóa chính của bảng liên kết là sự kết hợp của CATEGORY_ID và ITEM_ID.
+Do đó, lớp thực thể cũng có một khóa hợp thành, mà bạn đóng gói trong một lớp component embeddable nội tĩnh (nested class) [2]
+để thuận tiện. Bạn cũng có thể đưa lớp này ra thành một tệp riêng, tất nhiên. Annotation mới @EmbeddedId [3] ánh xạ thuộc tính
+định danh và các cột khóa hợp thành của nó vào bảng của lớp thực thể.
+
+Tiếp theo là hai thuộc tính cơ bản ánh xạ username (addedBy) [4] và timestamp (addOn) [5] vào các cột của bảng liên kết.
+Đây là "thông tin bổ sung về liên kết" mà bạn quan tâm.
+
+Sau đó là hai thuộc tính @ManyToOne, category [6] và item [7], ánh xạ các cột đã được ánh xạ trong thuộc tính định danh.
+Bí quyết ở đây là làm cho chúng chỉ đọc, với cài đặt updatable = false, insertable = false. Điều này có nghĩa là Hibernate
+sẽ ghi các giá trị của các cột này bằng cách lấy giá trị của thuộc tính định danh của CategorizedItem. Đồng thời, bạn có
+thể đọc và duyệt các instance tương ứng thông qua categorizedItem.getItem() và getCategory() lần lượt. (Nếu bạn ánh xạ
+cùng một cột hai lần mà không làm cho một ánh xạ trở thành chỉ đọc, Hibernate sẽ phàn nàn khi khởi động về việc ánh xạ
+cột trùng lặp.)
+
+Bạn cũng có thể thấy rằng việc xây dựng một CategorizedItem [8] bao gồm việc thiết lập các giá trị của thuộc tính định danh -
+ứng dụng luôn gán giá trị khóa hợp thành; Hibernate không tạo chúng. Hãy chú ý đặc biệt đến constructor và cách nó thiết
+lập các giá trị trường và đảm bảo tính nhất quán về mặt tài liệu thông qua việc quản lý các collection ở cả hai phía của 
+mối quan hệ. Bạn sẽ ánh xạ các collection này tiếp theo để hỗ trợ naviagtion bidirectional.
+
+Đây là một ánh xạ một chiều và đủ để hỗ trợ mối quan hệ many-to-many giữa Category và Item. Để tạo một liên kết, bạn khởi tạo
+và lưu một CategorizedItem. Nếu bạn muốn hủy một liên kết, bạn remove CategorizedItem. Constructor của CategorizedItem
+yêu cầu bạn cung cấp các thể hiện Category và Item đã được lưu trữ trước đó.
+
+Nếu bạn cần điều hướng hai chiều, hãy ánh xạ một collection @OneToMany trong Category và/hoặc Item.
+
+PATH: /model/src/main/java/org/jpwh/model/associations/manytomany/linkentity/
+Category.java
+
+@Entity
+public class Category {
+    @OneToMany(mappedBy = "category")
+    protected Set<CategorizedItem> categorizedItems = new HashSet<>();
+    // ...
+}
+
+PATH: /model/src/main/java/org/jpwh/model/associations/manytomany/
+linkentity/Item.java
+
+@Entity
+public class Item {
+    @OneToMany(mappedBy = "item")
+    protected Set<CategorizedItem> categorizedItems = new HashSet<>();
+    // ...
+}
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+ManyToManyLinkEntity.java
+
+Category someCategory = new Category("Some Category");
+Category otherCategory = new Category("Other Category");
+em.persist(someCategory);
+em.persist(otherCategory);
+
+Item someItem = new Item("Some Item");
+Item otherItem = new Item("Other Item");
+em.persist(someItem);
+em.persist(otherItem);
+
+CategorizedItem linkOne = new CategorizedItem(
+     "johndoe", someCategory, someItem
+);
+CategorizedItem linkTwo = new CategorizedItem(
+     "johndoe", someCategory, otherItem
+);
+CategorizedItem linkThree = new CategorizedItem(
+     "johndoe", otherCategory, someItem
+);
+
+em.persist(linkOne);
+em.persist(linkTwo);
+em.persist(linkThree);
+
+
+Lợi ích chính của chiến lược này là khả năng điều hướng hai chiều (bidirectional navigation): bạn có thể lấy tất cả các Item 
+trong một Category bằng cách gọi someCategory.getCategorizedItems() và sau đó cũng có thể điều hướng từ hướng ngược lại
+với someItem.getCategorizedItems(). Một điểm bất lợi là mã code phức tạp hơn cần thiết để quản lý các thể hiện thực thể
+CategorizedItem để tạo và xóa liên kết, mà bạn phải lưu trữ và xóa một cách độc lập.
+
+Bạn cũng cần một số cơ sở hạ tầng trong lớp CategorizedItem, chẳng hạn như định danh hợp thành (composite identifier).
+Một cải tiến nhỏ sẽ là kích hoạt CascadeType.PERSIST trên một số mối quan hệ, giảm số lần gọi persist().
+
+Trong ví dụ trước đó, bạn đã lưu trữ người dùng tạo ra liên kết giữa Category và Item dưới dạng một chuỗi tên đơn giản.
+Nếu bảng liên kết thay bằng một cột khóa ngoại có tên USER_ID, bạn sẽ có một mối quan hệ tam thức (ternary). Lúc đó,
+lớp CategorizedItem sẽ có một @ManyToOne cho Category, Item, và User.
+
+Ở phần sau, bạn sẽ thấy một chiến lược many-to-many khác. Để làm cho nó thú vị hơn một chút, chúng tôi biến nó thành một
+mối quan hệ tam thức (ternary).
+
+
+[8.3.3] Ternary associations with components
+
+Ở phần trước, bạn đã biểu diễn một mối quan hệ many-to-many bằng một entity-class được ánh xạ vào bảng liên kết.
+Một lựa chọn có thể đơn giản hơn là ánh xạ vào một embeddable component class:
+
+PATH: /model/src/main/java/org/jpwh/model/associations/manytomany/ternary/
+CategorizedItem.java
+
+@Embeddable
+public class CategorizedItem {
+    @ManyToOne
+    @JoinColumn(
+        name = "ITEM_ID",
+        nullable = false, updatable = false
+    )
+    protected Item item;
+
+    @ManyToOne
+    @JoinColumn(
+        name = "USER_ID",
+        updatable = false
+    )
+    @NotNull
+    protected User addedBy;         <-- Không tạo ra ràng buộc SQL nên không phải là một phần của khóa chính
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(updatable = false)
+    @NotNull
+    protected Date addedOn = new Date();      <-- Không tạo ra ràng buộc SQL nên không phải là một phần của khóa chính
+
+    protected CategorizedItem() {
+    }
+
+    public CategorizedItem(User addedBy, Item item) {
+        this.addedBy = addedBy;
+        this.item = item;
+    }
+    // ...
+}
+
+Các ánh xạ mới ở đây là các mối quan hệ @ManyToOne trong một @Embeddable, cùng với cột nối khóa ngoại bổ sung USER_ID, 
+biến đây thành một mối quan hệ tam thức. Hãy xem cấu trúc cơ sở dữ liệu trong hình 8.17.
+
+Chủ sở hữu của collection thành phần nhúng là thực thể Category.
+
+PATH: /model/src/main/java/org/jpwh/model/associations/manytomany/ternary/
+Category.java
+
+@Entity
+public class Category {
+    @ElementCollection
+    @CollectionTable(
+        name = "CATEGORY_ITEM",
+        joinColumns = @JoinColumn(name = "CATEGORY_ID")
+    )
+    protected Set<CategorizedItem> categorizedItems = new HashSet<>();
+    // ...
+}
+
+Rất tiếc, ánh xạ này không hoàn hảo: khi bạn ánh xạ một @ElementCollection của kiểu nhúng (embeddable type), tất cả các
+thuộc tính của kiểu đích có nullable=false sẽ trở thành một phần của khóa chính (composite primary key). Bạn muốn tất cả
+các cột trong CATEGORY_ITEM đều có giá trị NOT NULL. Chỉ các cột CATEGORY_ID và ITEM_ID nên là một phần của khóa chính.
+Mẹo ở đây là sử dụng chú thích @NotNull của Bean Validation cho các thuộc tính mà bạn không muốn chúng là một phần của khóa chính.
+Trong trường hợp đó (vì đó là một lớp nhúng), Hibernate bỏ qua chú thích Bean Validation cho việc thực hiện khóa chính và
+tạo lược đồ SQL. Nhược điểm là lược đồ được tạo ra sẽ không có ràng buộc NOT NULL thích hợp trên các cột USER_ID và ADDEDON,
+điều này bạn nên sửa thủ công.
+
+Lợi ích của chiến lược này là vòng đời ngầm của các thành phần liên kết. Để tạo một mối quan hệ giữa một Category và một Item,
+thêm một thể hiện CategorizedItem mới vào collection. Để hủy liên kết, loại bỏ phần tử khỏi collection.
+Không cần thiết đặt các cài đặt lan truyền bổ sung, và mã Java được đơn giản hóa (mặc dù nó có thể phân bố trên nhiều dòng hơn):
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+ManyToManyTernary.java
+
+Category someCategory = new Category("Some Category");
+Category otherCategory = new Category("Other Category");
+em.persist(someCategory);
+em.persist(otherCategory);
+
+Item someItem = new Item("Some Item");
+Item otherItem = new Item("Other Item");
+em.persist(someItem);
+em.persist(otherItem);
+
+User someUser = new User("johndoe");
+em.persist(someUser);
+
+CategorizedItem linkOne = new CategorizedItem(
+     someUser, someItem
+);
+someCategory.getCategorizedItems().add(linkOne);
+
+CategorizedItem linkTwo = new CategorizedItem(
+    someUser, otherItem
+);
+someCategory.getCategorizedItems().add(linkTwo);
+
+CategorizedItem linkThree = new CategorizedItem(
+    someUser, someItem
+);
+otherCategory.getCategorizedItems().add(linkThree);
+
+Không có cách nào để kích hoạt điều hướng hai chiều: một thành phần nhúng (embeddable component), như CategorizedItem theo
+định nghĩa, không thể có các tham chiếu chia sẻ. Bạn không thể điều hướng từ Item đến CategorizedItem, và không có ánh xạ của
+liên kết này trong Item. Thay vào đó, bạn có thể viết một truy vấn để lấy danh mục dựa trên một Item:
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+ManyToManyTernary.java
+
+Item item = em.find(Item.class, ITEM_ID);
+List<Category> categoriesOfItem =
+    em.createQuery(
+        "select c from Category c " +
+        "join c.categorizedItems ci " +
+        "where ci.item = :itemParameter")
+    .setParameter("itemParameter", item)
+    .getResultList();
+assertEquals(categoriesOfItem.size(), 2);
+
+Bạn đã hoàn thành việc ánh xạ mối quan hệ tam thức đầu tiên của mình. Trong các chương trước, bạn đã thấy ví dụ về ORM 
+với các map; các key và value của các map được hiển thị luôn luôn thuộc loại cơ bản hoặc nhúng. Trong phần tiếp theo,
+bạn sẽ thấy các loại cặp key/value phức tạp hơn và cách ánh xạ chúng.
+
+
+

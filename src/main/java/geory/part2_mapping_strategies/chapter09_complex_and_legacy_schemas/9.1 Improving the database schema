@@ -1,0 +1,33 @@
+Hibernate đọc các lớp domain model Java và siêu dữ liệu ánh xạ của bạn và tạo ra các câu lệnh DDL cho schema.
+Bạn có thể xuất chúng thành một tệp văn bản hoặc thực hiện chúng trực tiếp trên cơ sở dữ liệu của bạn mỗi khi bạn chạy
+các kiểm tra tích hợp (integration tests). Bởi vì các ngôn ngữ schema chủ yếu là cụ thể cho từng nhà cung cấp, mọi tùy
+chọn bạn đặt trong siêu dữ liệu ánh xạ của bạn có khả năng liên kết siêu dữ liệu với một sản phẩm cơ sở dữ liệu cụ thể -
+hãy nhớ điều này khi sử dụng các tính năng schema.
+
+Hibernate tự động tạo schema cơ bản cho các bảng và ràng buộc của bạn; nó thậm chí còn tạo ra các chuỗi số (sequences),
+tùy thuộc vào bộ tạo định danh (identifier generator) bạn chọn. Nhưng có một số "schema artifact" (các thành phần của schema)
+mà Hibernate không thể và cũng không nên tạo tự động. Điều này bao gồm tất cả các tùy chọn hiệu suất cụ thể cho từng nhà
+cung cấp và bất kỳ "artifact" nào khác chỉ liên quan đến việc lưu trữ dữ liệu một cách vật lý (ví dụ: các tablespace).
+
+Ngoài các vấn đề vật lý này, DBA của bạn thường sẽ cung cấp các câu lệnh schema tùy chỉnh bổ sung để cải thiện schema
+được tạo ra tự động. DBA nên tham gia sớm và kiểm tra schema tự động được tạo ra bởi Hibernate. Không bao giờ triển khai
+vào sản xuất với một schema tự động được tạo ra mà không được kiểm tra.
+
+Nếu (quy trình phát triển - development process) của bạn cho phép, các thay đổi được thực hiện bởi DBA có thể chảy ngược lại
+hệ thống Java của bạn để bạn có thể thêm vào siêu dữ liệu ánh xạ. Trong nhiều dự án, siêu dữ liệu ánh xạ có thể chứa tất cả
+các thay đổi schema cần thiết từ DBA. Sau đó, Hibernate có thể tạo ra schema sản xuất cuối cùng trong quá trình xây dựng thường xuyên
+bằng cách bao gồm tất cả các comments, constrants, indexs, và như vậy.
+
+Trong các phần sau, chúng tôi sẽ hướng dẫn bạn cách tùy chỉnh schema được tạo ra tự động và cách thêm các artifact schema
+cơ sở dữ liệu phụ trợ (chúng tôi đôi khi gọi chúng là các đối tượng; chúng tôi không ám chỉ các đối tượng Java ở đây).
+Chúng tôi sẽ thảo luận về các loại dữ liệu tùy chỉnh, các quy tắc toàn vẹn bổ sung, chỉ mục, và cách bạn có thể thay thế
+một số tên "artifact" (thỉnh thoảng có thể không được đẹp) được tạo ra tự động bởi Hibernate.
+
+Hibernate đi kèm với lớp org.hibernate.tool.hbm2ddl.SchemaExport có một phương thức main() bạn có thể chạy từ dòng lệnh.
+Tiện ích này có thể trò chuyện trực tiếp với hệ quản trị cơ sở dữ liệu của bạn và tạo schema hoặc viết một tệp văn bản
+chứa script DDL để được tùy chỉnh thêm bởi DBA của bạn.
+
+Đầu tiên, hãy xem cách bạn có thể thêm các câu lệnh SQL tùy chỉnh vào quá trình tạo schema tự động của Hibernate.
+
+9.1.1 Adding (auxiliary - phụ trợ) database objects
+
