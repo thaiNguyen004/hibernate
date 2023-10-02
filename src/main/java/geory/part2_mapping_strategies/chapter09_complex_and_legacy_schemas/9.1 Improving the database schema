@@ -1,3 +1,5 @@
+9.1 Cải thiện lược đồ SQL bằng DDL tùy chỉnh
+
 Hibernate đọc các lớp domain model Java và siêu dữ liệu ánh xạ của bạn và tạo ra các câu lệnh DDL cho schema.
 Bạn có thể xuất chúng thành một tệp văn bản hoặc thực hiện chúng trực tiếp trên cơ sở dữ liệu của bạn mỗi khi bạn chạy
 các kiểm tra tích hợp (integration tests). Bởi vì các ngôn ngữ schema chủ yếu là cụ thể cho từng nhà cung cấp, mọi tùy
@@ -20,7 +22,7 @@ bằng cách bao gồm tất cả các comments, constrants, indexs, và như v�
 
 Trong các phần sau, chúng tôi sẽ hướng dẫn bạn cách tùy chỉnh schema được tạo ra tự động và cách thêm các artifact schema
 cơ sở dữ liệu phụ trợ (chúng tôi đôi khi gọi chúng là các đối tượng; chúng tôi không ám chỉ các đối tượng Java ở đây).
-Chúng tôi sẽ thảo luận về các loại dữ liệu tùy chỉnh, các quy tắc toàn vẹn bổ sung, chỉ mục, và cách bạn có thể thay thế
+Chúng tôi sẽ thảo luận về các loại dữ liệu tùy chỉnh, các quy tắc toàn vẹn bổ sung, index, và cách bạn có thể thay thế
 một số tên "artifact" (thỉnh thoảng có thể không được đẹp) được tạo ra tự động bởi Hibernate.
 
 Hibernate đi kèm với lớp org.hibernate.tool.hbm2ddl.SchemaExport có một phương thức main() bạn có thể chạy từ dòng lệnh.
@@ -30,4 +32,427 @@ chứa script DDL để được tùy chỉnh thêm bởi DBA của bạn.
 Đầu tiên, hãy xem cách bạn có thể thêm các câu lệnh SQL tùy chỉnh vào quá trình tạo schema tự động của Hibernate.
 
 9.1.1 Adding (auxiliary - phụ trợ) database objects
+
+Bạn có thể kết nối ba loại tùy chỉnh SQL script sau vào quá trình tạo schema của Hibernate:
+
+1. Create script (Tạo script): Script này được thực thi khi schema được tạo ra. Một script tạo tùy chỉnh có thể chạy trước,
+sau hoặc thay thế cho các script tự động được tạo ra bởi Hibernate. Nói cách khác, bạn có thể viết một SQL script chạy
+trước hoặc sau khi Hibernate tạo bảng, ràng buộc và các thành phần khác từ dữ liệu ánh xạ của bạn.
+
+2. Drop script (Xóa script): Script này được thực thi khi Hibernate xóa các thành phần schema. Giống như create script,
+drop script có thể chạy trước, sau hoặc thay thế cho các câu lệnh tự động được tạo ra bởi Hibernate.
+
+3. Load script (Tải script): Script này luôn được thực thi sau khi Hibernate tạo schema, là bước cuối cùng sau quá trình tạo.
+Mục đích chính của nó là nhập dữ liệu kiểm tra hoặc dữ liệu chính trước khi ứng dụng của bạn hoặc bài kiểm tra đơn vị chạy.
+Nó có thể chứa bất kỳ loại câu lệnh SQL nào, bao gồm cả các câu lệnh DDL như ALTER, nếu bạn muốn tùy chỉnh thêm schema.
+
+Việc tùy chỉnh quá trình tạo schema này thực tế là đã được tiêu chuẩn hóa; bạn cấu hình nó bằng các thuộc tính JPA trong
+tệp persistence.xml cho một đơn vị persistence.
+
+Listing 9.1 Custom schema-generation properties in persistence.xml
+<property name="hibernate.0hbm2ddl.import_files_sql_extractor"
+     value="org.hibernate.tool.hbm2ddl.
+     ➥MultipleLinesSqlCommandExtractor"/>       // [1] Đổi sang multiline extractor(trích xuất)
+<property name="javax.persistence.schema-generation.create-source"
+     value="script-then-metadata"/>             // [2] Xác định khi nào script được thực thi
+<property name="javax.persistence.schema-generation.drop-source"
+     value="metadata-then-script"/>
+<property name="javax.persistence.schema-generation.create-script-source"
+     value="complexschemas/CreateScript.sql.txt"/>  // [3] Tập lệnh SQL tùy chỉnh để tạo lược đồ
+<property name="javax.persistence.schema-generation.drop-script-source"
+     value="complexschemas/DropScript.sql.txt"/>        // [4] Tập lệnh SQL tùy chỉnh để drop lược đồ
+<property name="javax.persistence.sql-load-script-source"
+     value="complexschemas/LoadScript.sql.txt"/>        // [5] Load script
+
+
+1. Theo mặc định, Hibernate mong đợi một câu lệnh SQL trên mỗi dòng trong các tập lệnh. Điều này được
+chuyển sang trình trích xuất nhiều dòng thuận tiện hơn. Các câu lệnh SQL trong các tập lệnh được kết thúc
+bằng dấu chấm phẩy. Bạn có thể tự viết một triển khai org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractor nếu bạn
+muốn xử lý tập lệnh SQL theo cách khác.
+
+2. Thuộc tính này xác định khi nào các tập lệnh tạo và xóa nên được thực thi. Các tập lệnh SQL tùy chỉnh của bạn sẽ
+chứa câu lệnh CREATE DOMAIN, phải được thực thi trước khi các bảng sử dụng các domain này được tạo. Với các cài đặt này,
+trình tạo schema chạy tập lệnh tạo trước khi đọc dữ liệu ORM của bạn (chú thích, tệp XML) và tạo các bảng. Tập lệnh xóa
+thực thi sau khi Hibernate xóa các bảng, cho bạn cơ hội để làm sạch bất cứ điều gì bạn đã tạo. Các tùy chọn khác bao gồm
+metadata (bỏ qua nguồn tùy chỉnh của script) và script (chỉ sử dụng nguồn tùy chỉnh của script; bỏ qua dữ liệu ORM trong
+chú thích và tệp XML).
+
+3. Đây là vị trí của tập lệnh SQL tùy chỉnh để tạo schema. Đường dẫn có thể là (a) vị trí của tài nguyên script trên classpath;
+(b) vị trí của script như một URL file://; hoặc, nếu không có (a) hoặc (b), (c) đường dẫn tệp tuyệt đối hoặc tương đối
+trên hệ thống tệp cục bộ. Ví dụ này sử dụng (a).
+
+4. Đây là tập lệnh SQL tùy chỉnh để xóa schema.
+
+5. Tập lệnh load này chạy sau khi các bảng đã được tạo. Chúng ta đã đề cập rằng DDL thường rất cụ thể cho từng nhà cung cấp.
+Nếu ứng dụng của bạn cần hỗ trợ nhiều hệ thống cơ sở dữ liệu, bạn có thể cần một số bộ tập lệnh create/drop/load để tùy chỉnh
+schema cho mỗi hệ thống cơ sở dữ liệu. Bạn có thể giải quyết vấn đề này bằng cách cấu hình nhiều đơn vị duy trì trong tệp persistence.xml.
+Hoặc, Hibernate có cấu hình riêng cho tùy chỉnh schema trong tệp ánh xạ hbm.xml của nó.
+
+Listing 9.2 Custom schema generation with a Hibernate proprietary configuration
+
+<hibernate-mapping xmlns="http://www.hibernate.org/xsd/orm/hbm">
+
+    <database-object>
+        <create>
+            CREATE ...
+        </create>
+        <drop>
+            DROP ...
+        </drop>
+    <dialect-scope name="org.hibernate.dialect.H2Dialect"/>
+    <dialect-scope name="org.hibernate.dialect.PostgreSQL82Dialect"/>
+    </database-object>
+
+</hibernate-mapping>
+
+[Hibernate Feature]
+
+Đặt các đoạn mã SQL tùy chỉnh của bạn vào các phần `<create>` và `<drop>`. Hibernate sẽ thực thi những câu lệnh này sau
+khi tạo schema cho các lớp domain model của bạn, tức sau khi tạo các bảng và trước khi xóa phần tự động được tạo của schema.
+Hành vi này không thể thay đổi, vì vậy các cài đặt kịch bản tạo schema tiêu chuẩn của JPA cung cấp tính linh hoạt hơn.
+
+Các phần `<dialect-scope>` giới hạn các câu lệnh SQL của bạn cho một tập hợp cụ thể các hệ thống cơ sở dữ liệu được cấu hình.
+Nếu không có bất kỳ phần `<dialect-scope>` nào, các câu lệnh SQL sẽ luôn được áp dụng.
+
+Hibernate cũng hỗ trợ một tập lệnh tải (load script): nếu Hibernate tìm thấy một tệp có tên import.sql ở gốc của classpath
+của bạn, nó sẽ thực thi tệp đó sau khi schema đã được tạo. Hoặc, nếu bạn có nhiều tệp import, bạn có thể đặt tên chúng
+dưới dạng danh sách phân cách bằng dấu phẩy và sử dụng thuộc tính hibernate.hbm2ddl.import_files trong cấu hình đơn vị duy trì
+của bạn.
+
+Cuối cùng, nếu bạn cần kiểm soát chương trình hơn đối với schema được tạo ra, bạn có thể triển khai giao diện
+org.hibernate.mapping.AuxiliaryDatabaseObject. Hibernate đi kèm với một triển khai thuận tiện mà bạn có thể kế thừa và
+ghi đè một cách chọn lọc.
+
+Listing 9.3 Kiểm soát schema được tạo ra bằng cách lập trình
+
+package org.jpwh.model.complexschemas;
+import org.hibernate.dialect.Dialect;
+import org.hibernate.boot.model.relational.AbstractAuxiliaryDatabaseObject;
+public class CustomSchema
+            extends AbstractAuxiliaryDatabaseObject {
+
+ public CustomSchema() {
+    addDialectScope("org.hibernate.dialect.Oracle9Dialect");
+ }
+
+ @Override
+ public String[] sqlCreateStrings(Dialect dialect) {
+    return new String[]{"[CREATE statement]"};
+ }
+
+ @Override
+ public String[] sqlDropStrings(Dialect dialect) {
+    return new String[]{"[DROP statement]"};
+ }
+}
+
+Bạn có thể thêm các dialect scope bằng cách lập trình và thậm chí truy cập một số thông tin ánh xạ trong các phương thức 
+sqlCreateString() và sqlDropString(). Bạn phải kích hoạt lớp tùy chỉnh này trong tệp hbm.xml như sau:
+
+<hibernate-mapping xmlns="http://www.hibernate.org/xsd/orm/hbm">
+  <database-object>
+    <definition class="org.jpwh.model.complexschemas.CustomSchema"/>
+    <dialect-scope name="org.hibernate.dialect.H2Dialect"/>
+    <dialect-scope name="org.hibernate.dialect.PostgreSQL82Dialect"/>
+  </database-object>
+</hibernate-mapping>
+
+Các dialect scope bổ sung sẽ cộng dồn; ví dụ trước đó áp dụng cho ba dialect.
+
+Hãy viết một số tập lệnh create/drop/load tùy chỉnh và thực hiện các quy tắc tích hợp bổ sung được đề xuất bởi bất kỳ
+DBA giỏi nào. Trước hết, một số thông tin cơ bản về quy tắc tích hợp và ràng buộc SQL.
+
+9.1.2 SQL constraints
+Các hệ thống đảm bảo tính toàn vẹn dữ liệu chỉ trong mã ứng dụng thường dễ bị thất thoát dữ liệu và thường làm giảm
+chất lượng của cơ sở dữ liệu theo thời gian. Nếu hệ thống lưu trữ dữ liệu không áp dụng các quy tắc, một lỗi ứng dụng nhỏ
+không được phát hiện có thể gây ra các vấn đề không thể phục hồi như dữ liệu sai hoặc bị mất.
+
+Ngược lại với việc đảm bảo tính nhất quán dữ liệu trong mã ứng dụng theo cách thủ tục (hoặc hướng đối tượng), các hệ thống
+quản lý cơ sở dữ liệu cho phép bạn triển khai các quy tắc tích hợp dưới dạng khai báo, như một lược đồ cơ sở dữ liệu.
+Lợi ích của các quy tắc khai báo là có ít lỗi có thể xảy ra trong mã và có cơ hội cho hệ quản trị cơ sở dữ liệu (DBMS)
+tối ưu hóa việc truy cập dữ liệu.
+
+Trong cơ sở dữ liệu SQL, chúng ta xác định bốn loại rules:
+- **Ràng buộc vùng (Domain constraints)**: Một vùng (nói một cách tổng quát, trong thế giới cơ sở dữ liệu) là một kiểu
+dữ liệu trong cơ sở dữ liệu. Do đó, một ràng buộc vùng xác định phạm vi các giá trị có thể được xử lý bởi một kiểu dữ liệu
+cụ thể. Ví dụ, kiểu dữ liệu INTEGER có thể được sử dụng cho các giá trị số nguyên. Một kiểu dữ liệu CHAR có thể chứa
+chuỗi ký tự: ví dụ, tất cả các ký tự được định nghĩa trong ASCII hoặc một mã hóa khác nào đó. Bởi vì chúng ta thường
+sử dụng các kiểu dữ liệu tích hợp sẵn trong hệ quản trị cơ sở dữ liệu (DBMS), chúng ta phụ thuộc vào ràng buộc vùng được
+định nghĩa bởi nhà cung cấp. Nếu hỗ trợ bởi cơ sở dữ liệu SQL của bạn, bạn có thể sử dụng (thường giới hạn) hỗ trợ cho
+các vùng tùy chỉnh để thêm các ràng buộc bổ sung cho các kiểu dữ liệu hiện có cụ thể hoặc tạo kiểu dữ liệu do người
+dùng định nghĩa (UDT).
+
+- **Ràng buộc cột (Column constraints)**: Hạn chế một cột để chứa các giá trị của một vùng và kiểu dữ liệu cụ thể tạo
+ra một ràng buộc cột. Ví dụ, bạn khai báo trong lược đồ rằng cột EMAIL chứa các giá trị kiểu VARCHAR. Hoặc bạn có thể tạo
+một vùng mới có tên là EMAIL_ADDRESS với các ràng buộc bổ sung và áp dụng nó cho một cột thay vì VARCHAR. Một ràng buộc cột
+đặc biệt trong cơ sở dữ liệu SQL là NOT NULL.
+
+- **Ràng buộc bảng (Table constraints)**: Một quy tắc tích hợp áp dụng cho nhiều cột hoặc nhiều hàng là một ràng buộc bảng.
+Một ràng buộc bảng thường là khai báo: tất cả các hàng được kiểm tra để xem có giá trị trùng lặp không (ví dụ, mỗi người
+dùng phải có một địa chỉ email riêng biệt). Một quy tắc chỉ ảnh hưởng đến một hàng duy nhất nhưng nhiều cột là
+"thời gian kết thúc phiên đấu giá phải sau thời gian bắt đầu phiên đấu giá".
+
+- **Ràng buộc cơ sở dữ liệu (Database constraints)**: Nếu một quy tắc áp dụng cho nhiều hơn một bảng, nó có phạm vi cơ
+sở dữ liệu. Bạn đã quen thuộc với ràng buộc cơ sở dữ liệu phổ biến nhất, khóa ngoại. Quy tắc này đảm bảo tính toàn vẹn
+của các liên kết giữa các hàng, thường là trong các bảng riêng biệt, nhưng không phải lúc nào cũng như vậy (ràng buộc
+khóa ngoại tự tham chiếu không hiếm gặp). Ràng buộc cơ sở dữ liệu khác liên quan đến nhiều bảng cũng không hiếm:
+ví dụ, một đợt đấu giá chỉ có thể được lưu trữ nếu thời gian kết thúc đấu giá của mặt hàng tham chiếu chưa được đạt.
+
+Hầu hết (nếu không phải tất cả) hệ thống quản lý cơ sở dữ liệu SQL hỗ trợ các loại ràng buộc này và các tùy chọn quan trọng
+nhất của mỗi loại. Ngoài các từ khóa đơn giản như NOT NULL và UNIQUE, bạn thường cũng có thể khai báo các quy tắc phức tạp hơn
+với ràng buộc CHECK, áp dụng biểu thức SQL tùy ý. Tuy nhiên, ràng buộc tích hợp là một trong những điểm yếu trong tiêu chuẩn
+SQL, và các giải pháp từ các nhà cung cấp có thể khác nhau một cách đáng kể.
+
+Ngoài ra, các ràng buộc không được khai báo và thủ tục có thể thực hiện được với cơ sở dữ liệu (các bộ kích hoạt)
+- (triggers) mà chặn các hoạt động sửa đổi dữ liệu. Một trigger có thể thực hiện trực tiếp quy tắc tích hợp hoặc gọi
+một thủ tục đã lưu tồn tại.
+
+Ràng buộc tích hợp có thể được kiểm tra ngay khi một câu lệnh sửa đổi dữ liệu được thực thi hoặc kiểm tra có thể được
+hoãn lại cho đến khi cuối giao dịch. Phản ứng khi vi phạm ràng buộc trong cơ sở dữ liệu SQL thường là từ chối mà không có
+khả năng tùy chỉnh. Khóa ngoại là đặc biệt vì bạn thường có thể quyết định điều gì sẽ xảy ra với ON DELETE
+hoặc ON UPDATE cho các hàng được tham chiếu.
+
+Hibernate truyền tiếp các lỗi vi phạm ràng buộc cơ sở dữ liệu qua các ngoại lệ lỗi; hãy kiểm tra xem ngoại lệ trong
+giao dịch của bạn có một nguyên nhân, ở một vị trí nào đó trong chuỗi ngoại lệ, thuộc kiểu org.hibernate.exception.ConstraintViolationException.
+Ngoại lệ này có thể cung cấp thông tin thêm về lỗi, chẳng hạn tên của ràng buộc cơ sở dữ liệu bị lỗi.
+
+
+
+Hiển thị thông báo lỗi validation
+
+Nghe có vẻ như hầu như là quá tốt để làm việc: Lớp cơ sở dữ liệu sẽ ném một ConstraintViolationException mà bao gồm tất
+cả các chi tiết, vậy tại sao không hiển thị điều này cho người dùng? Người dùng sau đó có thể thay đổi giá trị không
+hợp lệ trên màn hình của họ và gửi biểu mẫu lại cho đến khi dữ liệu vượt qua quy tắc xác nhận.
+Thật không may, điều này không hoạt động và nhiều người đã thử triển khai chiến lược này đã thất bại.
+
+Trước hết, mỗi hệ quản trị cơ sở dữ liệu có thông báo lỗi khác nhau, và Hibernate không đảm bảo phân tích
+cú pháp chính xác của lỗi. Các chi tiết có sẵn trên Exception vi phạm ràng buộc là một sự đoán tốt nhất; chúng thường
+sai và chỉ đủ tốt cho thông báo ghi log của nhà phát triển. Liệu SQL có nên tiêu chuẩn hóa điều này không? Tất nhiên,
+nhưng nó không làm vậy.
+
+Thứ hai, một ứng dụng không nên truyền dữ liệu không hợp lệ vào cơ sở dữ liệu để xem điều gì hoạt động và điều gì không hoạt động.
+Hệ quản trị cơ sở dữ liệu (DBMS) là vị thần cuối cùng, không phải là bộ kiểm tra đầu tiên. Hãy sử dụng Bean Validation ở
+tầng ứng dụng Java thay vì vậy, và hiển thị thông báo lỗi xác nhận dễ đọc bằng ngôn ngữ của người dùng của bạn.
+
+Hãy cùng xem xét kỹ hơn về việc triển khai các ràng buộc tích hợp.
+
+THÊM RÀNG BUỘC DOMAIN VÀ COLUMN
+Tiêu chuẩn SQL bao gồm các vùng (domains), nhưng không may mắn, chúng thường có hạn chế và thường không được hỗ trợ bởi
+hệ quản trị cơ sở dữ liệu (DBMS). Nếu hệ thống của bạn hỗ trợ các domains SQL, bạn có thể sử dụng chúng để thêm các ràng buộc
+vào các kiểu dữ liệu.
+
+Trong tập lệnh SQL create tùy chỉnh của bạn, xác định một EMAIL_ADDRESS domain dựa trên kiểu dữ liệu VARCHAR như sau:
+
+PATH: /model/src/main/resources/complexschemas/CreateScript.sql.txt
+create domain if not exists
+ EMAIL_ADDRESS as varchar
+ check (position('@', value) > 1);
+
+Ràng buộc bổ sung là kiểm tra sự hiện diện của ký tự @ trong chuỗi. Lợi ích (tương đối nhỏ) của việc sử dụng các domain
+như vậy trong SQL là trừu tượng hóa các ràng buộc phổ biến vào một vị trí duy nhất. Ràng buộc domain luôn được kiểm tra
+ngay lập tức khi dữ liệu được chèn và sửa đổi.
+
+Bây giờ bạn có thể sử dụng domain này trong các ánh xạ của bạn, tương tự như một kiểu dữ liệu tích hợp sẵn.
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/custom/User.java
+
+@Entity
+public class User {
+    @Column(
+        nullable = false,       <-- Column constraint
+        unique = true,          <-- Table multirow constraint
+        columnDefinition = "EMAIL_ADDRESS(255)"     <-- Applies domain constraint
+    )
+    protected String email;
+    // ...
+}
+
+Có nhiều ràng buộc trong ánh xạ này. Ràng buộc NOT NULL là phổ biến; bạn đã thấy nó nhiều lần trước đó. Ràng buộc thứ hai
+là ràng buộc cột UNIQUE; người dùng không thể có địa chỉ email trùng lặp. Vào thời điểm viết bài này, không may mắn là không
+có cách để tùy chỉnh tên của ràng buộc duy nhất trên cột này trong Hibernate; nó sẽ có một tên được tạo tự động không đẹp
+trong lược đồ của bạn. Cuối cùng, columnDefinition đề cập đến domain mà bạn đã thêm vào với tập lệnh tạo tùy chỉnh của bạn.
+Định nghĩa này là một đoạn mã SQL, được xuất ra lược đồ của bạn trực tiếp, vì vậy hãy cẩn thận với SQL cụ thể cho cơ sở dữ liệu.
+
+Nếu bạn không muốn tạo các domain trước, bạn có thể áp dụng từ khóa CHECK trực tiếp như một ràng buộc trên cột duy nhất:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/custom/User.java
+
+@Entity
+public class User {
+    @Column(columnDefinition =
+        "varchar(15) not null unique" +
+        " check (not substring(lower(USERNAME), 0, 5) = 'admin')"
+    )
+    protected String username;
+    // ...
+}
+
+Ràng buộc này hạn chế các giá trị username hợp lệ tối đa là 15 ký tự, và chuỗi không thể bắt đầu bằng "admin" để tránh nhầm lẫn.
+Bạn có thể gọi bất kỳ hàm SQL nào được hỗ trợ bởi hệ quản trị cơ sở dữ liệu (DBMS) của bạn; columnDefinition luôn được truyền
+vào lược đồ được xuất ra.
+
+Lưu ý rằng bạn có sự lựa chọn: tạo và sử dụng một domain hoặc thêm một ràng buộc trên cột duy nhất có cùng hiệu ứng.
+Thường thì các domain dễ bảo trì hơn và tránh trường hợp trùng lặp.
+
+Vào thời điểm viết bài này, Hibernate không hỗ trợ chú thích độc quyền của nó @org.hibernate.annotations.Check
+cho các thuộc tính cá nhân; bạn sử dụng nó cho các ràng buộc cấp bảng.
+
+[Hibernate Feature]
+Table-Level Constraints
+Một phiên đấu giá không thể kết thúc trước khi bắt đầu. Cho đến nay, bạn chưa có quy tắc nào trong lược đồ SQL của bạn,
+hoặc thậm chí trong mô hình domain Java của bạn, để thực hiện ràng buộc này. Bạn cần một ràng buộc (cấp bảng-table level)
+chỉ áp dụng cho một hàng duy nhất:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/custom/Item.java
+@Entity
+@org.hibernate.annotations.Check(
+    constraints = "AUCTIONSTART < AUCTIONEND"
+)
+public class Item {
+    @NotNull
+    protected Date auctionStart;
+
+    @NotNull
+    protected Date auctionEnd;
+    // ...
+}
+
+Hibernate thêm các ràng buộc cấp bảng vào câu lệnh CREATE TABLE được tạo ra, có thể chứa các biểu thức SQL tùy ý.
+
+Bạn có thể triển khai các ràng buộc cấp bảng đa hàng với các biểu thức phức tạp hơn. Đôi khi bạn có thể cần một câu '
+lệnh con (subselect) trong biểu thức để thực hiện điều này, điều này có thể không được hỗ trợ bởi hệ quản trị cơ sở dữ
+liệu (DBMS) của bạn. Nhưng có một số ràng buộc cấp bảng đa hàng phổ biến, như UNIQUE, bạn có thể thêm trực tiếp vào các
+ánh xạ. Bạn đã thấy tùy chọn @Column(unique = true|false) trong phần trước.
+
+Nếu ràng buộc unique của bạn bao gồm nhiều cột, hãy sử dụng tùy chọn uniqueConstraints của chú thích @Table.
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/custom/User.java
+@Entity
+@Table(
+    name = "USERS",
+    uniqueConstraints =
+        @UniqueConstraint(
+            name = "UNQ_USERNAME_EMAIL",
+            columnNames = { "USERNAME", "EMAIL" }
+        )
+)
+public class User {
+    // ...
+}
+
+Bây giờ tất cả các cặp USERNAME và EMAIL phải là duy nhất, cho tất cả các hàng trong bảng USERS. Nếu bạn không cung cấp
+tên cho ràng buộc - ở đây là UNQ_USERNAME_EMAIL - thì một tên được tạo tự động và có thể không đẹp sẽ được sử dụng.
+
+Loại cuối cùng của các ràng buộc mà chúng ta thảo luận là các quy tắc cơ sở dữ liệu rộng rãi, bao quát nhiều bảng.
+
+DATABASE CONSTRAINTS
+
+Một người dùng chỉ có thể đặt giá đấu cho đến khi phiên đấu giá kết thúc. Cơ sở dữ liệu của bạn nên đảm bảo rằng các
+bid không hợp lệ không thể được lưu trữ để mỗi khi một hàng được chèn vào bảng BID, thời gian CREATEDON của Bid
+được kiểm tra so với thời gian kết thúc phiên đấu giá. Loại ràng buộc này liên quan đến hai bảng: BID và ITEM.
+
+Bạn có thể tạo một quy tắc bao quát nhiều bảng với một truy vấn kết nối (join) trong một biểu thức SQL CHECK bất kỳ.
+Thay vì chỉ tham chiếu đến bảng trên đó ràng buộc được khai báo, bạn có thể truy vấn (thường là để kiểm tra sự tồn tại
+hoặc không tồn tại của một phần thông tin cụ thể) từ một bảng khác. Vấn đề ở đây là bạn không thể sử dụng chú thích
+@org.hibernate.annotations.Check trên cả lớp Bid hoặc Item. Bạn không biết Hibernate sẽ tạo bảng nào trước.
+
+Do đó, bạn nên đặt ràng buộc CHECK vào một câu lệnh ALTER TABLE mà thực thi sau khi tất cả các bảng đã được tạo ra.
+Một nơi tốt là trong tập lệnh load, vì nó luôn thực thi vào thời điểm đó.
+
+PATH: /model/src/main/resources/complexschemas/LoadScript.sql.txt
+
+alter table BID
+    add constraint AUCTION_BID_TIME
+        check(
+            CREATEDON <= (
+            select i.AUCTIONEND from ITEM i where i.ID = ITEM_ID
+        )
+    );
+
+Một hàng trong bảng BID hiện là hợp lệ nếu giá trị CREATEDON của nó nhỏ hơn hoặc bằng thời gian kết thúc đấu giá của hàng
+ITEM được tham chiếu.
+
+Đến nay, ràng buộc phổ biến nhất bao quát nhiều bảng là các ràng buộc về tích hợp tham chiếu. Chúng được biết đến rộng rãi
+với tên gọi là khóa ngoại (foreign keys), là sự kết hợp của hai điều: sao chép giá trị khóa từ một hàng liên quan và
+một ràng buộc đảm bảo rằng giá trị được tham chiếu tồn tại. Hibernate tạo ra các ràng buộc khóa ngoại tự động cho tất cả
+các cột khóa ngoại trong các ánh xạ liên kết. Nếu bạn kiểm tra lược đồ được tạo ra bởi Hibernate, bạn sẽ thấy rằng các
+ràng buộc này cũng có các định danh cơ sở dữ liệu tự động được tạo ra - các tên không dễ đọc và làm cho việc gỡ lỗi trở
+nên khó khăn hơn. Bạn sẽ thấy loại câu lệnh này trong lược đồ được tạo ra:
+
+alter table BID add constraint FKCFAEEDB471BF59FF
+    foreign key (ITEM_ID) references ITEM
+
+Câu lệnh này khai báo ràng buộc khóa ngoại cho cột ITEM_ID trong bảng BID, tham chiếu đến cột khóa chính của bảng ITEM.
+Bạn có thể tùy chỉnh tên của ràng buộc bằng tùy chọn foreignKey trong ánh xạ @JoinColumn:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/custom/Bid.java
+@Entity
+public class Bid {
+    @ManyToOne
+    @JoinColumn(
+        name = "ITEM_ID",
+        nullable = false
+        foreignKey = @ForeignKey(name = "FK_ITEM_ID")
+    )
+    protected Item item;
+    // ...
+}
+
+Một thuộc tính foreignKey cũng được hỗ trợ trong các ánh xạ @PrimaryKeyJoinColumn, @MapKeyJoinColumn, @JoinTable, @CollectionTable và @AssociationOverride.
+
+Chú thích @ForeignKey có một số tùy chọn ít khi cần thiết chúng tôi chưa giới thiệu:
+- Bạn có thể viết foreignKeyDefinition của riêng bạn, một đoạn mã SQL như FOREIGN KEY ([column]) REFERENCES [table]([column]) ON UPDATE [action].
+Hibernate sẽ sử dụng đoạn mã SQL này thay vì đoạn mã được tạo bởi nhà cung cấp, nó có thể ở trong ngôn ngữ SQL được hỗ trợ
+bởi hệ quản trị cơ sở dữ liệu của bạn.
+- Thiết lập ConstraintMode hữu ích nếu bạn muốn hoàn toàn vô hiệu hóa việc tạo khóa ngoại, với giá trị NO_CONSTRAINT.
+Sau đó, bạn có thể tự viết ràng buộc khóa ngoại bằng câu lệnh ALTER TABLE, có thể trong một tập lệnh load như chúng tôi đã
+thể hiện.
+
+Đặt tên cho các ràng buộc một cách đúng đắn không chỉ là một thực hành tốt, mà còn giúp đáng kể khi bạn phải đọc các thông báo lỗi.
+
+Điều này hoàn tất cuộc thảo luận của chúng ta về các quy tắc tích hợp cơ sở dữ liệu. Tiếp theo, chúng ta sẽ xem xét một số
+tối ưu hóa bạn có thể muốn bao gồm trong lược đồ của mình vì lý do hiệu suất.
+
+[9.1.3] Tạo index
+Các index (indexes) là một tính năng quan trọng khi tối ưu hiệu suất của một ứng dụng cơ sở dữ liệu. Trình tối ưu
+truy vấn trong hệ quản trị cơ sở dữ liệu (DBMS) có thể sử dụng các index để tránh quét dữ liệu quá nhiều lần trong các
+bảng dữ liệu. Bởi vì index chỉ liên quan đến triển khai vật lý của cơ sở dữ liệu, chúng không phải là một phần của
+tiêu chuẩn SQL, và các tùy chọn index có sẵn trong DDL là cụ thể cho từng sản phẩm. Tuy nhiên, bạn có thể nhúng các
+schema artifacts thông thường nhất cho các index điển hình vào trong dữ liệu ánh xạ.
+
+Nhiều truy vấn trong CaveatEmptor có thể sẽ liên quan đến tên người dùng (username) của một đối tượng User.
+Bạn có thể tăng tốc các truy vấn này bằng cách tạo một index cho cột này. Một ứng cử viên khác cho index là sự kết hợp
+của các cột USERNAME và EMAIL, mà bạn cũng thường xuyên sử dụng trong các truy vấn. Bạn có thể khai báo index cho cột đơn
+hoặc đa cột trên lớp đối tượng (entity) bằng chú thích @Table và thuộc tính indexes của nó:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/custom/User.java
+
+@Entity
+@Table(
+    name = "USERS",
+    indexes = {
+        @Index(
+            name = "IDX_USERNAME",
+            columnList = "USERNAME"
+        ),
+        @Index(
+            name = "IDX_USERNAME_EMAIL",
+            columnList = "USERNAME, EMAIL"
+        )
+    }
+)
+public class User {
+    // ...
+}
+
+Nếu bạn không cung cấp tên cho index, một tên được tạo tự động sẽ được sử dụng.
+
+Chúng tôi không khuyến nghị thêm index vào lược đồ của bạn một cách tùy ý chỉ vì có vẻ như một index có thể giúp giải quyết
+vấn đề hiệu suất. Hãy đọc cuốn sách xuất sắc về Tinh chỉnh SQL của Dan Tow (Tow, 2003) nếu bạn muốn tìm hiểu về các kỹ thuật
+tối ưu hóa cơ sở dữ liệu hiệu quả và đặc biệt là cách index có thể giúp bạn tiến gần hơn đến kế hoạch thực thi tốt nhất cho
+các truy vấn của bạn.
+
+Tùy chỉnh lược đồ cơ sở dữ liệu thường chỉ khả thi khi bạn làm việc trên một hệ thống mới mà chưa có dữ liệu tồn tại.
+Nếu bạn phải làm việc với một lược đồ cũ đã tồn tại, một trong những vấn đề phổ biến nhất là làm việc với các khóa tự
+nhiên và tổ hợp.
 
