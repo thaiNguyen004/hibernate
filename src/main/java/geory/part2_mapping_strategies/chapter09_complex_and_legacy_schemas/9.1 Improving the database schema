@@ -1,13 +1,13 @@
 9.1 Cải thiện lược đồ SQL bằng DDL tùy chỉnh
 
-Hibernate đọc các lớp domain model Java và siêu dữ liệu ánh xạ của bạn và tạo ra các câu lệnh DDL cho schema.
+Hibernate đọc các lớp domain model Java và mapping metadata của bạn và tạo ra các câu lệnh DDL cho schema.
 Bạn có thể xuất chúng thành một tệp văn bản hoặc thực hiện chúng trực tiếp trên cơ sở dữ liệu của bạn mỗi khi bạn chạy
-các kiểm tra tích hợp (integration tests). Bởi vì các ngôn ngữ schema chủ yếu là cụ thể cho từng nhà cung cấp, mọi tùy
-chọn bạn đặt trong siêu dữ liệu ánh xạ của bạn có khả năng liên kết siêu dữ liệu với một sản phẩm cơ sở dữ liệu cụ thể -
+các kiểm tra tích hợp (integration tests). Bởi vì các dialect schema chủ yếu là cụ thể cho từng nhà cung cấp, mọi tùy
+chọn bạn đặt trong mapping metadata của bạn có khả năng ràng buộc metadata với một sản phẩm cơ sở dữ liệu cụ thể -
 hãy nhớ điều này khi sử dụng các tính năng schema.
 
 Hibernate tự động tạo schema cơ bản cho các bảng và ràng buộc của bạn; nó thậm chí còn tạo ra các chuỗi số (sequences),
-tùy thuộc vào bộ tạo định danh (identifier generator) bạn chọn. Nhưng có một số "schema artifact" (các thành phần của schema)
+tùy thuộc vào bộ tạo định danh (identifier generator) bạn chọn. Nhưng có một số "schema artifact" (tài liệu mô tả cấu trúc cơ sở dữ liệu)
 mà Hibernate không thể và cũng không nên tạo tự động. Điều này bao gồm tất cả các tùy chọn hiệu suất cụ thể cho từng nhà
 cung cấp và bất kỳ "artifact" nào khác chỉ liên quan đến việc lưu trữ dữ liệu một cách vật lý (ví dụ: các tablespace).
 
@@ -16,7 +16,7 @@ Ngoài các vấn đề vật lý này, DBA của bạn thường sẽ cung cấ
 vào sản xuất với một schema tự động được tạo ra mà không được kiểm tra.
 
 Nếu (quy trình phát triển - development process) của bạn cho phép, các thay đổi được thực hiện bởi DBA có thể chảy ngược lại
-hệ thống Java của bạn để bạn có thể thêm vào siêu dữ liệu ánh xạ. Trong nhiều dự án, siêu dữ liệu ánh xạ có thể chứa tất cả
+hệ thống Java của bạn để bạn có thể thêm vào mapping metadata. Trong nhiều dự án, mapping metadata có thể chứa tất cả
 các thay đổi schema cần thiết từ DBA. Sau đó, Hibernate có thể tạo ra schema sản xuất cuối cùng trong quá trình xây dựng thường xuyên
 bằng cách bao gồm tất cả các comments, constrants, indexs, và như vậy.
 
@@ -35,9 +35,9 @@ chứa script DDL để được tùy chỉnh thêm bởi DBA của bạn.
 
 Bạn có thể kết nối ba loại tùy chỉnh SQL script sau vào quá trình tạo schema của Hibernate:
 
-1. Create script (Tạo script): Script này được thực thi khi schema được tạo ra. Một script tạo tùy chỉnh có thể chạy trước,
+1. Create script (Tạo script): Script này được thực thi khi schema được tạo ra. Một script create tùy chỉnh có thể chạy trước,
 sau hoặc thay thế cho các script tự động được tạo ra bởi Hibernate. Nói cách khác, bạn có thể viết một SQL script chạy
-trước hoặc sau khi Hibernate tạo bảng, ràng buộc và các thành phần khác từ dữ liệu ánh xạ của bạn.
+trước hoặc sau khi Hibernate tạo bảng, rà ng buộcvà các thành phần khác từ dữ liệu ánh xạ của bạn.
 
 2. Drop script (Xóa script): Script này được thực thi khi Hibernate xóa các thành phần schema. Giống như create script,
 drop script có thể chạy trước, sau hoặc thay thế cho các câu lệnh tự động được tạo ra bởi Hibernate.
@@ -50,6 +50,7 @@ Việc tùy chỉnh quá trình tạo schema này thực tế là đã được 
 tệp persistence.xml cho một đơn vị persistence.
 
 Listing 9.1 Custom schema-generation properties in persistence.xml
+
 <property name="hibernate.0hbm2ddl.import_files_sql_extractor"
      value="org.hibernate.tool.hbm2ddl.
      ➥MultipleLinesSqlCommandExtractor"/>       // [1] Đổi sang multiline extractor(trích xuất)
@@ -85,7 +86,7 @@ trên hệ thống tệp cục bộ. Ví dụ này sử dụng (a).
 
 5. Tập lệnh load này chạy sau khi các bảng đã được tạo. Chúng ta đã đề cập rằng DDL thường rất cụ thể cho từng nhà cung cấp.
 Nếu ứng dụng của bạn cần hỗ trợ nhiều hệ thống cơ sở dữ liệu, bạn có thể cần một số bộ tập lệnh create/drop/load để tùy chỉnh
-schema cho mỗi hệ thống cơ sở dữ liệu. Bạn có thể giải quyết vấn đề này bằng cách cấu hình nhiều đơn vị duy trì trong tệp persistence.xml.
+schema cho mỗi hệ thống cơ sở dữ liệu. Bạn có thể giải quyết vấn đề này bằng cách cấu hình nhiều persistent unit trong tệp persistence.xml.
 Hoặc, Hibernate có cấu hình riêng cho tùy chỉnh schema trong tệp ánh xạ hbm.xml của nó.
 
 Listing 9.2 Custom schema generation with a Hibernate proprietary configuration
@@ -116,7 +117,7 @@ Nếu không có bất kỳ phần `<dialect-scope>` nào, các câu lệnh SQL 
 
 Hibernate cũng hỗ trợ một tập lệnh tải (load script): nếu Hibernate tìm thấy một tệp có tên import.sql ở gốc của classpath
 của bạn, nó sẽ thực thi tệp đó sau khi schema đã được tạo. Hoặc, nếu bạn có nhiều tệp import, bạn có thể đặt tên chúng
-dưới dạng danh sách phân cách bằng dấu phẩy và sử dụng thuộc tính hibernate.hbm2ddl.import_files trong cấu hình đơn vị duy trì
+dưới dạng danh sách phân cách bằng dấu phẩy và sử dụng thuộc tính hibernate.hbm2ddl.import_files trong cấu hình persistence unit
 của bạn.
 
 Cuối cùng, nếu bạn cần kiểm soát chương trình hơn đối với schema được tạo ra, bạn có thể triển khai giao diện
@@ -131,19 +132,19 @@ import org.hibernate.boot.model.relational.AbstractAuxiliaryDatabaseObject;
 public class CustomSchema
             extends AbstractAuxiliaryDatabaseObject {
 
- public CustomSchema() {
-    addDialectScope("org.hibernate.dialect.Oracle9Dialect");
- }
+    public CustomSchema() {
+        addDialectScope("org.hibernate.dialect.Oracle9Dialect");
+    }
 
- @Override
- public String[] sqlCreateStrings(Dialect dialect) {
-    return new String[]{"[CREATE statement]"};
- }
+    @Override
+    public String[] sqlCreateStrings(Dialect dialect) {
+        return new String[]{"[CREATE statement]"};
+    }
 
- @Override
- public String[] sqlDropStrings(Dialect dialect) {
-    return new String[]{"[DROP statement]"};
- }
+    @Override
+    public String[] sqlDropStrings(Dialect dialect) {
+        return new String[]{"[DROP statement]"};
+    }
 }
 
 Bạn có thể thêm các dialect scope bằng cách lập trình và thậm chí truy cập một số thông tin ánh xạ trong các phương thức 
@@ -160,10 +161,10 @@ sqlCreateString() và sqlDropString(). Bạn phải kích hoạt lớp tùy ch�
 Các dialect scope bổ sung sẽ cộng dồn; ví dụ trước đó áp dụng cho ba dialect.
 
 Hãy viết một số tập lệnh create/drop/load tùy chỉnh và thực hiện các quy tắc tích hợp bổ sung được đề xuất bởi bất kỳ
-DBA giỏi nào. Trước hết, một số thông tin cơ bản về quy tắc tích hợp và ràng buộc SQL.
+DBA giỏi nào. Trước hết, một số thông tin cơ bản về (quy tắc tích hợp-integration rules) và (ràng buộc SQL-SQL Constraint).
 
 9.1.2 SQL constraints
-Các hệ thống đảm bảo tính toàn vẹn dữ liệu chỉ trong mã ứng dụng thường dễ bị thất thoát dữ liệu và thường làm giảm
+Các hệ thống (đảm bảo tính toàn vẹn dữ liệu-ensure data integrity) chỉ trong mã ứng dụng thường dễ bị thất thoát dữ liệu và thường làm giảm
 chất lượng của cơ sở dữ liệu theo thời gian. Nếu hệ thống lưu trữ dữ liệu không áp dụng các quy tắc, một lỗi ứng dụng nhỏ
 không được phát hiện có thể gây ra các vấn đề không thể phục hồi như dữ liệu sai hoặc bị mất.
 
@@ -173,26 +174,26 @@ Lợi ích của các quy tắc khai báo là có ít lỗi có thể xảy ra t
 tối ưu hóa việc truy cập dữ liệu.
 
 Trong cơ sở dữ liệu SQL, chúng ta xác định bốn loại rules:
-- **Ràng buộc vùng (Domain constraints)**: Một vùng (nói một cách tổng quát, trong thế giới cơ sở dữ liệu) là một kiểu
-dữ liệu trong cơ sở dữ liệu. Do đó, một ràng buộc vùng xác định phạm vi các giá trị có thể được xử lý bởi một kiểu dữ liệu
+- Domain constraints: Một domain (nói một cách tổng quát, trong thế giới cơ sở dữ liệu) là một kiểu
+dữ liệu trong cơ sở dữ liệu. Do đó, một ràng buộc domain xác định phạm vi các giá trị có thể được xử lý bởi một kiểu dữ liệu
 cụ thể. Ví dụ, kiểu dữ liệu INTEGER có thể được sử dụng cho các giá trị số nguyên. Một kiểu dữ liệu CHAR có thể chứa
 chuỗi ký tự: ví dụ, tất cả các ký tự được định nghĩa trong ASCII hoặc một mã hóa khác nào đó. Bởi vì chúng ta thường
-sử dụng các kiểu dữ liệu tích hợp sẵn trong hệ quản trị cơ sở dữ liệu (DBMS), chúng ta phụ thuộc vào ràng buộc vùng được
+sử dụng các kiểu dữ liệu tích hợp sẵn trong hệ quản trị cơ sở dữ liệu (DBMS), chúng ta phụ thuộc vào ràng buộc domain được
 định nghĩa bởi nhà cung cấp. Nếu hỗ trợ bởi cơ sở dữ liệu SQL của bạn, bạn có thể sử dụng (thường giới hạn) hỗ trợ cho
-các vùng tùy chỉnh để thêm các ràng buộc bổ sung cho các kiểu dữ liệu hiện có cụ thể hoặc tạo kiểu dữ liệu do người
+các domain tùy chỉnh để thêm các ràng buộc bổ sung cho các kiểu dữ liệu hiện có cụ thể hoặc tạo kiểu dữ liệu do người
 dùng định nghĩa (UDT).
 
-- **Ràng buộc cột (Column constraints)**: Hạn chế một cột để chứa các giá trị của một vùng và kiểu dữ liệu cụ thể tạo
+- Column constraints: Hạn chế một cột để chứa các giá trị của một domain và kiểu dữ liệu cụ thể tạo
 ra một ràng buộc cột. Ví dụ, bạn khai báo trong lược đồ rằng cột EMAIL chứa các giá trị kiểu VARCHAR. Hoặc bạn có thể tạo
-một vùng mới có tên là EMAIL_ADDRESS với các ràng buộc bổ sung và áp dụng nó cho một cột thay vì VARCHAR. Một ràng buộc cột
+một domain mới có tên là EMAIL_ADDRESS với các ràng buộc bổ sung và áp dụng nó cho một cột thay vì VARCHAR. Một ràng buộc cột
 đặc biệt trong cơ sở dữ liệu SQL là NOT NULL.
 
-- **Ràng buộc bảng (Table constraints)**: Một quy tắc tích hợp áp dụng cho nhiều cột hoặc nhiều hàng là một ràng buộc bảng.
+- Table constraints: Một quy tắc tích hợp áp dụng cho nhiều cột hoặc nhiều hàng là một ràng buộc bảng.
 Một ràng buộc bảng thường là khai báo: tất cả các hàng được kiểm tra để xem có giá trị trùng lặp không (ví dụ, mỗi người
 dùng phải có một địa chỉ email riêng biệt). Một quy tắc chỉ ảnh hưởng đến một hàng duy nhất nhưng nhiều cột là
 "thời gian kết thúc phiên đấu giá phải sau thời gian bắt đầu phiên đấu giá".
 
-- **Ràng buộc cơ sở dữ liệu (Database constraints)**: Nếu một quy tắc áp dụng cho nhiều hơn một bảng, nó có phạm vi cơ
+- Database constraints: Nếu một quy tắc áp dụng cho nhiều hơn một bảng, nó có phạm vi cơ
 sở dữ liệu. Bạn đã quen thuộc với ràng buộc cơ sở dữ liệu phổ biến nhất, khóa ngoại. Quy tắc này đảm bảo tính toàn vẹn
 của các liên kết giữa các hàng, thường là trong các bảng riêng biệt, nhưng không phải lúc nào cũng như vậy (ràng buộc
 khóa ngoại tự tham chiếu không hiếm gặp). Ràng buộc cơ sở dữ liệu khác liên quan đến nhiều bảng cũng không hiếm:
@@ -237,7 +238,7 @@ tầng ứng dụng Java thay vì vậy, và hiển thị thông báo lỗi xác
 Hãy cùng xem xét kỹ hơn về việc triển khai các ràng buộc tích hợp.
 
 THÊM RÀNG BUỘC DOMAIN VÀ COLUMN
-Tiêu chuẩn SQL bao gồm các vùng (domains), nhưng không may mắn, chúng thường có hạn chế và thường không được hỗ trợ bởi
+Tiêu chuẩn SQL bao gồm các domain, nhưng không may mắn, chúng thường có hạn chế và thường không được hỗ trợ bởi
 hệ quản trị cơ sở dữ liệu (DBMS). Nếu hệ thống của bạn hỗ trợ các domains SQL, bạn có thể sử dụng chúng để thêm các ràng buộc
 vào các kiểu dữ liệu.
 
@@ -245,8 +246,8 @@ Trong tập lệnh SQL create tùy chỉnh của bạn, xác định một EMAIL
 
 PATH: /model/src/main/resources/complexschemas/CreateScript.sql.txt
 create domain if not exists
- EMAIL_ADDRESS as varchar
- check (position('@', value) > 1);
+    EMAIL_ADDRESS as varchar
+    check (position('@', value) > 1);
 
 Ràng buộc bổ sung là kiểm tra sự hiện diện của ký tự @ trong chuỗi. Lợi ích (tương đối nhỏ) của việc sử dụng các domain
 như vậy trong SQL là trừu tượng hóa các ràng buộc phổ biến vào một vị trí duy nhất. Ràng buộc domain luôn được kiểm tra
@@ -453,6 +454,7 @@ tối ưu hóa cơ sở dữ liệu hiệu quả và đặc biệt là cách ind
 các truy vấn của bạn.
 
 Tùy chỉnh lược đồ cơ sở dữ liệu thường chỉ khả thi khi bạn làm việc trên một hệ thống mới mà chưa có dữ liệu tồn tại.
-Nếu bạn phải làm việc với một lược đồ cũ đã tồn tại, một trong những vấn đề phổ biến nhất là làm việc với các khóa tự
-nhiên và tổ hợp.
+Nếu bạn phải làm việc với một lược đồ cũ đã tồn tại, một trong những vấn đề phổ biến nhất là làm việc với các khóa (tự nhiên-natural) và (tổ hợp-composite).
+
+
 

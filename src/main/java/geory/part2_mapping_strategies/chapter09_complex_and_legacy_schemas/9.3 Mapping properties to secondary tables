@@ -1,0 +1,48 @@
+Chúng tôi đã trình bày chú thích @SecondaryTable trong ánh xạ kế thừa trong phần 6.5. Nó giúp phân chia các thuộc tính
+của một lớp con cụ thể vào một bảng riêng biệt. Chức năng chung này có nhiều ứng dụng khác - nhưng hãy nhớ rằng một hệ thống
+được thiết kế đúng cách nên có, đơn giản hóa, nhiều lớp hơn so với bảng.
+
+Giả sử trong một schema thừa kế, bạn không lưu trữ thông tin địa chỉ thanh toán của người dùng cùng với các chi tiết
+người dùng khác trong bảng thực thể chính USERS, mà lưu trữ nó trong một bảng riêng biệt. Hình 9.5 hiển thị schema này.
+Địa chỉ nhà của người dùng được lưu trữ trong các cột STREET, ZIPCODE, và CITY của bảng USERS. Địa chỉ thanh toán của người
+dùng được lưu trữ trong bảng BILLING_ADDRESS, có cột khóa chính USER_ID, cũng là một ràng buộc khóa ngoại tham chiếu đến
+khóa chính ID của bảng USERS.
+
+Để ánh xạ schema này, bạn cần khai báo bảng phụ cho thực thể User và sau đó chỉ cho Hibernate cách nối nó với @SecondaryTable:
+
+@Entity
+@Table(name = "USERS")
+@SecondaryTable(
+    name = "BILLING_ADDRESS",
+    pkJoinColumns = @PrimaryKeyJoinColumn(name = "USER_ID")
+)
+public class User {
+    protected Address homeAddress;
+
+    @AttributeOverrides({
+        @AttributeOverride(name = "street",
+            column = @Column(table = "BILLING_ADDRESS",
+            nullable = false)),
+        @AttributeOverride(name = "zipcode",
+            column = @Column(table = "BILLING_ADDRESS",
+            length = 5,
+            nullable = false)),
+        @AttributeOverride(name = "city",
+            column = @Column(table = "BILLING_ADDRESS",
+            nullable = false))
+    })
+    protected Address billingAddress;
+    // ...
+}
+
+Lớp User có hai thuộc tính kiểu nhúng: homeAddress và billingAddress. Cái đầu tiên là một ánh xạ nhúng thông thường và
+lớp Address được chú thích bằng @Embeddable.
+
+Tương tự như trong phần 5.2.3, bạn có thể sử dụng chú thích @AttributeOverrides để ghi đè ánh xạ của các thuộc tính nhúng.
+Sau đó, @Column ánh xạ các thuộc tính riêng lẻ vào bảng BILLING_ADDRESS, với tùy chọn table của nó. Hãy nhớ rằng
+@AttributeOverride thay thế tất cả thông tin ánh xạ cho một thuộc tính: bất kỳ chú thích nào trên các trường Address sẽ
+bị bỏ qua nếu bạn ghi đè. Do đó, bạn phải chỉ định lại tính nullability và độ dài trong ghi đè @Column.
+
+Chúng tôi đã chỉ cho bạn ví dụ về ánh xạ bảng phụ với một thuộc tính nhúng. Tất nhiên, bạn cũng có thể tách ra các
+thuộc tính cơ bản đơn giản như chuỗi username vào một bảng phụ. Tuy nhiên, hãy nhớ rằng việc đọc và duy trì các ánh xạ
+này có thể là một vấn đề; bạn nên chỉ ánh xạ các schema thừa kế không thay đổi bằng các bảng phụ.

@@ -1,0 +1,93 @@
+Nếu một tham chiếu (reference) ra khỏi phạm vi của danh tính được đảm bảo, chúng ta gọi nó là một `tham chiếu` đến một 
+detached entity instance. Khi persistence context không còn tồn tại, nó không cung cấp dịch vụ ánh xạ danh tính nữa.
+Bạn sẽ gặp phải các vấn đề về đặt tên khi làm việc với các entity instance đã tách, vì vậy hãy đảm bảo bạn hiểu
+cách xử lý danh tính của các thể hiện đã tách.
+
+
+INDEX
+[10.3.1] The identity of detached instances
+
+
+
+[10.3.1] The identity of detached instances
+
+Nếu bạn truy vấn dữ liệu bằng cùng một giá trị định danh cơ sở dữ liệu trong cùng một persistence context,
+kết quả sẽ là hai tham chiếu đến cùng một thể hiện trong bộ nhớ trên JVM heap. Hãy xem xét hai units of work sau đây.
+
+Listing 10.2 (Phạm vi đảm bảo-Guaranteed scope) of object identity in Java Persistence
+PATH: /examples/src/test/java/org/jpwh/test/simple/SimpleTransitions.java
+
+tx.begin();         [1] Creates persistent context
+em = JPA.createEntityManager();  [2] Loads entity instances
+
+Item a = em.find(Item.class, ITEM_ID);
+Item b = em.find(Item.class, ITEM_ID);
+assertTrue(a == b);     [3]  a and b have same Java identity
+assertTrue(a.equals(b));        [4] a and b are equal
+assertEquals(a.getId(), b.getId()); [5] a and b have the same database identity
+
+tx.commit();    [6] Commits transaction
+em.close();     [7] Closes persistence context
+tx.begin();
+em = JPA.createEntityManager();
+Item c = em.find(Item.class, ITEM_ID);      [8] a and c aren’t identical
+assertTrue(a != c);         [9] a and c aren’t equal
+assertFalse(a.equals(c));
+assertEquals(a.getId(), c.getId());     [10] Identity test still true
+tx.commit();
+em.close();
+
+Trong unit of work đầu tiên tại điểm bắt đầu begin() [1], bạn bắt đầu bằng cách tạo một persistence context [2] và tải
+một số thể hiện thực thể. Vì các tham chiếu a và b được lấy từ cùng một persistence context, chúng có cùng định danh Java [3].
+Chúng bằng nhau [4] vì theo mặc định, equals() dựa vào việc so sánh định danh Java. Chúng có cùng định danh cơ sở dữ liệu [5].
+Chúng tham chiếu đến cùng một thể hiện Item, trong trạng thái persistent, được quản lý bởi persistence context cho unit of work đó.
+Phần đầu tiên của ví dụ này kết thúc bằng việc commit giao dịch [6] và đóng persistence context [7].
+
+Tham chiếu a và b ở trạng thái detached khi persistence context đầu tiên được đóng. Bạn đang xử lý các thể hiện sống ngoài
+phạm vi đảm bảo của định danh đối tượng.
+
+Bạn có thể thấy rằng a và c, được tải trong một persistence context khác, không giống nhau [8]. Kết quả kiểm tra bằng
+equals(a, c) cũng là sai [9]. Kiểm tra định danh cơ sở dữ liệu vẫn trả về true [10]). Hành vi này có thể dẫn đến vấn đề nếu
+bạn xem xét các thể hiện thực thể như equal trong trạng thái detached. Ví dụ, hãy xem xét phần mở rộng sau của mã,
+sau khi unit of work thứ hai kết thúc.
+
+em.close();
+Set<Item> allItems = new HashSet<>();
+allItems.add(a);
+allItems.add(b);
+allItems.add(c);
+assertEquals(allItems.size(), 2);  <-- Điều đó có vẻ sai lầm và tùy tiện.
+
+Trong ví dụ này, tất cả ba tham chiếu đều được thêm vào một Set. Tất cả đều là tham chiếu đến các thể hiện đã tách. 
+Bây giờ, nếu bạn kiểm tra kích thước của Set - số phần tử - bạn mong đợi kết quả gì?
+
+Một Set không cho phép các phần tử trùng lặp. Các bản sao được phát hiện bởi Set; mỗi khi bạn thêm một tham chiếu, 
+phương thức Item#equals() sẽ tự động được gọi so sánh với tất cả các phần tử khác đã có trong set. Nếu equals() trả về 
+true cho bất kỳ phần tử nào đã có trong bộ sưu tập, thì sự thêm vào không xảy ra.
+
+Mặc định, tất cả các lớp Java kế thừa phương thức equals() từ java.lang.Object. Triển khai này sử dụng so sánh double-equals (==) 
+để kiểm tra xem hai tham chiếu có tham chiếu đến cùng một thể hiện trong bộ nhớ trên Java heap hay không.
+
+Bạn có thể dự đoán rằng số phần tử trong bộ sưu tập là hai. Cuối cùng, a và b là tham chiếu đến cùng một thể hiện trong bộ nhớ; 
+chúng đã được nạp trong cùng một persistence context. Bạn đã lấy tham chiếu c từ một persistence context khác;
+nó tham chiếu đến một thể hiện khác trên heap. Bạn có ba tham chiếu đến hai thể hiện, nhưng bạn chỉ biết điều này là do
+bạn đã xem mã nạp dữ liệu. Trong một ứng dụng thực tế, bạn có thể không biết a và b được nạp trong một ngữ cảnh khác với c.
+Hơn nữa, bạn dự kiến rằng bộ sưu tập có đúng một phần tử, vì a, b và c đại diện cho cùng một hàng trong cơ sở dữ liệu,
+cùng một Item.
+
+Khi bạn làm việc với các thể hiện trong trạng thái đã tách và bạn kiểm tra chúng để so sánh bằng nhau
+(thường trong các bộ sưu tập dựa trên băm), bạn cần cung cấp triển khai riêng của phương thức equals() và hashCode() cho
+lớp thực thể đã ánh xạ của bạn. Điều này là một vấn đề quan trọng: nếu bạn không làm việc với các thể hiện thực thể trong
+trạng thái đã tách, không cần thực hiện bất kỳ hành động nào, và triển khai mặc định của equals() của java.lang.Object là đủ.
+Bạn tin cậy vào phạm vi đảm bảo của định danh đối tượng bên trong một persistence context của Hibernate. Ngay cả khi bạn
+làm việc với các thể hiện đã tách: nếu bạn không kiểm tra xem chúng có bằng nhau, bạn không đặt chúng vào một Set hoặc
+sử dụng chúng làm khóa trong một Map, bạn không cần phải lo lắng. Nếu tất cả những gì bạn làm là hiển thị một Item đã tách
+trên màn hình, bạn không so sánh nó với bất kỳ thứ gì.
+
+Rất nhiều nhà phát triển mới sử dụng JPA nghĩ rằng họ luôn phải cung cấp một phương thức so sánh tùy chỉnh cho tất cả các
+lớp thực thể, nhưng điều này không phải lúc nào cũng đúng. Trong phần 18.3, chúng tôi sẽ hướng dẫn bạn về một thiết kế ứng dụng
+với chiến lược persistence context mở rộng. Chiến lược này cũng sẽ mở rộng phạm vi của đảm bảo định danh đối tượng sang
+toàn bộ cuộc trò chuyện và một số giao dịch hệ thống. Hãy lưu ý rằng bạn vẫn cần có kỷ luật không so sánh các thể hiện
+đã tách được lấy trong hai cuộc trò chuyện! Hãy giả sử rằng bạn muốn sử dụng các thể hiện đã tách và bạn cần kiểm tra chúng
+có bằng nhau bằng phương thức của riêng bạn.
+
