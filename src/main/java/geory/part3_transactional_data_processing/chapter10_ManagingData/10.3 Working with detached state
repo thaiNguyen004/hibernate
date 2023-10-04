@@ -1,18 +1,21 @@
 Nếu một tham chiếu (reference) ra khỏi phạm vi của danh tính được đảm bảo, chúng ta gọi nó là một `tham chiếu` đến một 
 detached entity instance. Khi persistence context không còn tồn tại, nó không cung cấp dịch vụ ánh xạ danh tính nữa.
 Bạn sẽ gặp phải các vấn đề về đặt tên khi làm việc với các entity instance đã tách, vì vậy hãy đảm bảo bạn hiểu
-cách xử lý danh tính của các thể hiện đã tách.
+cách xử lý danh tính của các instance đã tách.
 
 
 INDEX
 [10.3.1] The identity of detached instances
 [10.3.2] Implementing equality methods
+[10.3.3] Detaching entity instances
+[10.3.4] Merging entity instances
+
 
 
 [10.3.1] The identity of detached instances
 
 Nếu bạn truy vấn dữ liệu bằng cùng một giá trị định danh cơ sở dữ liệu trong cùng một persistence context,
-kết quả sẽ là hai tham chiếu đến cùng một thể hiện trong bộ nhớ trên JVM heap. Hãy xem xét hai units of work sau đây.
+kết quả sẽ là hai tham chiếu đến cùng một instance trong bộ nhớ trên JVM heap. Hãy xem xét hai units of work sau đây.
 
 Listing 10.2 (Phạm vi đảm bảo-Guaranteed scope) of object identity in Java Persistence
 PATH: /examples/src/test/java/org/jpwh/test/simple/SimpleTransitions.java
@@ -38,17 +41,17 @@ tx.commit();
 em.close();
 
 Trong unit of work đầu tiên tại điểm bắt đầu begin() [1], bạn bắt đầu bằng cách tạo một persistence context [2] và tải
-một số thể hiện thực thể. Vì các tham chiếu a và b được lấy từ cùng một persistence context, chúng có cùng định danh Java [3].
+một số instance thực thể. Vì các tham chiếu a và b được lấy từ cùng một persistence context, chúng có cùng định danh Java [3].
 Chúng bằng nhau [4] vì theo mặc định, equals() dựa vào việc so sánh định danh Java. Chúng có cùng định danh cơ sở dữ liệu [5].
-Chúng tham chiếu đến cùng một thể hiện Item, trong trạng thái persistent, được quản lý bởi persistence context cho unit of work đó.
+Chúng tham chiếu đến cùng một instance Item, trong trạng thái persistent, được quản lý bởi persistence context cho unit of work đó.
 Phần đầu tiên của ví dụ này kết thúc bằng việc commit giao dịch [6] và đóng persistence context [7].
 
-Tham chiếu a và b ở trạng thái detached khi persistence context đầu tiên được đóng. Bạn đang xử lý các thể hiện sống ngoài
+Tham chiếu a và b ở trạng thái detached khi persistence context đầu tiên được đóng. Bạn đang xử lý các instance sống ngoài
 phạm vi đảm bảo của định danh đối tượng.
 
 Bạn có thể thấy rằng a và c, được tải trong một persistence context khác, không giống nhau [8]. Kết quả kiểm tra bằng
 equals(a, c) cũng là sai [9]. Kiểm tra định danh cơ sở dữ liệu vẫn trả về true [10]). Hành vi này có thể dẫn đến vấn đề nếu
-bạn xem xét các thể hiện thực thể như equal trong trạng thái detached. Ví dụ, hãy xem xét phần mở rộng sau của mã,
+bạn xem xét các instance thực thể như equal trong trạng thái detached. Ví dụ, hãy xem xét phần mở rộng sau của mã,
 sau khi unit of work thứ hai kết thúc.
 
 em.close();
@@ -58,7 +61,7 @@ allItems.add(b);
 allItems.add(c);
 assertEquals(allItems.size(), 2);  <-- Điều đó có vẻ sai lầm và tùy tiện.
 
-Trong ví dụ này, tất cả ba tham chiếu đều được thêm vào một Set. Tất cả đều là tham chiếu đến các thể hiện đã tách. 
+Trong ví dụ này, tất cả ba tham chiếu đều được thêm vào một Set. Tất cả đều là tham chiếu đến các instance đã tách. 
 Bây giờ, nếu bạn kiểm tra kích thước của Set - số phần tử - bạn mong đợi kết quả gì?
 
 Một Set không cho phép các phần tử trùng lặp. Các bản sao được phát hiện bởi Set; mỗi khi bạn thêm một tham chiếu, 
@@ -66,50 +69,50 @@ phương thức Item#equals() sẽ tự động được gọi so sánh với t�
 true cho bất kỳ phần tử nào đã có trong bộ sưu tập, thì sự thêm vào không xảy ra.
 
 Mặc định, tất cả các lớp Java kế thừa phương thức equals() từ java.lang.Object. Triển khai này sử dụng so sánh double-equals (==) 
-để kiểm tra xem hai tham chiếu có tham chiếu đến cùng một thể hiện trong bộ nhớ trên Java heap hay không.
+để kiểm tra xem hai tham chiếu có tham chiếu đến cùng một instance trong bộ nhớ trên Java heap hay không.
 
-Bạn có thể dự đoán rằng số phần tử trong bộ sưu tập là hai. Cuối cùng, a và b là tham chiếu đến cùng một thể hiện trong bộ nhớ; 
+Bạn có thể dự đoán rằng số phần tử trong bộ sưu tập là hai. Cuối cùng, a và b là tham chiếu đến cùng một instance trong bộ nhớ; 
 chúng đã được nạp trong cùng một persistence context. Bạn đã lấy tham chiếu c từ một persistence context khác;
-nó tham chiếu đến một thể hiện khác trên heap. Bạn có ba tham chiếu đến hai thể hiện, nhưng bạn chỉ biết điều này là do
+nó tham chiếu đến một instance khác trên heap. Bạn có ba tham chiếu đến hai instance, nhưng bạn chỉ biết điều này là do
 bạn đã xem mã nạp dữ liệu. Trong một ứng dụng thực tế, bạn có thể không biết a và b được nạp trong một ngữ cảnh khác với c.
 Hơn nữa, bạn dự kiến rằng bộ sưu tập có đúng một phần tử, vì a, b và c đại diện cho cùng một hàng trong cơ sở dữ liệu,
 cùng một Item.
 
-Khi bạn làm việc với các thể hiện trong trạng thái đã tách và bạn kiểm tra chúng để so sánh bằng nhau
+Khi bạn làm việc với các instance trong trạng thái đã tách và bạn kiểm tra chúng để so sánh bằng nhau
 (thường trong các bộ sưu tập dựa trên băm), bạn cần cung cấp triển khai riêng của phương thức equals() và hashCode() cho
-lớp thực thể đã ánh xạ của bạn. Điều này là một vấn đề quan trọng: nếu bạn không làm việc với các thể hiện thực thể trong
+lớp thực thể đã ánh xạ của bạn. Điều này là một vấn đề quan trọng: nếu bạn không làm việc với các instance thực thể trong
 trạng thái đã tách, không cần thực hiện bất kỳ hành động nào, và triển khai mặc định của equals() của java.lang.Object là đủ.
 Bạn tin cậy vào phạm vi đảm bảo của định danh đối tượng bên trong một persistence context của Hibernate. Ngay cả khi bạn
-làm việc với các thể hiện đã tách: nếu bạn không kiểm tra xem chúng có bằng nhau, bạn không đặt chúng vào một Set hoặc
+làm việc với các instance đã tách: nếu bạn không kiểm tra xem chúng có bằng nhau, bạn không đặt chúng vào một Set hoặc
 sử dụng chúng làm khóa trong một Map, bạn không cần phải lo lắng. Nếu tất cả những gì bạn làm là hiển thị một Item đã tách
 trên màn hình, bạn không so sánh nó với bất kỳ thứ gì.
 
 Rất nhiều nhà phát triển mới sử dụng JPA nghĩ rằng họ luôn phải cung cấp một phương thức so sánh tùy chỉnh cho tất cả các
 lớp thực thể, nhưng điều này không phải lúc nào cũng đúng. Trong phần 18.3, chúng tôi sẽ hướng dẫn bạn về một thiết kế ứng dụng
 với chiến lược persistence context mở rộng. Chiến lược này cũng sẽ mở rộng phạm vi của đảm bảo định danh đối tượng sang
-toàn bộ cuộc trò chuyện và một số giao dịch hệ thống. Hãy lưu ý rằng bạn vẫn cần có kỷ luật không so sánh các thể hiện
-đã tách được lấy trong hai cuộc trò chuyện! Hãy giả sử rằng bạn muốn sử dụng các thể hiện đã tách và bạn cần kiểm tra chúng
+toàn bộ cuộc trò chuyện và một số giao dịch hệ thống. Hãy lưu ý rằng bạn vẫn cần có kỷ luật không so sánh các instance
+đã tách được lấy trong hai cuộc trò chuyện! Hãy giả sử rằng bạn muốn sử dụng các instance đã tách và bạn cần kiểm tra chúng
 có bằng nhau bằng phương thức của riêng bạn.
 
 
 [10.3.2] Implementing equality methods
 
 Bạn có thể triển khai các phương thức equals() và hashCode() theo nhiều cách khác nhau. Hãy nhớ rằng khi bạn ghi đè equals(),
-bạn luôn cần phải ghi đè hashCode() cùng với để hai phương thức này làm việc một cách nhất quán. Nếu hai thể hiện (instances)
+bạn luôn cần phải ghi đè hashCode() cùng với để hai phương thức này làm việc một cách nhất quán. Nếu hai instance (instances)
 giống nhau, chúng phải có cùng giá trị hash.
 
 Một cách tiếp cận có vẻ thông minh là triển khai equals() chỉ để so sánh thuộc tính định danh của cơ sở dữ liệu, thường là
-giá trị khóa chính giả định (surrogate primary key). Tóm lại, nếu hai thể hiện Item có cùng định danh được trả về bởi getId(),
-thì chúng phải giống nhau. Nếu getId() trả về null, nó phải là một thể hiện transient (tạm thời) chưa được lưu.
+giá trị khóa chính giả định (surrogate primary key). Tóm lại, nếu hai instance Item có cùng định danh được trả về bởi getId(),
+thì chúng phải giống nhau. Nếu getId() trả về null, nó phải là một instance transient (transient) chưa được lưu.
 
-Tuy nhiên, giải pháp này có một vấn đề lớn: giá trị định danh không được gán bởi Hibernate cho đến khi một thể hiện trở nên
-persistent (bền vững). Nếu một thể hiện transient được thêm vào một Set trước khi được lưu, thì khi bạn lưu nó, giá trị
+Tuy nhiên, giải pháp này có một vấn đề lớn: giá trị định danh không được gán bởi Hibernate cho đến khi một instance trở nên
+persistent (persistent). Nếu một instance transient được thêm vào một Set trước khi được lưu, thì khi bạn lưu nó, giá trị
 hash của nó sẽ thay đổi trong khi nó đang nằm trong Set. Điều này vi phạm hợp đồng của java.util.Set, làm hỏng bộ sưu tập
-(collection). Đặc biệt, vấn đề này làm cho trạng thái bền vững dạng lan truyền (cascading) trở nên vô dụng cho các mối quan
+(collection). Đặc biệt, vấn đề này làm cho trạng thái persistent dạng lan truyền (cascading) trở nên vô dụng cho các mối quan
 hệ ánh xạ dựa trên các Set. Chúng tôi mạnh mẽ khuyến nghị không nên sử dụng sự equality của giá trị định danh của cơ sở dữ liệu.
 
 Để đạt được giải pháp mà chúng tôi đề xuất, bạn cần hiểu khái niệm về khóa kinh doanh (business key). Khóa kinh doanh
-là một thuộc tính hoặc sự kết hợp của một số thuộc tính mà duy nhất cho mỗi thể hiện với cùng một định danh trong cơ sở dữ liệu.
+là một thuộc tính hoặc sự kết hợp của một số thuộc tính mà duy nhất cho mỗi instance với cùng một định danh trong cơ sở dữ liệu.
 Đơn giản là, đó là khóa tự nhiên mà bạn sẽ sử dụng nếu bạn không sử dụng một giá trị khóa chính giả định. Không giống
 như khóa chính tự nhiên, nó không phải là một yêu cầu tuyệt đối rằng khóa kinh doanh không bao giờ thay đổi - miễn là nó
 thay đổi ít thì đủ.
@@ -121,7 +124,7 @@ thuộc tính chính là khóa kinh doanh của bạn. Khóa kinh doanh là đi�
 một bản ghi cụ thể, trong khi khóa chính giả định là điều mà ứng dụng và hệ thống cơ sở dữ liệu phụ thuộc vào.
 Thuộc tính hoặc các thuộc tính khóa kinh doanh có khả năng được giới hạn là UNIQUE trong mô hình cơ sở dữ liệu của bạn.
 
-Hãy viết các phương thức so sánh tùy chỉnh cho lớp thực thể User; điều này dễ hơn so sánh các thể hiện Item.
+Hãy viết các phương thức so sánh tùy chỉnh cho lớp thực thể User; điều này dễ hơn so sánh các instance Item.
 Đối với lớp User, username là một ứng viên tuyệt vời cho khóa kinh doanh. Nó luôn là bắt buộc, duy nhất với một ràng
 buộc cơ sở dữ liệu và nó thay đổi ít khi hoặc không thay đổi bao giờ.
 
@@ -149,17 +152,17 @@ public class User {
 
 Bạn có thể đã nhận thấy rằng mã của phương thức equals() luôn truy cập vào các thuộc tính của tham chiếu "other"
 thông qua phương thức getter. Điều này rất quan trọng, vì tham chiếu được truyền như "other" có thể là một Hibernate proxy,
-không phải là thể hiện thực sự nắm giữ trạng thái bền vững. Bạn không thể truy cập trực tiếp vào trường "username" của
+không phải là instance thực sự nắm giữ trạng thái persistent. Bạn không thể truy cập trực tiếp vào trường "username" của
 một proxy User. Để khởi tạo proxy để lấy giá trị thuộc tính, bạn cần truy cập nó thông qua một phương thức getter.
 Điều này là một điểm mà Hibernate không hoàn toàn trong suốt, nhưng đây là một thực hành tốt để luôn sử dụng phương thức
-getter thay vì truy cập trực tiếp vào biến thể của thể hiện (instance variable).
+getter thay vì truy cập trực tiếp vào biến thể của instance (instance variable).
 
 Hãy kiểm tra kiểu của tham chiếu "other" bằng cách sử dụng instanceof, chứ không phải bằng cách so sánh giá trị của getClass().
 Một lần nữa, tham chiếu "other" có thể là một proxy, mà là một lớp con được tạo ra tại thời gian chạy (runtime-generated subclass)
 của User, vì vậy this và other có thể không cùng kiểu chính xác mà là một siêu kiểu hoặc con kiểu hợp lệ. Bạn có thể tìm hiểu
 thêm về các proxy trong phần 12.1.1.
 
-Bây giờ bạn có thể an toàn so sánh các tham chiếu User trong trạng thái bền vững.
+Bây giờ bạn có thể an toàn so sánh các tham chiếu User trong trạng thái persistent.
 
 tx.begin();
 em = JPA.createEntityManager();
@@ -171,8 +174,8 @@ assertEquals(a.getId(), b.getId());
 tx.commit();
 em.close();
 
-Thêm vào đó, tất nhiên, bạn sẽ có hành vi đúng nếu bạn so sánh các tham chiếu đến các thể hiện trong trạng thái bền vững
-(persistent) và trạng thái tách rời (detached):
+Thêm vào đó, tất nhiên, bạn sẽ có hành vi đúng nếu bạn so sánh các tham chiếu đến các instance trong trạng thái persistent
+(persistent) và trạng thái detached (detached):
 
 tx.begin();
 em = JPA.createEntityManager();
@@ -199,7 +202,7 @@ Dưới đây là một số gợi ý có thể giúp bạn xác định khóa k
 
 - Mọi thuộc tính không thay đổi (immutable) có thể là ứng viên tốt cho khóa kinh doanh. Các thuộc tính có thể thay đổi
 (mutable) cũng có thể là ứng viên tốt, nếu chúng được cập nhật ít khi hoặc nếu bạn có thể kiểm soát trường hợp khi
-chúng được cập nhật - ví dụ, bằng cách đảm bảo rằng các thể hiện không nằm trong một Set trong thời gian đó.
+chúng được cập nhật - ví dụ, bằng cách đảm bảo rằng các instance không nằm trong một Set trong thời gian đó.
 
 - Mọi thuộc tính có ràng buộc cơ sở dữ liệu UNIQUE là ứng viên tốt cho khóa kinh doanh. Hãy nhớ rằng độ chính xác
 của khóa kinh doanh phải đủ tốt để tránh xảy ra trùng lắp.
@@ -211,15 +214,15 @@ thời gian là thuộc tính duy nhất của khóa kinh doanh.
 
 - Bạn có thể sử dụng các định danh cơ sở dữ liệu như một phần của khóa kinh doanh. Điều này có vẻ trái ngược với
 các tuyên bố trước của chúng tôi, nhưng chúng tôi không đề cập đến giá trị định danh cơ sở dữ liệu của thực thể đã cho.
-Bạn có thể sử dụng định danh cơ sở dữ liệu của một thể hiện thực thể liên quan. Ví dụ, một ứng viên khóa kinh doanh
+Bạn có thể sử dụng định danh cơ sở dữ liệu của một instance thực thể liên quan. Ví dụ, một ứng viên khóa kinh doanh
 cho lớp Bid có thể là định danh của Item mà nó phù hợp cùng với số lượng đặt giá. Bạn có thể thậm chí có một ràng buộc
 duy nhất đại diện cho khóa kinh doanh kết hợp này trong mô hình cơ sở dữ liệu. Bạn có thể sử dụng giá trị định danh
 của Item liên quan vì nó không bao giờ thay đổi trong suốt vòng đời của Bid - constructor của Bid có thể yêu cầu một
-Item đã bền vững từ trước.
+Item đã persistent từ trước.
 
 Nếu bạn tuân theo lời khuyên của chúng tôi, bạn không nên gặp khó khăn lớn trong việc tìm kiếm một khóa kinh doanh tốt
-cho tất cả các lớp kinh doanh của bạn. Nếu bạn gặp trường hợp khó khăn, hãy cố gắng giải quyết nó mà không xem xét H
-ibernate. Cuối cùng, đó là một vấn đề thuần túy của lập trình hướng đối tượng. Hãy lưu ý rằng gần như không bao giờ
+cho tất cả các lớp kinh doanh của bạn. Nếu bạn gặp trường hợp khó khăn, hãy cố gắng giải quyết nó mà không xem xét Hibernate.
+Cuối cùng, đó là một vấn đề thuần túy của lập trình hướng đối tượng. Hãy lưu ý rằng gần như không bao giờ
 đúng khi bạn ghi đè equals() trên một lớp con và bao gồm một thuộc tính khác trong so sánh.
 Điều này khá phức tạp để đảm bảo rằng định danh và tính đồng bằng của đối tượng phải đối xứng và có tính chất chuyển tiếp
 trong trường hợp này; và quan trọng hơn, khóa kinh doanh có thể không tương ứng với bất kỳ khóa tự nhiên ứng cử viên nào
@@ -227,8 +230,87 @@ trong trường hợp này; và quan trọng hơn, khóa kinh doanh có thể kh
 thông tin về việc tùy chỉnh so sánh sự bằng nhau, hãy xem sách "Effective Java, 2nd edition" của Joshua Bloch (Bloch, 2008),
 cuốn sách bắt buộc đối với tất cả các lập trình viên Java.
 
-Lớp User hiện đã sẵn sàng cho trạng thái tách rời (detached); bạn có thể an toàn đưa các thể hiện được tải từ các ngữ cảnh
-bền vững khác nhau vào một Set. Tiếp theo, chúng ta sẽ xem xét một số ví dụ liên quan đến trạng thái tách rời và bạn sẽ thấy
-một số lợi ích của khái niệm này. Đôi khi, bạn có thể muốn tách một thể hiện thực thể ra khỏi ngữ cảnh bền vững một cách thủ
+Lớp User hiện đã sẵn sàng cho trạng thái detached (detached); bạn có thể an toàn đưa các instance được tải từ các ngữ cảnh
+persistent khác nhau vào một Set. Tiếp theo, chúng ta sẽ xem xét một số ví dụ liên quan đến trạng thái detached và bạn sẽ thấy
+một số lợi ích của khái niệm này. Đôi khi, bạn có thể muốn tách một instance thực thể ra khỏi persistence context một cách thủ
 công.
+
+
+[10.3.3] Detaching entity instances
+PATH: /examples/src/test/java/org/jpwh/test/simple/SimpleTransitions.java
+Bạn không cần phải chờ cho persistence context đóng. Bạn có thể tách thể hiện thực thể ra khỏi persistence context
+bằng cách thủ công:
+
+User user = em.find(User.class, USER_ID);
+em.detach(user);
+assertFalse(em.contains(user));
+
+Ví dụ này cũng minh họa phép toán EntityManager#contains(), nó trả về true nếu thể hiện đã cho nằm trong trạng thái persistent
+được quản lý trong persistence context hiện tại. Bây giờ bạn có thể làm việc với tham chiếu user trong trạng thái detached.
+Nhiều ứng dụng chỉ đọc và hiển thị dữ liệu sau khi persistence context đã đóng. Sửa đổi người dùng đã tải sau khi
+persistence context đã đóng không ảnh hưởng đến biểu diễn persistent của nó trong cơ sở dữ liệu. JPA cho phép bạn merge
+lại bất kỳ thay đổi nào trở lại cơ sở dữ liệu trong một persistence context mới.
+
+[10.3.4] Merging entity instances
+
+Hãy giả sử bạn đã truy xuất một thể hiện User trong một persistence context trước đó, và bây giờ bạn muốn sửa đổi nó
+và lưu các sửa đổi này:
+
+PATH: /examples/src/test/java/org/jpwh/test/simple/SimpleTransitions.java
+
+detachedUser.setUsername("johndoe");    // detached instance
+tx.begin();
+em = JPA.createEntityManager();
+User mergedUser = em.merge(detachedUser);
+mergedUser.setUsername("doejohn");      --> Hãy loại bỏ tham chiếu detachedUser sau khi merge.
+                                            mergedUser đang ở trạng thái persistent.
+tx.commit();                --> UPDATE in database
+em.close();
+
+Hãy xem xét biểu đồ biểu diễn thủ tục này trong hình 10.5. Nó không khó như nó có vẻ.
+Mục tiêu là ghi lại username mới của User ở trạng thái detached. 
+
+Trước hết, khi bạn gọi merge(), Hibernate kiểm tra xem một persistent instance trong persistence context có
+cùng định danh cơ sở dữ liệu với thể hiện detached bạn đang merge.
+
+Trong ví dụ này, persistence context là trống; không có gì được tải từ cơ sở dữ liệu. Do đó, Hibernate tải một
+thể hiện có định danh này từ cơ sở dữ liệu. Sau đó, merge() sao chép thể hiện thực thể detached lên persistent instance
+đã được tải này. Nói cách khác, tên người dùng mới bạn đã đặt trên User detached cũng được đặt trên User persistent đã merge,
+mà merge() trả về cho bạn.
+
+Bây giờ hãy loại bỏ tham chiếu cũ đến trạng thái detached đã cũ và lỗi thời; detachedUser không còn đại diện cho trạng
+thái hiện tại nữa. Bạn có thể tiếp tục sửa đổi mergedUser đã trả về; Hibernate sẽ thực hiện một lệnh UPDATE duy nhất khi
+nó flush persistence context trong quá trình commit.
+
+Nếu không có persistent instance nào có cùng định danh trong persistence context và một tìm kiếm theo định danh trong
+cơ sở dữ liệu là âm, Hibernate tạo một User mới. Sau đó, Hibernate sao chép thể hiện detached của bạn lên thể hiện mới này,
+và sau đó nó chèn nó vào cơ sở dữ liệu khi bạn đồng bộ hóa persistence context với cơ sở dữ liệu.
+
+Nếu thể hiện bạn đang truyền cho merge() không phải là detached mà thay vào đó là transient (nó không có giá trị định danh),
+Hibernate tạo một User mới, sao chép giá trị của User transient lên nó, và sau đó làm cho nó persistent và trả nó cho bạn.
+Nói cách khác, thao tác merge() có thể xử lý thể hiện thực thể detached và transient. Hibernate luôn luôn trả kết quả cho
+bạn dưới dạng một persistent instance.
+
+Một kiến trúc ứng dụng dựa trên trạng thái detached và merge có thể không gọi phép persist(). Bạn có thể merge các thể hiện
+thực thể mới và detached để lưu trữ dữ liệu. Sự khác biệt quan trọng là trạng thái hiện tại được trả về và cách bạn xử lý
+việc chuyển đổi tham chiếu này trong mã ứng dụng của bạn. Bạn phải loại bỏ detachedUser và từ bây giờ tham chiếu đến
+mergedUser hiện tại. Mọi thành phần khác trong ứng dụng của bạn vẫn giữ tham chiếu đến detachedUser
+phải chuyển sang mergedUser.
+
+Có thể reattach một thể hiện detach không? API Session Hibernate có một phương thức để reattach gọi là saveOrUpdate(). 
+Nó chấp nhận một thể hiện transient hoặc một thể hiện detach và không trả về gì cả. Thể hiện được cung cấp sẽ ở trạng 
+thái persistent sau phép thực hiện, vì vậy bạn không cần phải chuyển đổi tham chiếu. Hibernate sẽ thực hiện một lệnh 
+INSERT nếu thể hiện đã cho là transient hoặc một lệnh UPDATE nếu nó đã bị detach. Chúng tôi khuyên bạn nên dựa vào 
+phép merge (merge) thay vì saveOrUpdate(), vì nó được tiêu chuẩn hóa và do đó dễ tích hợp với các framework khác. 
+Ngoài ra, thay vì một lệnh UPDATE, phép merge có thể chỉ gây ra một lệnh SELECT nếu dữ liệu detach không được sửa đổi.
+Nếu bạn đang tò mò về phương thức saveOrUpdateCopy() của API Session, thì nó tương đương với merge() trên EntityManager.
+
+Nếu bạn muốn xóa một thể hiện detach, bạn phải merge nó trước. Sau đó, gọi remove() trên thể hiện persistent
+được trả về bởi merge().
+
+Chúng tôi sẽ xem xét trạng thái detach và phép merge lại trong chương 18 và thực hiện một cuộc trò chuyện phức tạp hơn
+giữa một người dùng và hệ thống bằng cách sử dụng chiến lược này.
+
+
+
 

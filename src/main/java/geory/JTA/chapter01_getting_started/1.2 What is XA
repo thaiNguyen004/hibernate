@@ -1,0 +1,6 @@
+XA ("eXtended Architecture") là một tiêu chuẩn của nhóm X/Open được sử dụng để truy cập nhiều kho lưu trữ dữ liệu
+phía sau trong cùng một global transaction. Thông số kỹ thuật quy định cách một trình quản lý giao dịch XA (như Atomikos®)
+có thể thông báo cho một cơ sở dữ liệu (như Oracle, MySQL, PostgreSQL) về công việc đang diễn ra như một phần của giao dịch
+nào và cách thực hiện giao thức hai pha (two-phase commit - 2PC) ở cuối mỗi giao dịch. Cũng bao gồm cách khôi phục các
+giao dịch đang chờ xử lý từ kho lưu trữ dữ liệu.
+

@@ -1,0 +1,18 @@
+Một chút thông tin cơ bản
+Atomikos đã được thiết kế theo cách modul. Có một lõi giao dịch được gọi là 'icatch' cung cấp một API độc quyền.
+Trên nền đó, nhiều dịch vụ giao dịch khác nhau được xây dựng. Một trong số đó là JTA implementation:
+một tầng trên icatch thực hiện API JTA.
+
+Nó đã được tích hợp
+Atomikos là một trình quản lý giao dịch nhúng, điều này có nghĩa là không có dịch vụ quản lý giao dịch riêng biệt cần khởi động, nó chỉ chạy bên trong JVM của ứng dụng của bạn.
+
+Lập trình JTA với Atomikos
+Nhìn chung, bạn chỉ cần sử dụng API liên quan đến JTA và có thể bỏ qua API riêng biệt của icatch.
+
+Để khởi tạo trình quản lý giao dịch, hãy tạo một instance của com.atomikos.icatch.jta.UserTransactionManager
+sau đó gọi init() trên nó. Đừng quên gọi close() trong quá trình tắt ứng dụng của bạn.
+Lớp này thực hiện javax.transaction.TransactionManager, điều này là đủ cho việc điều khiển các giao dịch JTA thông qua
+các phương thức begin(), commit() và rollback().
+Trong quá trình khởi tạo, nó sẽ đọc tệp jta.properties ở gốc của classpath. Xem JTA Properties để biết được những gì có
+thể được cấu hình.
+

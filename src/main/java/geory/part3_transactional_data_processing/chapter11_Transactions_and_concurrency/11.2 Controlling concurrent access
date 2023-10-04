@@ -1,0 +1,206 @@
+11.2 Controlling concurrent access - Kiểm soát truy cập đồng thời
+
+Cơ sở dữ liệu (và các hệ thống giao dịch khác) cố gắng đảm bảo tính cách ly của giao dịch, có nghĩa là từ góc nhìn của
+mỗi giao dịch đang diễn ra, có vẻ như không có giao dịch khác đang được thực hiện.
+Truyền thống, các hệ thống cơ sở dữ liệu đã triển khai tính cách ly bằng cách sử dụng khóa. Một giao dịch có thể đặt
+một khóa trên một mục dữ liệu cụ thể trong cơ sở dữ liệu, tạm thời ngăn chặn quyền truy cập đọc và/hoặc ghi vào mục đó
+bởi các giao dịch khác. Một số hệ thống cơ sở dữ liệu hiện đại triển khai tính cách ly giao dịch bằng cách sử dụng kiểm
+soát đồng thời đa phiên bản (MVCC) - multiversion concurrency control, mà các nhà cung cấp thông thường coi là có khả năng mở rộng hơn.
+
+MVCC hoạt động bằng cách duy trì nhiều phiên bản (versions) của các dòng dữ liệu trong cơ sở dữ liệu. Mỗi phiên bản có
+một số hiệu phiên bản (version number) và thể hiện trạng thái của dòng dữ liệu tại một thời điểm cụ thể. Khi một giao dịch
+muốn đọc hoặc cập nhật dòng dữ liệu, nó sẽ thấy phiên bản có hiệu số phiên bản phù hợp nhất với trạng thái của giao dịch đó.
+
+Chúng tôi sẽ thảo luận về tính cách ly dựa trên một mô hình khóa, nhưng hầu hết các quan sát của chúng tôi cũng áp dụng
+cho MVCC.
+
+Cách cơ sở dữ liệu triển khai kiểm soát đồng thời là điều quan trọng nhất đối với ứng dụng Java Persistence của bạn.
+Ứng dụng kế thừa các cam kết về tính cách ly do hệ thống quản lý cơ sở dữ liệu cung cấp. Ví dụ, Hibernate không bao giờ
+khóa bất kỳ điều gì trong bộ nhớ. Nếu bạn xem xét nhiều năm kinh nghiệm mà các nhà cung cấp cơ sở dữ liệu có trong
+việc triển khai kiểm soát đồng thời, bạn sẽ thấy lợi ích của cách tiếp cận này. Ngoài ra, một số tính năng trong Java Persistence,
+một cách tường minh hoặc do thiết kế, có thể cải thiện cam kết tính cách ly hơn so với những gì cơ sở dữ liệu cung cấp.
+Chúng tôi sẽ thảo luận về kiểm soát đồng thời trong từng bước. Trước tiên, chúng tôi sẽ khám phá lớp cách ly giao dịch thấp nhất:
+cam kết về tính cách ly của giao dịch được cung cấp bởi hệ thống quản lý cơ sở dữ liệu. Sau đó, bạn sẽ thấy các tính năng
+Java Persistence cho kiểm soát đồng thời bi quan và lạc quan ở mức ứng dụng, cũng như cam kết về tính cách ly khác mà
+Hibernate có thể cung cấp.
+
+
+INDEX
+11.2.1 Understanding database-level concurrency
+
+
+11.2.1 Understanding database-level concurrency - Hiểu sự đồng thời ở cấp cơ sở dữ liệu
+Vocabulary: isolation : cách ly
+
+Nếu chúng ta đang nói về tính cách ly, bạn có thể giả định rằng hai điều gì đó:  hoặc được cách ly hoàn toàn hoặc không;
+không có không gian mờ trong thế giới thực. Khi chúng ta nói về giao dịch cơ sở dữ liệu, tính cách ly hoàn toàn đi kèm
+với một giá trị đắt đỏ. Bạn không thể dừng thế giới để truy cập dữ liệu một cách độc quyền trong một hệ thống OLTP
+đa người dùng. Do đó, có nhiều mức độ cách ly khả dụng, những mức độ này, tất nhiên, làm yếu đi tính cách ly hoàn toàn
+nhưng tăng cường hiệu suất và khả năng mở rộng của hệ thống.
+
+[TRANSACTION ISOLATION ISSUES]
+
+Trước tiên, hãy xem xét một số hiện tượng có thể xảy ra khi bạn làm yếu tính isolation transaction full. Tiêu chuẩn ANSI SQL
+xác định các mức độ cách ly giao dịch tiêu chuẩn dưới dạng đặc điểm nào của các hiện tượng này là cho phép.
+
+1. (Mất cập nhật-lost update) xảy ra khi hai giao dịch cùng cập nhật một mục dữ liệu và sau đó giao dịch thứ hai bị hủy bỏ,
+dẫn đến việc mất cả hai thay đổi. Điều này xảy ra trong các hệ thống không triển khai (kiểm soát đồng thời-concurrency control),
+nơi các giao dịch đồng thời không được cách ly. Được minh họa trong hình 11.1.
+
+2. Đọc dữ liệu không đúng (dirty read) xảy ra khi một giao dịch đọc các thay đổi được thực hiện bởi một giao dịch khác
+mà chưa được commit. Điều này nguy hiểm vì các thay đổi được thực hiện bởi giao dịch khác có thể sau này bị rollback và dữ liệu
+không hợp lệ có thể được ghi bởi giao dịch đầu tiên; xem hình 11.2.
+
+3. Đọc không lặp lại (unrepeatable read) xảy ra khi một giao dịch đọc một mục dữ liệu hai lần và đọc trạng thái khác nhau mỗi lần.
+Ví dụ, một giao dịch khác có thể đã ghi vào mục dữ liệu và commit giữa hai lần đọc, như được thể hiện trong hình 11.3.
+
+4. Một trường hợp đặc biệt của đọc không lặp lại là vấn đề "last commit wins". Hãy tưởng tượng hai giao dịch đồng thời
+cùng đọc một mục dữ liệu, như trong hình 11.4. Một giao dịch viết vào nó và commit, sau đó giao dịch thứ hai viết vào nó và commit.
+Các thay đổi được thực hiện bởi người viết đầu tiên bị mất. Vấn đề này đặc biệt đáng nản lòng đối với người dùng: các thay đổi
+của người dùng A bị ghi đè mà không có cảnh báo, và B có thể đã đưa ra quyết định dựa trên thông tin đã cũ.
+
+5. Đọc dữ liệu ảo (phantom read) xảy ra khi một giao dịch thực hiện một truy vấn hai lần, và kết quả thứ hai bao gồm dữ liệu
+mà không hiển thị trong kết quả đầu tiên hoặc ít dữ liệu hơn do có điều gì đó bị xóa. Không nhất thiết phải là truy vấn hoàn
+toàn giống nhau. Một giao dịch khác chèn hoặc xóa dữ liệu giữa hai lần thực hiện truy vấn gây ra tình huống này, như được
+minh họa trong hình 11.5.
+
+Bây giờ, khi bạn đã hiểu tất cả các vấn đề xấu có thể xảy ra, chúng ta có thể xác định các mức độ cách ly giao dịch và
+xem xét các vấn đề mà chúng ngăn chặn.
+
+
+[ANSI ISOLATION LEVELS]
+
+Các mức độ cách ly tiêu chuẩn được định nghĩa bởi tiêu chuẩn ANSI SQL, nhưng chúng không đặc thù cho cơ sở dữ liệu SQL.
+JTA định nghĩa chính xác các mức độ cách ly giống như vậy, và bạn sẽ sử dụng các mức độ này để khai báo mức độ cách ly
+giao dịch mong muốn. Với các mức độ cách ly tăng lên, đi kèm là sự tăng chi phí và sự suy giảm nghiêm trọng về hiệu suất
+và khả năng mở rộng:
+
+- Mức độ cách ly Read Uncommitted: Hệ thống cho phép dirty reads (Đây là tình huống trong giao dịch cơ sở dữ liệu khi một
+giao dịch đọc dữ liệu đã được thay đổi bởi một giao dịch khác mà chưa được commit.) nhưng không cho phép mất cập nhật
+được hoạt động trong mức độ cách ly này. Một giao dịch không thể ghi vào một hàng nếu một giao dịch chưa được commit khác
+đã ghi vào nó. Tuy nhiên, bất kỳ giao dịch nào cũng có thể đọc bất kỳ hàng nào. Hệ quản trị cơ sở dữ liệu có thể triển khai
+mức độ cách ly này bằng cách sử dụng khóa ghi độc quyền (exclusive write locks).
+
+- Mức độ cách ly Read Committed: Hệ thống cho phép đọc không lặp lại unrepeatable nhưng không cho phép đọc bẩn thực hiện
+read committed isolation.
+Trong mức độ này, hệ thống cho phép một giao dịch đọc dữ liệu mà một giao dịch khác đang thay đổi (chưa commit).
+Điều này có nghĩa rằng giao dịch đọc có thể thấy dữ liệu ở trạng thái transient hoặc chưa hoàn thiện.
+Một hệ quản trị cơ sở dữ liệu có thể đạt được điều này bằng cách sử dụng write locks chia sẻ và khóa ghi độc quyền.
+Các giao dịch đọc không chặn các giao dịch khác khỏi truy cập một hàng, nhưng một giao dịch ghi chưa commit chặn tất cả
+các giao dịch khác khỏi truy cập hàng đó.
+
+- Mức độ cách ly Repeatable Read: Hệ thống hoạt động ở chế độ cách ly (đọc có tính lặp lại - repeatable read) không cho
+phép (đọc không lặp lại - unrepeatable read) và dirty read (đọc bẩn). Có thể xảy ra đọc ảo. Các giao dịch đọc chặn các
+giao dịch ghi nhưng không chặn các giao dịch đọc khác, và các giao dịch ghi chặn tất cả các giao dịch khác.
+
+- Mức độ cách ly Serializable - Mức độ cách ly nghiêm ngặt nhất, serializable, mô phỏng việc thực thi tuần tự, như là
+nếu các giao dịch được thực thi một sau một, thay vì đồng thời. Một hệ thống quản lý cơ sở dữ liệu (DBMS) có thể không
+triển khai mức độ serializable chỉ bằng việc sử dụng khóa cấp dòng (row-level locks). Thay vào đó, DBMS phải cung cấp
+cơ chế khác để ngăn một hàng mới được thêm vào trở nên hiển thị đối với một giao dịch đã thực hiện một truy vấn đã
+trả về hàng đó. Một cơ chế thô sơ là khóa toàn bộ bảng cơ sở dữ liệu sau một ghi, để không có đọc giả ma (phantom reads) xảy ra.
+
+Cách mà một DBMS triển khai hệ thống khóa của nó thay đổi đáng kể; mỗi nhà cung cấp có chiến lược khác nhau. Bạn nên nghiên
+cứu tài liệu của DBMS của bạn để tìm hiểu thêm về hệ thống khóa của nó, cách khóa được nâng cấp
+(từ cấp dòng, lên trang, đến toàn bộ bảng, ví dụ), và tác động của mỗi mức độ cách ly lên hiệu suất và tính mở rộng của
+hệ thống của bạn.
+
+Việc biết cách các thuật ngữ kỹ thuật này được định nghĩa có lợi, nhưng làm thế nào để bạn chọn một mức độ cách ly cho
+ứng dụng của bạn?
+
+
+[CHOOSING AN ISOLATION LEVEL]
+
+Những người phát triển (bao gồm cả chúng tôi) thường không chắc chắn nên sử dụng mức độ cách ly giao dịch nào trong
+ứng dụng sản xuất. Mức độ cách ly quá cao có thể làm hại tính khả năng mở rộng của ứng dụng có tính cạnh tranh cao.
+Mức độ cách ly không đủ có thể gây ra các lỗi tinh vi, khó tái hiện trong ứng dụng mà bạn sẽ không phát hiện ra cho
+đến khi hệ thống đang hoạt động trong điều kiện tải nặng.
+
+Lưu ý rằng chúng tôi đề cập đến `optimistic locking` (với versioning) trong phần giải thích sau, một khái niệm được
+giải thích sau trong chương này. Bạn có thể muốn bỏ qua phần này tạm thời và quay lại sau khi đã đến lúc chọn mức độ
+cách ly cho ứng dụng của bạn. Việc lựa chọn mức độ cách ly chính xác phụ thuộc rất nhiều vào tình huống cụ thể của bạn.
+Hãy đọc cuộc trao đổi sau đây như là các khuyến nghị, không phải là những điều ràng buộc cứng nhắc.
+
+Hibernate cố gắng làm cho mọi thứ càng rõ ràng càng tốt về ngữ nghĩa giao dịch của cơ sở dữ liệu. Tuy nhiên, việc lưu trữ
+ngữ nghĩa và phiên bản của ngữ nghĩa ảnh hưởng đến những ngữ nghĩa này. Mức độ cách ly cơ sở dữ liệu hợp lý nào để
+chọn trong ứng dụng JPA?
+
+Trước hết, đối với hầu hết các tình huống, hãy loại bỏ mức độ cách ly "read uncommitted". Việc sử dụng các thay đổi
+chưa được xác nhận của một giao dịch trong một giao dịch khác là rất nguy hiểm. Việc hoàn tác hoặc thất bại của một
+giao dịch có thể ảnh hưởng đến các giao dịch khác đang diễn ra đồng thời. Hoàn tác của giao dịch đầu tiên có thể làm
+sụp đổ các giao dịch khác, hoặc có thể gây ra tình trạng sai lệch trong cơ sở dữ liệu (người bán một món đấu giá có thể
+bị tính tiền hai lần - phù hợp với luật toàn vẹn cơ sở dữ liệu nhưng không chính xác). Có thể xảy ra trường hợp các thay đổi
+được thực hiện bởi một giao dịch cuối cùng bị hoàn tác vẫn có thể được xác nhận vì chúng có thể được đọc và sau đó được
+truyền bởi một giao dịch khác thành công!
+
+Thứ hai, hầu hết các ứng dụng không cần mức độ cách ly "serializable". Đọc ảo không thường gây ra vấn đề, và mức độ cách ly
+này thường không mở rộng tốt. Rất ít ứng dụng hiện có sử dụng mức độ cách ly "serializable" trong sản xuất, mà thay vào đó
+phụ thuộc vào việc áp dụng (khóa bi quan-pessimistic locks) một cách có hiệu quả trong một số tình huống cụ thể.
+
+Tiếp theo, hãy xem xét mức độ cách ly "repeatable read". Mức độ này cung cấp tính lặp lại cho các kết quả truy vấn
+trong suốt một giao dịch cơ sở dữ liệu. Điều này có nghĩa là bạn sẽ không đọc các cập nhật đã được xác nhận từ cơ sở dữ
+liệu nếu bạn truy vấn nó một số lần. Tuy nhiên, việc xuất hiện đọc ảo vẫn có thể xảy ra: các hàng mới có thể xuất hiện -
+các hàng mà bạn cho rằng đã tồn tại có thể biến mất nếu một giao dịch khác xác nhận các thay đổi đồng thời. Mặc dù bạn có
+thể đôi khi muốn sử dụng đọc lặp lại, nhưng bạn thường không cần thiết trong mọi giao dịch.
+
+Thông số kỹ thuật JPA giả định rằng "read committed" là mức độ cách ly mặc định. Điều này có nghĩa là bạn phải xử lý
+việc đọc không lặp lại-unrepeatable reads, đọc ảo-phantom reads và vấn đề last commit wins.
+
+Hãy giả sử bạn đang bật tính năng phiên bản cho các thực thể mô hình miền của bạn, điều mà Hibernate có thể thực hiện
+tự động cho bạn. Sự kết hợp giữa việc (bắt buộc) persistence context cache và versioning đã cung cấp cho bạn hầu hết các
+tính năng tốt của mức độ cách ly "repeatable read". Persistence context cache đảm bảo rằng trạng thái của các thực thể
+được nạp bởi một giao dịch cách ly khỏi các thay đổi được thực hiện bởi các giao dịch khác. Nếu bạn truy vấn cùng một
+thực thể hai lần trong một unit of work, việc tra cứu lần thứ hai sẽ được giải quyết trong persistence context cache
+và không ảnh hưởng đến cơ sở dữ liệu. Do đó, đọc của bạn có tính lặp lại, và bạn sẽ không thấy dữ liệu đã được xác nhận
+xung đột (Tuy nhiên, bạn vẫn gặp phải đọc ảo, mặc dù thường dễ xử lý hơn). Ngoài ra, việc sử dụng versioning chuyển sang
+"first commit wins". Do đó, đối với hầu hết các ứng dụng JPA có nhiều người dùng, cách ly "read committed" cho tất cả
+các giao dịch cơ sở dữ liệu là chấp nhận được khi bật entity versioning.
+
+Hibernate giữ nguyên mức độ cách ly của kết nối cơ sở dữ liệu của bạn; nó không thay đổi mức độ. Hầu hết các sản phẩm
+mặc định là "read committed". Có nhiều cách bạn có thể thay đổi mức độ cách ly giao dịch mặc định hoặc các thiết lập của
+giao dịch hiện tại.
+
+Trước hết, bạn có thể kiểm tra xem hệ quản trị cơ sở dữ liệu (DBMS) của bạn có một thiết lập mức độ cách ly giao dịch 
+toàn cầu trong cấu hình độc quyền của nó không. Nếu DBMS của bạn hỗ trợ câu lệnh tiêu chuẩn SQL SET SESSION CHARACTERISTICS, 
+bạn có thể thực hiện nó để thiết lập cài đặt giao dịch cho tất cả các giao dịch được bắt đầu trong phiên làm việc cơ sở 
+dữ liệu cụ thể này (nghĩa là một kết nối cụ thể với cơ sở dữ liệu, không phải là Hibernate Session). SQL cũng chuẩn hóa 
+cú pháp SET TRANSACTION, mà thiết lập mức độ cách ly của giao dịch hiện tại. Cuối cùng, giao diện JDBC Connection 
+cung cấp phương thức setTransactionIsolation(), mà theo tài liệu của nó, "cố gắng thay đổi mức độ cách ly giao dịch 
+cho kết nối này." Trong ứng dụng Hibernate/JPA, bạn có thể lấy được một JDBC Connection từ API Session cơ bản; 
+xem phần 17.1.
+
+Chúng tôi đề xuất một cách tiếp cận khác nếu bạn đang sử dụng trình quản lý giao dịch JTA hoặc thậm chí là một cơ sở dữ 
+liệu JDBC đơn giản. Hệ thống quản lý giao dịch JTA, chẳng hạn như Bitronix được sử dụng cho các ví dụ trong cuốn sách này, 
+cho phép bạn thiết lập một mức độ cách ly giao dịch mặc định cho mỗi kết nối được lấy từ pool. Trong Bitronix, bạn có thể 
+thiết lập mức độ cách ly mặc định khi khởi động với PoolingDataSource#setIsolationLevel(). Hãy kiểm tra tài liệu của nhà 
+cung cấp DataSource, máy chủ ứng dụng hoặc bể kết nối JDBC của bạn để biết thêm thông tin.
+
+Chúng tôi giả định từ đây trở đi rằng kết nối cơ sở dữ liệu của bạn mặc định ở mức độ cách ly "read committed". 
+Từ thời gian này, một unit of work cụ thể trong ứng dụng của bạn có thể yêu cầu một mức độ cách ly khác, thường là nghiêm ngặt hơn.
+Thay vì thay đổi mức độ cách ly của toàn bộ giao dịch, bạn nên sử dụng Java Persistence API để lấy thêm khóa trên dữ liệu liên quan.
+Fine-grained locking này có tính mở rộng hơn trong một ứng dụng có độ cạnh tranh cao. JPA cung cấp (kiểm tra phiên bản lạc quan
+-optimistic version checking) và (khóa bi quan cấp độ cơ sở dữ liệu-database level pessimistic locking).
+
+[Giải thích bởi ChatGPT về 2 loại khóa {Optimistic Locking, Pessimistic Locking}]
+Optimistic locking và pessimistic locking là hai phương pháp khác nhau để quản lý đồng thời và đảm bảo tính nhất quán của dữ liệu trong môi trường đa giao dịch trong các hệ thống quản lý cơ sở dữ liệu.
+
+1. Optimistic Locking:
+- Làm việc dựa trên giả định lạc quan (optimistic assumption) rằng các giao dịch sẽ hiếm khi xảy ra xung đột.
+- Khi một giao dịch muốn cập nhật dữ liệu, nó trước hết đọc dữ liệu và giữ một phiên bản của dữ liệu đó
+(thông qua một trường version hoặc timestamp).
+- Khi giao dịch hoàn thành và muốn cập nhật dữ liệu, nó kiểm tra phiên bản của dữ liệu so với phiên bản đã lưu trữ trước đó.
+Nếu chúng khớp, cập nhật được thực hiện.
+- Nếu phiên bản đã thay đổi (do giao dịch khác đã cập nhật dữ liệu trong thời gian này), giao dịch hiện tại sẽ thất bại
+và phải xử lý xung đột.
+
+Ưu điểm: Hiệu suất tốt, không có khóa chặn giao dịch khác trong khi chờ đợi.
+Nhược điểm: Cần phải xử lý xung đột sau khi xảy ra.
+
+2. Pessimistic Locking:
+- Làm việc dựa trên giả định pesimistic (pessimistic assumption) rằng xung đột có thể xảy ra thường xuyên, vì vậy nó sẽ
+áp đặt khóa trên dữ liệu để chặn giao dịch khác truy cập dữ liệu đó.
+- Có hai loại khóa thường được sử dụng: shared lock cho đọc (cho phép các giao dịch khác đọc dữ liệu, nhưng không cho
+phép cập nhật), và exclusive lock cho ghi (khóa chặn tất cả các giao dịch khác, bao gồm đọc và ghi).
+- Giao dịch được áp dụng khóa trước khi truy cập dữ liệu và giữ khóa cho đến khi hoàn thành.
+
+Ưu điểm: Đảm bảo tính nhất quán tuyệt đối của dữ liệu, không xảy ra xung đột.
+Nhược điểm: Hiệu suất thấp hơn vì các giao dịch khác phải chờ đợi khóa được giải phóng.
