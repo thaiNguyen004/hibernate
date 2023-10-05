@@ -1,0 +1,102 @@
+Chương này là cụ thể cho Atomikos TransactionsEssentials. Nó liên quan đến việc thiết lập (cấu hình) Atomikos TransactionsEssentials
+trong ứng dụng của bạn.
+
+Atomikos TransactionsEssentials là một dịch vụ giao dịch nhúng, có nghĩa là nó chạy trong cùng máy ảo (VM) với ứng dụng của bạn.
+Điều này tối ưu hóa tốc độ và khả năng sẵn sàng của ứng dụng của bạn.
+
+Cấu hình được thực hiện trong tệp cấu hình, một tệp properties với các cặp property=value của các thiết lập quan trọng
+của dịch vụ giao dịch. Các thiết lập bạn sử dụng xác định thông tin liên quan đến giao dịch chung như
+(nơi lưu trữ các tệp nhật ký-logfiles) và giá trị (thời gian chờ-timeout) mặc định là gì.
+
+3.1. The Configuration File
+
+Tệp cấu hình chứa các parameters cho việc khởi tạo và hoạt động của dịch vụ giao dịch. Nếu tệp này không được tìm thấy,
+giá trị mặc định sẽ được sử dụng. Để chỉ định cho Atomikos TransactionsEssentials sử dụng một tệp cấu hình tùy chỉnh,
+có một số cách:
+
+- Đặt tên tệp là "transactions.properties" và đặt nó trong classpath của bạn.
+- Đặt tên tệp bất kỳ và đặt vị trí tệp theo ý bạn, sau đó chỉ định nó như một thuộc tính hệ thống khi khởi động:
+`java -Dcom.atomikos.icatch.file=path_to_your_file` Lưu ý rằng việc đặt thuộc tính hệ thống này sẽ ghi đè lên bất kỳ
+dữ liệu cấu hình "transactions.properties" nào bạn có theo phương pháp đầu tiên.
+- Để tránh sử dụng tệp cấu hình, bạn cũng có thể sử dụng các giá trị run-time cho từng thiết lập tham số.
+Bạn có thể chỉ định điều này bằng cách cung cấp thuộc tính hệ thống sau khi khởi động: `java -Dcom.atomikos.icatch.no_file ...`
+Trong trường hợp này, các thuộc tính cần được đặt bằng cách lập trình trước khi khởi tạo dịch vụ giao dịch.
+Điều này được giải thích trong phần cuối cùng của hướng dẫn này.
+
+Example 3.1. Sample configuration file for the transaction service
+# SAMPLE PROPERTIES FILE FOR THE TRANSACTION SERVICE
+#Required: factory class name for the transaction service core.
+com.atomikos.icatch.service=com.atomikos.icatch.standalone.UserTransactionServiceFactory
+
+#Set name of file where messages are output
+com.atomikos.icatch.console_file_name = tm.out
+
+#Giới hạn kích thước (tính bằng byte) console file;
+#Số âm có nghĩa là không giới hạn.
+com.atomikos.icatch.console_file_limit=-1
+
+#Đối với các tệp console có kích thước giới hạn, tùy chọn này xác định số lượng tệp xoay để duy trì.
+com.atomikos.icatch.console_file_count=1
+
+#Đặt số lần ghi log giữa các checkpoint
+com.atomikos.icatch.checkpoint_interval=500
+
+#Đặt thư mục đầu ra nơi đặt tệp console và các tệp khác
+#Đảm bảo thư mục này tồn tại!
+com.atomikos.icatch.output_dir = ./log/ouput.txt
+
+#Đặt thư mục của tệp nhật ký; đảm bảo thư mục này tồn tại!
+com.atomikos.icatch.log_base_dir = ./log/log_base.txt
+
+#Đặt tên cơ sở của tệp nhật ký #tên này sẽ được sử dụng làm phần đầu tiên của \
+#tên tệp nhật ký do hệ thống tạo
+com.atomikos.icatch.log_base_name = tmlog
+
+#Đặt số lượng giao dịch địa phương đang hoạt động tối đa
+#hoặc -1 là không giới hạn. Lưu ý: điều này có thể bị ghi đè
+#bởi giấy phép của bạn!
+com.atomikos.icatch.max_actives = 50
+
+#Đặt thời gian chờ tối đa (tính bằng mili giây) cho các giao dịch cục bộ
+com.atomikos.icatch.max_timeout = 300000
+
+com.atomikos.icatch.tm_unique_name = tm
+
+#Chúng ta có muốn sử dụng các giao dịch con song song không? Giá trị mặc định của JTA là KHÔNG để tương thích với J2EE
+com.atomikos.icatch.serial_jta_transactions=true
+
+#Nếu bạn muốn đăng ký resource rõ ràng thì
+#bạn cần đặt giá trị này thành `false`.
+com.atomikos.icatch.automatic_resource_registration=true
+
+#Đặt phần này thành WARN, INFO hoặc DEBUG để kiểm soát mức độ chi tiết của output console file.
+com.atomikos.icatch.console_log_level=WARN
+
+#Bạn có muốn kích hoạt tính năng ghi nhật ký giao dịch hay không?
+#Nếu được đặt thành false thì sẽ không có chi phí ghi nhật ký nào được thực hiện
+#có nguy cơ mất dữ liệu sau khi khởi động lại hoặc gặp sự cố.
+#Lưu ý: cài đặt này có thể bị ghi đè tùy thuộc vào giấy phép của bạn!
+com.atomikos.icatch.enable_logging=true
+
+#Có nên thực hiện two-phase commit ở chế độ (đa) luồng hay không?
+com.atomikos.icatch.threaded_2pc=true
+
+
+3.2. Default Values You Should Override
+Mặc dù đã cung cấp các giá trị mặc định hợp lý, bạn nên ghi đè lên các tham số cấu hình sau đây để phù hợp với nhu cầu
+của ứng dụng của bạn:
+
+com.atomikos.icatch.tm_unique_name: đặt giá trị này thành một tên duy nhất cho mỗi ứng dụng
+
+com.atomikos.icatch.max_timeout: "Giá trị này giới hạn thời gian chờ tối đa có thể được đặt cho bất kỳ giao dịch nào.
+Cụ thể hơn: bạn không thể chỉ định một thời gian chờ vượt quá giới hạn được chỉ định ở đây.
+Đặt giá trị này theo nhu cầu của ứng dụng của bạn. Nếu bạn có các truy vấn hoặc cập nhật
+dài thì giá trị mặc định có thể không đủ."
+
+com.atomikos.icatch.console_file_limitz: Giá trị mặc định (không giới hạn) cuối cùng sẽ dẫn đến một tệp log rất lớn,
+không phù hợp cho việc sử dụng trong môi trường sản xuất. Đặt giá trị này thành một số lượng byte hợp lý cho trường hợp
+của bạn và đảm bảo cũng đặt số lượng tệp như được giải thích tiếp theo.
+
+com.atomikos.icatch.console_file_count: "Số lượng tệp log xoay để sử dụng, bắt buộc nếu bạn giới hạn kích thước tệp log tối đa.
+Giá trị mặc định (1) có lẽ không phải là điều bạn muốn."
+

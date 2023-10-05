@@ -7,9 +7,9 @@ một khóa trên một mục dữ liệu cụ thể trong cơ sở dữ liệu,
 bởi các giao dịch khác. Một số hệ thống cơ sở dữ liệu hiện đại triển khai tính cách ly giao dịch bằng cách sử dụng kiểm
 soát đồng thời đa phiên bản (MVCC) - multiversion concurrency control, mà các nhà cung cấp thông thường coi là có khả năng mở rộng hơn.
 
-MVCC hoạt động bằng cách duy trì nhiều phiên bản (versions) của các dòng dữ liệu trong cơ sở dữ liệu. Mỗi phiên bản có
+MVCC hoạt động bằng cách duy trì nhiều version (versions) của các dòng dữ liệu trong cơ sở dữ liệu. Mỗi version có
 một số hiệu phiên bản (version number) và thể hiện trạng thái của dòng dữ liệu tại một thời điểm cụ thể. Khi một giao dịch
-muốn đọc hoặc cập nhật dòng dữ liệu, nó sẽ thấy phiên bản có hiệu số phiên bản phù hợp nhất với trạng thái của giao dịch đó.
+muốn đọc hoặc cập nhật dòng dữ liệu, nó sẽ thấy version có hiệu số version phù hợp nhất với trạng thái của giao dịch đó.
 
 Chúng tôi sẽ thảo luận về tính cách ly dựa trên một mô hình khóa, nhưng hầu hết các quan sát của chúng tôi cũng áp dụng
 cho MVCC.
@@ -21,12 +21,13 @@ việc triển khai kiểm soát đồng thời, bạn sẽ thấy lợi ích c�
 một cách tường minh hoặc do thiết kế, có thể cải thiện cam kết tính cách ly hơn so với những gì cơ sở dữ liệu cung cấp.
 Chúng tôi sẽ thảo luận về kiểm soát đồng thời trong từng bước. Trước tiên, chúng tôi sẽ khám phá lớp cách ly giao dịch thấp nhất:
 cam kết về tính cách ly của giao dịch được cung cấp bởi hệ thống quản lý cơ sở dữ liệu. Sau đó, bạn sẽ thấy các tính năng
-Java Persistence cho kiểm soát đồng thời bi quan và lạc quan ở mức ứng dụng, cũng như cam kết về tính cách ly khác mà
+Java Persistence cho kiểm soát đồng thời pessimistic và optimistic ở mức ứng dụng, cũng như cam kết về tính cách ly khác mà
 Hibernate có thể cung cấp.
 
 
 INDEX
 11.2.1 Understanding database-level concurrency
+11.2.2 Optimistic concurrency control
 
 
 11.2.1 Understanding database-level concurrency - Hiểu sự đồng thời ở cấp cơ sở dữ liệu
@@ -54,7 +55,7 @@ không hợp lệ có thể được ghi bởi giao dịch đầu tiên; xem hì
 3. Đọc không lặp lại (unrepeatable read) xảy ra khi một giao dịch đọc một mục dữ liệu hai lần và đọc trạng thái khác nhau mỗi lần.
 Ví dụ, một giao dịch khác có thể đã ghi vào mục dữ liệu và commit giữa hai lần đọc, như được thể hiện trong hình 11.3.
 
-4. Một trường hợp đặc biệt của đọc không lặp lại là vấn đề "last commit wins". Hãy tưởng tượng hai giao dịch đồng thời
+4. Một instance đặc biệt của đọc không lặp lại là vấn đề "last commit wins". Hãy tưởng tượng hai giao dịch đồng thời
 cùng đọc một mục dữ liệu, như trong hình 11.4. Một giao dịch viết vào nó và commit, sau đó giao dịch thứ hai viết vào nó và commit.
 Các thay đổi được thực hiện bởi người viết đầu tiên bị mất. Vấn đề này đặc biệt đáng nản lòng đối với người dùng: các thay đổi
 của người dùng A bị ghi đè mà không có cảnh báo, và B có thể đã đưa ra quyết định dựa trên thông tin đã cũ.
@@ -81,13 +82,11 @@ giao dịch đọc dữ liệu đã được thay đổi bởi một giao dịch
 đã ghi vào nó. Tuy nhiên, bất kỳ giao dịch nào cũng có thể đọc bất kỳ hàng nào. Hệ quản trị cơ sở dữ liệu có thể triển khai
 mức độ cách ly này bằng cách sử dụng khóa ghi độc quyền (exclusive write locks).
 
-- Mức độ cách ly Read Committed: Hệ thống cho phép đọc không lặp lại unrepeatable nhưng không cho phép đọc bẩn thực hiện
-read committed isolation.
-Trong mức độ này, hệ thống cho phép một giao dịch đọc dữ liệu mà một giao dịch khác đang thay đổi (chưa commit).
-Điều này có nghĩa rằng giao dịch đọc có thể thấy dữ liệu ở trạng thái transient hoặc chưa hoàn thiện.
-Một hệ quản trị cơ sở dữ liệu có thể đạt được điều này bằng cách sử dụng write locks chia sẻ và khóa ghi độc quyền.
-Các giao dịch đọc không chặn các giao dịch khác khỏi truy cập một hàng, nhưng một giao dịch ghi chưa commit chặn tất cả
-các giao dịch khác khỏi truy cập hàng đó.
+- Mức độ cách ly Read Committed: Hệ thống cho phép đọc không nhất quán (unrepeatable reads) nhưng không cho phép đọc
+dữ liệu bẩn (dirty reads) thực hiện cách ly đọc có cam kết. Hệ quản trị cơ sở dữ liệu (DBMS) có thể đạt được điều này
+bằng cách sử dụng khóa đọc chung (shared read locks) và khóa ghi độc quyền (exclusive write locks). Các giao dịch đọc
+không chặn các giao dịch khác khỏi truy cập một hàng dữ liệu, nhưng một giao dịch ghi chưa hoàn tất (uncommitted writing transaction)
+sẽ chặn tất cả các giao dịch khác khỏi việc truy cập hàng dữ liệu đó.
 
 - Mức độ cách ly Repeatable Read: Hệ thống hoạt động ở chế độ cách ly (đọc có tính lặp lại - repeatable read) không cho
 phép (đọc không lặp lại - unrepeatable read) và dirty read (đọc bẩn). Có thể xảy ra đọc ảo. Các giao dịch đọc chặn các
@@ -121,20 +120,20 @@ cách ly cho ứng dụng của bạn. Việc lựa chọn mức độ cách ly 
 Hãy đọc cuộc trao đổi sau đây như là các khuyến nghị, không phải là những điều ràng buộc cứng nhắc.
 
 Hibernate cố gắng làm cho mọi thứ càng rõ ràng càng tốt về ngữ nghĩa giao dịch của cơ sở dữ liệu. Tuy nhiên, việc lưu trữ
-ngữ nghĩa và phiên bản của ngữ nghĩa ảnh hưởng đến những ngữ nghĩa này. Mức độ cách ly cơ sở dữ liệu hợp lý nào để
+ngữ nghĩa và version của ngữ nghĩa ảnh hưởng đến những ngữ nghĩa này. Mức độ cách ly cơ sở dữ liệu hợp lý nào để
 chọn trong ứng dụng JPA?
 
 Trước hết, đối với hầu hết các tình huống, hãy loại bỏ mức độ cách ly "read uncommitted". Việc sử dụng các thay đổi
 chưa được xác nhận của một giao dịch trong một giao dịch khác là rất nguy hiểm. Việc hoàn tác hoặc thất bại của một
 giao dịch có thể ảnh hưởng đến các giao dịch khác đang diễn ra đồng thời. Hoàn tác của giao dịch đầu tiên có thể làm
 sụp đổ các giao dịch khác, hoặc có thể gây ra tình trạng sai lệch trong cơ sở dữ liệu (người bán một món đấu giá có thể
-bị tính tiền hai lần - phù hợp với luật toàn vẹn cơ sở dữ liệu nhưng không chính xác). Có thể xảy ra trường hợp các thay đổi
+bị tính tiền hai lần - phù hợp với luật toàn vẹn cơ sở dữ liệu nhưng không chính xác). Có thể xảy ra instance các thay đổi
 được thực hiện bởi một giao dịch cuối cùng bị hoàn tác vẫn có thể được xác nhận vì chúng có thể được đọc và sau đó được
 truyền bởi một giao dịch khác thành công!
 
 Thứ hai, hầu hết các ứng dụng không cần mức độ cách ly "serializable". Đọc ảo không thường gây ra vấn đề, và mức độ cách ly
 này thường không mở rộng tốt. Rất ít ứng dụng hiện có sử dụng mức độ cách ly "serializable" trong sản xuất, mà thay vào đó
-phụ thuộc vào việc áp dụng (khóa bi quan-pessimistic locks) một cách có hiệu quả trong một số tình huống cụ thể.
+phụ thuộc vào việc áp dụng (khóa pessimistic-pessimistic locks) một cách có hiệu quả trong một số tình huống cụ thể.
 
 Tiếp theo, hãy xem xét mức độ cách ly "repeatable read". Mức độ này cung cấp tính lặp lại cho các kết quả truy vấn
 trong suốt một giao dịch cơ sở dữ liệu. Điều này có nghĩa là bạn sẽ không đọc các cập nhật đã được xác nhận từ cơ sở dữ
@@ -145,7 +144,7 @@ thể đôi khi muốn sử dụng đọc lặp lại, nhưng bạn thường kh
 Thông số kỹ thuật JPA giả định rằng "read committed" là mức độ cách ly mặc định. Điều này có nghĩa là bạn phải xử lý
 việc đọc không lặp lại-unrepeatable reads, đọc ảo-phantom reads và vấn đề last commit wins.
 
-Hãy giả sử bạn đang bật tính năng phiên bản cho các thực thể mô hình miền của bạn, điều mà Hibernate có thể thực hiện
+Hãy giả sử bạn đang bật tính năng version cho các thực thể mô hình miền của bạn, điều mà Hibernate có thể thực hiện
 tự động cho bạn. Sự kết hợp giữa việc (bắt buộc) persistence context cache và versioning đã cung cấp cho bạn hầu hết các
 tính năng tốt của mức độ cách ly "repeatable read". Persistence context cache đảm bảo rằng trạng thái của các thực thể
 được nạp bởi một giao dịch cách ly khỏi các thay đổi được thực hiện bởi các giao dịch khác. Nếu bạn truy vấn cùng một
@@ -159,37 +158,38 @@ Hibernate giữ nguyên mức độ cách ly của kết nối cơ sở dữ li�
 mặc định là "read committed". Có nhiều cách bạn có thể thay đổi mức độ cách ly giao dịch mặc định hoặc các thiết lập của
 giao dịch hiện tại.
 
-Trước hết, bạn có thể kiểm tra xem hệ quản trị cơ sở dữ liệu (DBMS) của bạn có một thiết lập mức độ cách ly giao dịch 
-toàn cầu trong cấu hình độc quyền của nó không. Nếu DBMS của bạn hỗ trợ câu lệnh tiêu chuẩn SQL SET SESSION CHARACTERISTICS, 
-bạn có thể thực hiện nó để thiết lập cài đặt giao dịch cho tất cả các giao dịch được bắt đầu trong phiên làm việc cơ sở 
-dữ liệu cụ thể này (nghĩa là một kết nối cụ thể với cơ sở dữ liệu, không phải là Hibernate Session). SQL cũng chuẩn hóa 
-cú pháp SET TRANSACTION, mà thiết lập mức độ cách ly của giao dịch hiện tại. Cuối cùng, giao diện JDBC Connection 
-cung cấp phương thức setTransactionIsolation(), mà theo tài liệu của nó, "cố gắng thay đổi mức độ cách ly giao dịch 
-cho kết nối này." Trong ứng dụng Hibernate/JPA, bạn có thể lấy được một JDBC Connection từ API Session cơ bản; 
+Trước hết, bạn có thể kiểm tra xem hệ quản trị cơ sở dữ liệu (DBMS) của bạn có một thiết lập mức độ cách ly giao dịch
+toàn cầu trong cấu hình độc quyền của nó không. Nếu DBMS của bạn hỗ trợ câu lệnh tiêu chuẩn SQL SET SESSION CHARACTERISTICS,
+bạn có thể thực hiện nó để thiết lập cài đặt giao dịch cho tất cả các giao dịch được bắt đầu trong phiên làm việc cơ sở
+dữ liệu cụ thể này (nghĩa là một kết nối cụ thể với cơ sở dữ liệu, không phải là Hibernate Session). SQL cũng chuẩn hóa
+cú pháp SET TRANSACTION, mà thiết lập mức độ cách ly của giao dịch hiện tại. Cuối cùng, giao diện JDBC Connection
+cung cấp phương thức setTransactionIsolation(), mà theo tài liệu của nó, "cố gắng thay đổi mức độ cách ly giao dịch
+cho kết nối này." Trong ứng dụng Hibernate/JPA, bạn có thể lấy được một JDBC Connection từ API Session cơ bản;
 xem phần 17.1.
 
-Chúng tôi đề xuất một cách tiếp cận khác nếu bạn đang sử dụng trình quản lý giao dịch JTA hoặc thậm chí là một cơ sở dữ 
-liệu JDBC đơn giản. Hệ thống quản lý giao dịch JTA, chẳng hạn như Bitronix được sử dụng cho các ví dụ trong cuốn sách này, 
-cho phép bạn thiết lập một mức độ cách ly giao dịch mặc định cho mỗi kết nối được lấy từ pool. Trong Bitronix, bạn có thể 
-thiết lập mức độ cách ly mặc định khi khởi động với PoolingDataSource#setIsolationLevel(). Hãy kiểm tra tài liệu của nhà 
+Chúng tôi đề xuất một cách tiếp cận khác nếu bạn đang sử dụng trình quản lý giao dịch JTA hoặc thậm chí là một cơ sở dữ
+liệu JDBC đơn giản. Hệ thống quản lý giao dịch JTA, chẳng hạn như Bitronix được sử dụng cho các ví dụ trong cuốn sách này,
+cho phép bạn thiết lập một mức độ cách ly giao dịch mặc định cho mỗi kết nối được lấy từ pool. Trong Bitronix, bạn có thể
+thiết lập mức độ cách ly mặc định khi khởi động với PoolingDataSource#setIsolationLevel(). Hãy kiểm tra tài liệu của nhà
 cung cấp DataSource, máy chủ ứng dụng hoặc bể kết nối JDBC của bạn để biết thêm thông tin.
 
-Chúng tôi giả định từ đây trở đi rằng kết nối cơ sở dữ liệu của bạn mặc định ở mức độ cách ly "read committed". 
+Chúng tôi giả định từ đây trở đi rằng kết nối cơ sở dữ liệu của bạn mặc định ở mức độ cách ly "read committed".
 Từ thời gian này, một unit of work cụ thể trong ứng dụng của bạn có thể yêu cầu một mức độ cách ly khác, thường là nghiêm ngặt hơn.
 Thay vì thay đổi mức độ cách ly của toàn bộ giao dịch, bạn nên sử dụng Java Persistence API để lấy thêm khóa trên dữ liệu liên quan.
-Fine-grained locking này có tính mở rộng hơn trong một ứng dụng có độ cạnh tranh cao. JPA cung cấp (kiểm tra phiên bản lạc quan
--optimistic version checking) và (khóa bi quan cấp độ cơ sở dữ liệu-database level pessimistic locking).
+Fine-grained locking này có tính mở rộng hơn trong một ứng dụng có độ cạnh tranh cao. JPA cung cấp (kiểm tra version optimistic
+-optimistic version checking) và (khóa pessimistic cấp độ cơ sở dữ liệu-database level pessimistic locking).
 
 [Giải thích bởi ChatGPT về 2 loại khóa {Optimistic Locking, Pessimistic Locking}]
-Optimistic locking và pessimistic locking là hai phương pháp khác nhau để quản lý đồng thời và đảm bảo tính nhất quán của dữ liệu trong môi trường đa giao dịch trong các hệ thống quản lý cơ sở dữ liệu.
+Optimistic locking và pessimistic locking là hai phương pháp khác nhau để quản lý đồng thời và đảm bảo tính nhất quán
+của dữ liệu trong môi trường đa giao dịch trong các hệ thống quản lý cơ sở dữ liệu.
 
 1. Optimistic Locking:
-- Làm việc dựa trên giả định lạc quan (optimistic assumption) rằng các giao dịch sẽ hiếm khi xảy ra xung đột.
-- Khi một giao dịch muốn cập nhật dữ liệu, nó trước hết đọc dữ liệu và giữ một phiên bản của dữ liệu đó
+- Làm việc dựa trên giả định optimistic (optimistic assumption) rằng các giao dịch sẽ hiếm khi xảy ra xung đột.
+- Khi một giao dịch muốn cập nhật dữ liệu, nó trước hết đọc dữ liệu và giữ một version của dữ liệu đó
 (thông qua một trường version hoặc timestamp).
-- Khi giao dịch hoàn thành và muốn cập nhật dữ liệu, nó kiểm tra phiên bản của dữ liệu so với phiên bản đã lưu trữ trước đó.
+- Khi giao dịch hoàn thành và muốn cập nhật dữ liệu, nó kiểm tra version của dữ liệu so với version đã lưu trữ trước đó.
 Nếu chúng khớp, cập nhật được thực hiện.
-- Nếu phiên bản đã thay đổi (do giao dịch khác đã cập nhật dữ liệu trong thời gian này), giao dịch hiện tại sẽ thất bại
+- Nếu version đã thay đổi (do giao dịch khác đã cập nhật dữ liệu trong thời gian này), giao dịch hiện tại sẽ thất bại
 và phải xử lý xung đột.
 
 Ưu điểm: Hiệu suất tốt, không có khóa chặn giao dịch khác trong khi chờ đợi.
@@ -204,3 +204,454 @@ phép cập nhật), và exclusive lock cho ghi (khóa chặn tất cả các gi
 
 Ưu điểm: Đảm bảo tính nhất quán tuyệt đối của dữ liệu, không xảy ra xung đột.
 Nhược điểm: Hiệu suất thấp hơn vì các giao dịch khác phải chờ đợi khóa được giải phóng.
+
+
+11.2.2 Optimistic concurrency control
+
+Xử lý sự đồng thời một cách optimistic (optimistic) là phù hợp khi các sự thay đổi đồng thời (concurrent modifications)
+là hiếm và có khả năng phát hiện xung đột muộn trong một unit of work. JPA cung cấp kiểm tra version tự động
+như một thủ tục phát hiện xung đột optimistic.
+
+Trước hết, bạn sẽ bật tính năng sử dụng version (versioning), vì nó đã tắt mặc định - đó là lý do tại sao nếu bạn không
+làm gì cả, thì version cuối cùng sẽ được chấp nhận. Hầu hết các ứng dụng đa người dùng, đặc biệt là các ứng dụng web,
+nên dựa vào tính năng version để xử lý các instance sửa đổi đồng thời của các đối tượng @Entity, để đảm bảo tính
+thân thiện với người dùng hơn là nguyên tắc "first commit wins".
+
+Các phần trước đó đã khá lý thú; bây giờ là lúc để thực hiện mã. Sau khi bật kiểm tra version tự động, bạn sẽ thấy cách
+kiểm tra version thủ công hoạt động và khi nào bạn cần phải sử dụng nó.
+
+BẬT TÍNH NĂNG VERSIONING
+Bạn bật tính năng version bằng cách sử dụng chú thích @Version trên một thuộc tính bổ sung đặc biệt của lớp đối tượng
+(entity) của bạn, như được hiển thị bên dưới.
+
+PATH: /model/src/main/java/org/jpwh/model/concurrency/version/Item.java
+
+@Entity
+public class Item implements Serializable {
+    @Version
+    protected long version;
+    // ...
+}
+
+Trong ví dụ này, mỗi instance của đối tượng (entity) mang theo một version số học. Phiên bản này được ánh xạ thành một cột
+bổ sung của bảng cơ sở dữ liệu ITEM; như thường lệ, tên cột mặc định là tên thuộc tính, ở đây là VERSION. Tên thực sự
+của thuộc tính và cột không quan trọng - bạn có thể đổi tên nó nếu VERSION là một từ khóa đã được dành riêng trong hệ quản
+trị cơ sở dữ liệu của bạn.
+
+Bạn có thể thêm một phương thức getVersion() vào lớp, nhưng bạn không nên có một phương thức setter và ứng dụng không nên
+thay đổi giá trị của version. Hibernate tự động thay đổi giá trị version: nó tăng giá trị version mỗi khi một instance
+Item được xác định là có sự thay đổi trong quá trình làm mới (flushing) của persistence context. Phiên bản là một bộ đếm đơn
+giản mà không có giá trị ngữ nghĩa hữu ích ngoài việc kiểm soát đồng thời. Bạn có thể sử dụng kiểu int, Integer, short, Short
+hoặc Long thay vì long; Hibernate gói giá trị và bắt đầu lại từ số không nếu số version đạt đến giới hạn của kiểu dữ liệu.
+
+Sau khi tăng giá trị version của một Item có sự thay đổi được xác định trong quá trình làm mới, Hibernate so sánh các
+version khi thực hiện các câu lệnh SQL UPDATE và DELETE. Ví dụ, giả sử trong một unit of work, bạn tải một Item và
+thay đổi tên của nó, như sau:
+
+PATH: /examples/src/test/java/org\jpwh/test/concurrency/Versioning.java
+
+tx.begin();
+em = JPA.createEntityManager();
+
+Item item = em.find(Item.class, ITEM_ID);       // [1] Retrieves by identifier
+// select * from ITEM where ID = ?
+
+assertEquals(item.getVersion(), 0);             // [2] Instance sersion: 0
+item.setName("New Name");
+em.flush();                                 // [3] Flushes persistence context
+// update ITEM set NAME = ?, VERSION = 1 where ID = ? and VERSION = 0
+
+1 Lấy một instance đối tượng (entity) bằng cách sử dụng định danh tải version hiện tại từ cơ sở dữ liệu thông qua một SELECT.
+
+2 Version hiện tại của instance Item là 0.
+
+3 Khi persistence context được flushed, Hibernate xác định instance Item dirty và tăng version của nó lên 1.
+SQL UPDATE hiện thực hiện kiểm tra version, lưu trữ version mới vào cơ sở dữ liệu, nhưng chỉ khi version cơ sở
+dữ liệu vẫn là 0. Hãy chú ý đến các câu lệnh SQL, đặc biệt là câu lệnh UPDATE và điều kiện WHERE của nó. Việc cập nhật
+này sẽ thành công chỉ khi có một hàng có VERSION = 0 trong cơ sở dữ liệu. JDBC trả về số
+hàng đã được cập nhật cho Hibernate; nếu kết quả đó là không, có nghĩa là hàng ITEM đã bị xóa hoặc không còn version 0 nữa.
+Hibernate phát hiện xung đột này trong quá trình làm mới và ném một javax.persistence.OptimisticLockException.
+
+Giờ hãy tưởng tượng hai người dùng thực hiện unit of work này cùng lúc, như đã được hiển thị trước đó trong hình 11.4.
+Người dùng đầu tiên tiến hành cập nhật tên của Item và làm mới version tăng lên 1 vào cơ sở dữ liệu. Việc làm mới của người
+dùng thứ hai (và việc commit) sẽ thất bại, vì câu lệnh UPDATE của họ không thể tìm thấy hàng trong cơ sở dữ liệu với phiên
+bản 0. Phiên bản cơ sở dữ liệu là 1. Do đó, lệnh commit đầu tiên thắng, và bạn có thể bắt lỗi javax.persistence.
+và xử lý nó một cách cụ thể. Ví dụ, bạn có thể hiển thị thông báo sau đây cho người dùng thứ hai:
+"Dữ liệu mà bạn đã làm việc với đã bị người khác thay đổi. Vui lòng bắt đầu lại unit of work của bạn với dữ liệu mới.
+Nhấn nút Khởi động lại để tiếp tục."
+
+Những sự thay đổi nào gây ra việc tăng version của một đối tượng (entity)? Hibernate tăng version mỗi khi một instance
+đối tượng bị làm dơ (dirty). Điều này bao gồm tất cả các thuộc tính có kiểu giá trị bị làm dơ của đối tượng, không quan trọng
+nó có kiểu giá trị đơn (như một thuộc tính String hoặc int), được nhúng (như một địa chỉ Address), hoặc
+là các tập hợp (collections). Những instance ngoại lệ là các bộ sưu tập liên kết @OneToMany và @ManyToMany đã được đánh dấu
+là chỉ đọc với mappedBy. Việc thêm hoặc xóa phần tử khỏi các bộ sưu tập này không làm tăng số version của instance
+đối tượng chủ sở hữu. Bạn nên biết rằng không có tiêu chuẩn nào trong JPA đối với điều này - đừng dựa vào việc hai nhà
+cung cấp JPA cài đặt cùng các quy tắc khi truy cập vào cơ sở dữ liệu chung.
+
+
+Versioning with a shared database
+Nếu có nhiều ứng dụng truy cập cơ sở dữ liệu của bạn và chúng không sử dụng tất cả cùng một thuật toán version hóa
+của Hibernate, bạn sẽ gặp vấn đề về đồng thời. Một giải pháp dễ dàng là sử dụng các triggers và stored procedures ở mức
+cơ sở dữ liệu: Một trigger THAY VÌ có thể thực hiện một stored procedure khi có bất kỳ UPDATE nào được thực hiện;
+nó thực hiện thay thế việc cập nhật. Trong thủ tục, bạn có thể kiểm tra xem ứng dụng đã tăng version của hàng;
+nếu version không được cập nhật hoặc cột version không được bao gồm trong UPDATE, bạn biết rằng câu lệnh không được
+gửi bởi ứng dụng Hibernate. Sau đó, bạn có thể tăng version trong thủ tục trước khi áp dụng UPDATE.
+
+Nếu bạn không muốn tăng version của instance entity khi giá trị của một thuộc tính cụ thể đã thay đổi, bạn có thể đánh
+dấu thuộc tính đó bằng @org.hibernate.annotations.OptimisticLock(excluded = true). Bạn có thể không thích việc thêm cột
+VERSION bổ sung trong lược đồ cơ sở dữ liệu của bạn. Một cách khác, bạn có thể đã có một thuộc tính "last updated"
+với dấu thời gian trên lớp thực thể của bạn và một cột cơ sở dữ liệu tương ứng. Hibernate có thể kiểm tra phiên bản bằng
+thời điểm dấu thời gian thay vì sử dụng trường đếm bổ sung.
+
+[VERSIONING WITH TIMESTAMPS]
+
+Nếu lược đồ cơ sở dữ liệu của bạn đã chứa một cột thời điểm như LASTUPDATED hoặc MODIFIED_ON, bạn có thể ánh xạ nó để
+kiểm tra version tự động thay vì sử dụng một bộ đếm số.
+
+Listing 11.4 Enabling versioning with timestamps
+PATH: /model/src/main/java/org/jpwh/model/concurrency/versiontimestamp/
+Item.java
+
+@Entity
+public class Item {
+    @Version
+    // Optional: @org.hibernate.annotations.Type(type = "dbtimestamp")
+    protected Date lastUpdated;
+    // ...
+}
+
+Ví dụ này ánh xạ cột LASTUPDATED thành một thuộc tính kiểu java.util.Date; kiểu Calendar cũng có thể hoạt động với Hibernate.
+Tiêu chuẩn JPA không định nghĩa các kiểu dữ liệu này cho thuộc tính version;
+JPA chỉ coi java.sql.Timestamp là có khả năng di chuyển. Điều này không hấp dẫn lắm, vì bạn sẽ phải nhập lớp JDBC đó
+vào trong mô hình miền của bạn. Bạn nên cố gắng giữ các chi tiết triển khai như JDBC ra khỏi các lớp mô hình miền để
+chúng có thể được kiểm tra, khởi tạo, biên dịch chéo (ví dụ, thành JavaScript với GWT), serialize và deserialize trong
+càng nhiều môi trường càng tốt.
+
+Lý thuyết, việc sử dụng phiên bản version với timestamp có độ an toàn ít hơn một chút, vì hai giao dịch đồng thời có
+thể cả hai đều tải và cập nhật cùng một Item trong cùng một mili giây; điều này được làm nghiêm trọng hơn bởi việc
+JVM thường không có độ chính xác tính theo mili giây (bạn nên kiểm tra tài liệu của JVM và hệ điều hành của bạn để biết
+về độ chính xác được đảm bảo).
+
+Hơn nữa, việc truy xuất thời gian hiện tại từ JVM không nhất thiết an toàn trong môi trường có nhiều nút, nơi thời gian
+hệ thống của các nút có thể không đồng bộ hoặc đồng bộ thời gian không đủ chính xác cho tải giao dịch của bạn.
+
+
+[Hibernate Feature]
+Bạn có thể chuyển sang việc truy xuất thời gian hiện tại từ máy chủ cơ sở dữ liệu bằng cách đánh dấu thuộc tính phiên bản
+bằng @org.hibernate.annotations.Type(type="dbtimestamp"). Bây giờ, Hibernate sẽ yêu cầu cơ sở dữ liệu, ví dụ, gọi
+current_timestamp() trên H2, để lấy thời gian hiện tại trước khi cập nhật. Điều này đưa ra một nguồn thời gian duy
+nhất cho việc đồng bộ hóa. Không phải tất cả các ngôn ngữ SQL Hibernate đều hỗ trợ tính năng này, vì vậy hãy kiểm tra nguồn
+của ngôn ngữ SQL đã cấu hình của bạn và xem liệu nó có ghi đè phương thức getCurrentTimestampSelectString() hay không.
+Ngoài ra, luôn có sự tăng thêm của việc truy vấn cơ sở dữ liệu cho mỗi lần tăng phiên bản.
+
+Chúng tôi khuyến nghị rằng các dự án mới nên dựa vào phiên bản hóa bằng số, chứ không phải bằng dấu thời gian.
+ Nếu bạn đang làm việc với lược đồ cơ sở dữ liệu cổ điển hoặc các lớp Java hiện có, có thể không thể giới thiệu một
+ thuộc tính phiên bản hoặc dấu thời gian và cột mới. Nếu đó là trường hợp, Hibernate có một chiến lược thay thế cho bạn.
+
+
+[Hibernate Feature]
+
+VERSION KHÔNG CẦN NUMBER HOẶC TIMESTAMP
+Nếu bạn không có các cột phiên bản hoặc dấu thời gian, Hibernate vẫn có thể thực hiện phiên bản hóa tự động.
+Sự thực hiện phiên bản hóa thay thế này kiểm tra trạng thái hiện tại của cơ sở dữ liệu so với các giá trị không được sửa đổi
+của các thuộc tính lưu trữ vào thời điểm Hibernate truy xuất thực thể (hoặc lần cuối cùng bộ persistence context đã được xả).
+Bạn có thể bật chức năng này bằng cách sử dụng chú thích Hibernate độc quyền @org.hibernate.annotations.OptimisticLocking:
+
+PATH: \model\src\main\java\org\jpwh\model\concurrency\versionall\Item.java
+
+@Entity
+@org.hibernate.annotations.OptimisticLocking(
+type = org.hibernate.annotations.OptimisticLockType.ALL)
+@org.hibernate.annotations.DynamicUpdate
+public class Item {
+
+    // ...
+
+}
+
+
+Đối với chiến lược này, bạn cũng phải bật việc tạo động các câu lệnh UPDATE SQL bằng cách sử dụng
+@org.hibernate.annotations.DynamicUpdate như được giải thích trong phần 4.3.2.
+
+Bây giờ, Hibernate thực hiện các câu lệnh SQL sau để xả thay đổi của một thể hiện Item:
+update ITEM set NAME = 'New Name'
+    where ID = 123
+    and NAME = 'Old Name'
+    and PRICE = '9.99'
+    and DESCRIPTION = 'Some item for auction'
+    and ...
+    and SELLER_ID = 45
+
+Hibernate liệt kê tất cả các cột và giá trị cuối cùng của chúng trong mệnh đề WHERE. Nếu bất kỳ giao dịch đồng thời
+nào đã sửa đổi bất kỳ giá trị nào trong số này hoặc thậm chí xóa dòng, câu lệnh này sẽ trả về số lượng dòng được cập nhật
+bằng không. Hibernate sau đó sẽ ném ra một ngoại lệ khi thực hiện xả.
+
+Một cách thay thế, Hibernate chỉ bao gồm các thuộc tính đã được sửa đổi trong điều kiện (chỉ có NAME, trong ví dụ này)
+nếu bạn chuyển sang sử dụng OptimisticLockType.DIRTY. Điều này có nghĩa là hai unit of work có thể sửa đổi cùng
+một Item đồng thời, và Hibernate phát hiện xung đột chỉ khi cả hai đều sửa đổi cùng một thuộc tính kiểu giá trị
+(hoặc một giá trị khóa ngoại). Mệnh đề WHERE của đoạn SQL cuối cùng sẽ được giảm xuống thành where ID = 123 và NAME = 'Tên cũ'.
+Ai đó có thể đồng thời sửa đổi giá, và Hibernate sẽ không phát hiện xung đột nào. Chỉ khi ứng dụng sửa đổi tên đồng thời
+bạn mới nhận được javax.persistence.OptimisticLockException.
+
+Trong hầu hết các trường hợp, kiểm tra chỉ các thuộc tính bị sửa đổi không phải là một chiến lược tốt cho các thực thể kinh doanh.
+Có lẽ không nên để thay đổi giá của một mặt hàng nếu mô tả thay đổi!
+
+Chiến lược này cũng không hoạt động với các thực thể detached và merging: nếu bạn merge một thực thể detach vào một persistence context mới,
+các giá trị "cũ" không được biết đến. Thể hiện thực thể đã tách sẽ phải mang theo một số phiên bản hoặc dấu thời gian
+cho việc kiểm soát xung đột tối ưu hóa.
+
+Automatic versioning trong Java Persistence ngăn chặn việc mất cập nhật khi hai giao dịch đồng thời cố gắng thực hiện
+các sửa đổi trên cùng một phần dữ liệu. Versioning cũng có thể giúp bạn đạt được các cam kết cách ly bổ sung theo cách thủ công
+khi bạn cần chúng.
+
+[MANUAL VERSION CHECKING]
+Kiểm tra Version thủ công
+
+Dưới đây là một tình huống yêu cầu repeatable read: hãy tưởng tượng bạn có một số category trong
+hệ thống đấu giá của bạn và mỗi Item trong một category. Đây là một ánh xạ thông thường @ManyToOne của Item
+entity association tới Category.
+
+Hãy nói rằng bạn muốn tổng hợp giá của tất cả Item trong một số Category. Điều này đòi hỏi một truy vấn
+cho tất cả Item trong mỗi Category để cộng giá. Vấn đề là gì xảy ra nếu có ai đó di chuyển ITEM từ một Category
+sang một Category khác trong khi bạn vẫn đang truy vấn và lặp qua tất cả các Category và Item? Với cách ly
+read-committed, cùng một Item có thể xuất hiện hai lần trong khi thủ tục của bạn đang chạy!
+
+Để làm cho việc đọc “get items in each category” read repeatable, giao diện Query của JPA có một phương thức
+setLockMode(). Hãy xem thủ tục trong đoạn mã sau đây.
+
+Listing 11.5 Requesting a version check at flush time to ensure repeatable reads
+PATH: /examples/src/test/java/org/jpwh/test/concurrency/Versioning.java
+
+tx.begin();
+EntityManager em = JPA.createEntityManager();
+
+BigDecimal totalPrice = new BigDecimal(0);
+for (Long categoryId : CATEGORIES) {
+    List<Item> items =
+        em.createQuery("select i from Item i where i.category.id = :catId")
+            .setLockMode(LockModeType.OPTIMISTIC)  // Query with OPTIMISTIC lock mode
+            .setParameter("catId", categoryId)
+            .getResultList();
+    for (Item item : items)
+        totalPrice = totalPrice.add(item.getBuyNowPrice());
+}
+tx.commit();        // [2] Executes SELECT trong khi Flushing
+em.close();
+assertEquals(totalPrice.toString(), "108.00");
+
+1. Đối với mỗi Category, truy vấn tất cả các thể hiện Item với một chế độ khóa OPTIMISTIC.
+Hibernate hiện nay biết rằng nó phải kiểm tra từng Item tại thời điểm flush.
+
+2. Đối với mỗi Item được tải trước đó bằng truy vấn khóa, Hibernate thực hiện một SELECT trong quá trình flush.
+Nó kiểm tra xem phiên bản cơ sở dữ liệu của từng hàng ITEM có còn giống như lúc nó được tải không. Nếu bất kỳ hàng ITEM
+nào có phiên bản khác hoặc hàng không còn tồn tại, một OptimisticLockException sẽ được ném ra.
+
+Đừng bị nhầm lẫn bởi thuật ngữ khóa-locking: Thông số kỹ thuật JPA để lại cách cụ thể mỗi LockModeType được thực hiện;
+đối với OPTIMISTIC, Hibernate thực hiện kiểm tra phiên bản. Không có khóa thực sự được liên quan. Bạn sẽ phải bật việc
+xác định phiên bản trên lớp thực thể Item như đã được giải thích trước đó; nếu không, bạn không thể sử dụng các LockModeType
+optimistic với Hibernate.
+
+Hibernate không tự động tổ chức hoặc tối ưu hóa các câu lệnh SELECT để kiểm tra phiên bản thủ công:
+Nếu bạn tổng hợp 100 mục, bạn sẽ có 100 truy vấn bổ sung vào thời điểm flush. Một cách tiếp cận pessimistic, như
+chúng ta sẽ thấy sau trong chương này, có thể là một giải pháp tốt hơn cho trường hợp cụ thể này.
+
+Câu hỏi: Tại sao persistence context cache không thể ngăn ngừa vấn đề này?
+Truy vấn "lấy tất cả các item trong một category cụ thể" trả về dữ liệu item trong một ResultSet.
+Sau đó, Hibernate xem xét các giá trị khóa chính trong dữ liệu này và trước tiên cố gắng giải quyết các chi tiết còn lại
+của mỗi Item trong persistence context cache - nó kiểm tra xem một thể hiện Item đã được tải với nhận dạng đó chưa.
+Tuy nhiên, cache này không giúp ích trong thủ tục ví dụ: nếu một giao dịch đồng thời đã di chuyển một mục vào
+một category khác, mục đó có thể được trả về nhiều lần trong các ResultSet khác nhau. Hibernate sẽ thực hiện tìm kiếm
+cache context của nó và nói: "Ồ, tôi đã tải thể hiện Item đó rồi; hãy sử dụng điều chúng ta đã có trong bộ nhớ."
+Hibernate thậm chí không nhận biết rằng category được gán cho item đã thay đổi hoặc rằng item đã xuất hiện lại trong một
+kết quả khác. Vì vậy, đây là một trường hợp mà tính năng lặp lại đọc của persistence context che giấu dữ liệu được thực hiện
+đồng thời. Bạn cần kiểm tra thủ công các phiên bản để xác định xem dữ liệu đã thay đổi trong khi bạn không mong muốn
+nó thay đổi.
+
+Như được thể hiện trong ví dụ trước đó, giao diện Query chấp nhận một LockModeType. Chế độ (khóa tường minh-Explicit lock)
+cũng được hỗ trợ bởi các giao diện TypedQuery và NamedQuery, với cùng một phương thức setLockMode().
+
+Cũng có một chế độ khóa optimistic bổ sung trong JPA, buộc tăng version của một thực thể.
+
+[FORCING A VERSION INCREMENT]
+[BUỘC TĂNG VERSION]
+Nếu hai users đặt giá cho cùng một mục đấu giá vào cùng thời điểm, có thể xảy ra một tình huống đua nhau như sau:
+
+Khi một user đặt giá mới, ứng dụng phải thực hiện một số việc:
+
+1. Lấy Bid cao nhất hiện tại cho Item từ cơ sở dữ liệu.
+2. So sánh Bid mới với Bid cao nhất; nếu Bid mới cao hơn, nó phải được lưu trữ trong cơ sở dữ liệu.
+
+Tại đây, có khả năng xảy ra một tình huống đua nhau (race condition). Nếu giữa việc đọc Bid cao nhất và đặt Bid mới,
+một người dùng khác đặt một Bid khác, bạn sẽ không thấy nó. Xung đột này không thể nhìn thấy; thậm chí việc kích hoạt
+tính năng xác định version cho Item cũng không giúp. Item không bao giờ bị sửa đổi trong quá trình này. Bắt buộc
+việc tăng version của Item khiến cho xung đột có thể phát hiện được.
+
+Listing 11.6 Forcing a version increment of an entity instance
+PATH: /examples/src/test/java/org/jpwh/test/concurrency/Versioning.java
+
+tx.begin();
+EntityManager em = JPA.createEntityManager();
+
+Item item = em.find(
+    Item.class,
+    ITEM_ID,
+    LockModeType.OPTIMISTIC_FORCE_INCREMENT   // [1] Yêu cầu Hibernate tăng version Item
+);
+Bid highestBid = queryHighestBid(em, item);
+
+try {
+    Bid newBid = new Bid(               // [2] Persists Bid instance
+        new BigDecimal("44.44"),
+        item,
+        highestBid
+    );
+    em.persist(newBid);
+} catch (InvalidBidException ex) {      // [3] Checks bid
+
+}
+tx.commit();            // [4] INSERTs Bid
+em.close();
+
+1. Phương thức find() chấp nhận một LockModeType. Chế độ OPTIMISTIC_FORCE_INCREMENT thông báo cho Hibernate rằng version
+của Item được truy xuất sẽ được tăng sau khi load, ngay cả khi nó chưa từng được sửa đổi trong unit of work.
+
+2. Mã lưu trữ một thể hiện Bid mới; điều này không ảnh hưởng đến bất kỳ giá trị nào của thể hiện Item. Một hàng mới
+được chèn vào bảng BID. Hibernate không thể phát hiện các đợt đặt giá được thực hiện đồng thời mà không có việc
+tăng phiên bản của Item bằng cách buộc.
+
+3. Bạn sử dụng một exception checked để xác minh số tiền đặt giá mới. Nó phải lớn hơn giá đặt giá cao nhất hiện tại.
+
+4. Khi flush, Hibernate thực hiện một INSERT cho Bid mới và buộc UPDATE Item với kiểm tra phiên bản. Nếu có ai đó sửa đổi Item
+đồng thời hoặc đặt Bid đồng thời với thủ tục này, Hibernate sẽ ném ra một ngoại lệ.
+
+Đối với hệ thống đấu giá, việc đặt giá đồng thời chắc chắn là một hoạt động thường xuyên. Tăng phiên bản thủ công hữu ích
+trong nhiều tình huống khi bạn chèn hoặc sửa đổi dữ liệu và muốn phiên bản của một số thể hiện gốc của một tổ hợp được tăng.
+
+Lưu ý rằng nếu thay vì có một mối quan hệ thể hiện Bid#item với @ManyToOne, bạn có một @ElementCollection của Item#bids,
+thêm một Bid vào bộ sưu tập sẽ tăng phiên bản của Item. Việc tăng phiên bản buộc không cần thiết trong trường hợp này.
+Bạn có thể muốn xem xét cuộc thảo luận về sự mơ hồ giữa mối quan hệ parent/child và cách tổ hợp và sự hợp thành
+hoạt động với ORM trong phần 7.3.
+
+Cho đến nay, chúng tôi đã tập trung vào kiểm soát xung đột optimistic: chúng tôi kỳ vọng rằng sự sửa đổi đồng thời là hiếm,
+vì vậy chúng tôi không ngăn truy cập đồng thời và phát hiện xung đột muộn. Đôi khi bạn biết rằng xung đột sẽ xảy ra thường xuyên
+và bạn muốn đặt một exclusive lock trên một số dữ liệu. Điều này đòi hỏi một cách tiếp cận pessimistic.
+
+
+11.2.3 Explicit pessimistic locking
+[KHÓA BI QUAN RÕ RÀNG]
+
+Hãy lặp lại quy trình được hiển thị trong phần "Manual version checking" với một khóa pessimistic thay vì kiểm tra phiên bản optimistic.
+Bạn sẽ tiếp tục tổng hợp tổng giá của tất cả các item trong một số category. Đây là mã tương tự như đã được hiển thị trước đó
+trong danh sách 11.5, nhưng với một LockModeType khác.
+
+Listing 11.7 Locking data pessimistically
+PATH: /examples/src/test/java/org/jpwh/test/concurrency/Locking.java
+
+tx.begin();
+EntityManager em = JPA.createEntityManager();
+
+BigDecimal totalPrice = new BigDecimal(0);
+for (Long categoryId : CATEGORIES) {
+    List<Item> items =              // [1] Queries all Item instances
+        em.createQuery("select i from Item i where i.category.id = :catId")
+            .setLockMode(LockModeType.PESSIMISTIC_READ)
+            .setHint("javax.persistence.lock.timeout", 5000)
+        .setParameter("catId", categoryId)
+        .getResultList();
+    for (Item item : items)                 // [2] Truy vấn thành công có nghĩa là exclusive lock
+        totalPrice = totalPrice.add(item.getBuyNowPrice());
+}
+tx.commit();                                // [3] Releases lock
+em.close();
+assertEquals(totalPrice.compareTo(new BigDecimal("108")), 0);
+
+1. Đối với mỗi Category, truy vấn tất cả các thể hiện Item ở chế độ khóa PESSIMISTIC_READ. Hibernate khóa các hàng
+trong cơ sở dữ liệu bằng truy vấn SQL. Nếu có thể, chờ 5 giây nếu một giao dịch khác đang giữ khóa xung đột.
+Nếu không thể lấy được khóa, truy vấn sẽ ném ra một ngoại lệ.
+
+2. Nếu truy vấn trả về thành công, bạn biết rằng bạn đang giữ một exclusive lock trên dữ liệu và không có giao dịch nào
+khác có thể truy cập dữ liệu đó với exclusive lock hoặc sửa đổi nó cho đến khi giao dịch này commit.
+
+3. Khóa của bạn được giải phóng sau khi commit, khi giao dịch hoàn tất.
+
+Thông số kỹ thuật JPA định nghĩa rằng chế độ khóa PESSIMISTIC_READ đảm bảo có thể repeatable read. JPA cũng chuẩn hóa
+chế độ PESSIMISTIC_WRITE, với các đảm bảo bổ sung: ngoài việc có thể đọc lại-repeatable read, nhà cung cấp JPA phải tuần tự
+hóa truy cập dữ liệu và không được phép xảy ra đọc "phantom" (đọc những gì không tồn tại).
+Tùy thuộc vào nhà cung cấp JPA để thực hiện các yêu cầu này. Đối với cả hai chế độ, Hibernate thêm một mệnh đề "for update"
+vào truy vấn SQL khi tải dữ liệu. Điều này đặt một khóa trên các hàng ở cấp độ cơ sở dữ liệu. Loại khóa mà Hibernate
+sử dụng phụ thuộc vào LockModeType và ngôn ngữ cơ sở dữ liệu Hibernate của bạn.
+
+Ví dụ, trên H2, truy vấn là SELECT * FROM ITEM ... FOR UPDATE. Bởi vì H2 chỉ hỗ trợ một loại exclusive lock, Hibernate
+tạo ra cùng một SQL cho tất cả các chế độ pessimistic.
+
+Mặt khác, PostgreSQL hỗ trợ khóa đọc chia sẻ: chế độ PESSIMISTIC_READ thêm FOR SHARE vào truy vấn SQL. PESSIMISTIC_WRITE
+sử dụng một exclusive write lock với FOR UPDATE.
+
+Khóa cơ sở dữ liệu pessimistic chỉ được giữ trong một giao dịch cơ sở dữ liệu duy nhất. Có thể thực hiện các triển khai khóa khác:
+ví dụ, một khóa được giữ trong bộ nhớ, hoặc một bảng khóa được gọi là bảng khóa trong cơ sở dữ liệu. Một tên thông thường
+cho các loại khóa này là "offline locks" (khóa ngoại tuyến).
+
+Bạn có thể cấu hình thời gian mà cơ sở dữ liệu sẽ chờ để lấy khóa và chặn truy vấn bằng mili giây thông qua gợi ý
+javax.persistence.lock.timeout. Như thường lệ với các gợi ý, Hibernate có thể bỏ qua nó, tùy thuộc vào sản phẩm cơ sở dữ liệu
+của bạn. Ví dụ, H2 không hỗ trợ thời gian chờ khóa cho từng truy vấn, chỉ hỗ trợ thời gian chờ khóa toàn cục cho từng kết nối
+(mặc định là 1 giây). Với một số ngôn ngữ cơ sở dữ liệu như PostgreSQL và Oracle, một thời gian chờ khóa bằng 0 sẽ thêm
+mệnh đề NOWAIT vào chuỗi SQL.
+
+Chúng tôi đã hiển thị gợi ý thời gian chờ khóa được áp dụng cho một Query. Bạn cũng có thể đặt gợi ý thời gian chờ cho
+các hoạt động find().
+
+Path: /examples/src/test/java/org/jpwh/test/concurrency/Locking.java
+
+tx.begin();
+EntityManager em = JPA.createEntityManager();
+
+Map<String, Object> hints = new HashMap<String, Object>();
+hints.put("javax.persistence.lock.timeout", 5000);
+// Thực thi SELECT .. FOR UPDATE WAIT 5000 nếu được hỗ trợ bởi phương ngữ
+
+Category category =
+    em.find(
+        Category.class,
+        CATEGORY_ID,
+        LockModeType.PESSIMISTIC_WRITE,
+        hints
+);
+    category.setName("New Name");
+    tx.commit();
+em.close();
+
+Khi không thể lấy được khóa, Hibernate sẽ ném một trong hai ngoại lệ: javax.persistence.LockTimeoutException hoặc 
+javax.persistence.PessimisticLockException. Nếu Hibernate ném một PessimisticLockException, giao dịch phải được hoàn nguyên 
+và unit of work kết thúc. Tuy nhiên, một (ngoại lệ thời gian chờ-timeout exception) không gây ra sự cố đối với giao dịch,
+như đã giải thích trong phần 11.1.4. Loại ngoại lệ Hibernate ném lại phụ thuộc vào ngôn ngữ SQL. Ví dụ, vì H2 không hỗ trợ
+thời gian chờ khóa cho từng câu lệnh, bạn luôn nhận được một PessimisticLockException.
+
+Bạn có thể sử dụng cả hai chế độ khóa PESSIMISTIC_READ và PESSIMISTIC_WRITE ngay cả khi bạn chưa bật việc sử dụng version
+của thực thể. Chúng được chuyển thành các câu lệnh SQL với khóa cấp cơ sở dữ liệu.
+
+Tuy nhiên, chế độ đặc biệt PESSIMISTIC_FORCE_INCREMENT yêu cầu sử dụng các thực thể có phiên bản. Trong Hibernate, chế độ
+này thực hiện một khóa FOR UPDATE NOWAIT (hoặc bất cứ điều gì ngôn ngữ của bạn hỗ trợ; hãy kiểm tra phần thực hiện
+của getForUpdateNowaitString() của nó). Sau đó, ngay sau khi truy vấn trả về, Hibernate sẽ tăng phiên bản và CẬP NHẬT (!)
+mỗi thể hiện thực thể đã trả về. Điều này thông báo cho bất kỳ giao dịch đồng thời nào rằng bạn đã cập nhật các hàng này,
+ngay cả khi bạn chưa từng sửa đổi bất kỳ dữ liệu nào. Chế độ này hiếm khi hữu ích, chủ yếu dành cho việc khóa tổng hợp
+như đã giải thích trong phần "Forcing a version increment".
+
+Về chế độ khóa READ và WRITE:
+
+Các chế độ khóa này là các chế độ khóa cũ từ Java Persistence 1.0 và bạn không nên sử dụng chúng nữa. LockModeType.READ
+tương đương với OPTIMISTIC và LockModeType.WRITE tương đương với OPTIMISTIC_FORCE_INCREMENT.
+
+Nếu bạn bật pessimistic lock, Hibernate chỉ khóa các hàng tương ứng với trạng thái của thể hiện thực thể. Nói cách khác,
+nếu bạn khóa một thể hiện Item, Hibernate sẽ khóa hàng của nó trong bảng ITEM. Nếu bạn có chiến lược ánh xạ kế thừa joined,
+Hibernate sẽ nhận ra điều này và khóa các hàng tương ứng trong các bảng cha và con. Điều này cũng áp dụng cho bất kỳ ánh xạ
+bảng phụ nào của một thực thể. Bởi vì Hibernate khóa toàn bộ hàng, bất kỳ mối quan hệ nào mà khóa ngoại
+nằm trong hàng đó cũng sẽ được khóa hiệu quả: Mối quan hệ Item#seller được khóa nếu cột khóa ngoại SELLER_ID nằm trong bảng ITEM.
+Thực thể Seller cụ thể không bị khóa! Cũng như không khóa các bộ sưu tập hoặc các mối quan hệ khác của Item mà các khóa ngoại
+nằm trong các bảng khác.
+
+Với khóa độc quyền trong hệ quản trị cơ sở dữ liệu (DBMS), bạn có thể trải qua các sự cố giao dịch vì gặp phải tình huống
+tắc nghẽn (deadlock).
+
+JPA 2.0 định nghĩa tùy chọn PessimisticLockScope.EXTENDED. Nó có thể được đặt làm gợi ý truy vấn bằng javax.persistence.lock.scope.
+Nếu được bật, hệ thống lưu trữ mở rộng phạm vi dữ liệu đã khóa để bao gồm bất kỳ dữ liệu nào trong bảng liên kết và bảng
+liên kết của các thực thể đã khóa. Tại thời điểm viết bài này, Hibernate không triển khai tính năng này.
