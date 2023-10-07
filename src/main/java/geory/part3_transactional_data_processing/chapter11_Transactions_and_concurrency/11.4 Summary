@@ -1,0 +1,13 @@
+- Bạn đã học cách sử dụng transaction, concurrency, isolation, và khóa.
+
+- Hibernate dựa vào cơ chế kiểm soát sự cạnh tranh của cơ sở dữ liệu nhưng cung cấp các đảm bảo cách ly tốt hơn trong
+một giao dịch, nhờ vào việc tự động tạo phiên bản và bộ nhớ cache của persistence context.
+
+- Chúng ta đã thảo luận cách thiết lập ranh giới giao dịch bằng cách lập trình và xử lý các ngoại lệ.
+
+- Bạn đã tìm hiểu về kiểm soát sự cạnh tranh lạc quan (optimistic concurrency control) và
+khóa bi quan (pessimistic locking) rõ ràng.
+
+- Bạn đã thấy cách làm việc với chế độ tự động commit và một persistence chưa được đồng bộ hóa ngoài giao dịch
+và cách xếp hàng các sự thay đổi.
+

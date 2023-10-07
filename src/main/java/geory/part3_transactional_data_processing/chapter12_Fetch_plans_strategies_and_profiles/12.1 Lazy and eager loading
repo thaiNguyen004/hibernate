@@ -1,0 +1,181 @@
+Đến một thời điểm nào đó, bạn phải quyết định dữ liệu nào sẽ được load vào memory từ cơ sở dữ liệu. Khi bạn thực hiện 
+entityManager.find(Item.class, 123), dữ liệu nào có sẵn trong memory và được load vào persistence context? Điều gì xảy ra 
+nếu bạn sử dụng EntityManager#getReference() thay vì thế?
+
+Trong ánh xạ mô hình miền của bạn, bạn xác định kế hoạch truy xuất mặc định toàn cục, với các tùy chọn FetchType.LAZY và 
+FetchType.EAGER trên các mối quan hệ và collection. Kế hoạch này là thiết lập mặc định cho tất cả các hoạt động liên quan 
+đến các lớp mô hình miền của bạn. Nó luôn được kích hoạt khi bạn load một thể hiện thực thể bằng bộ nhận dạng và khi bạn 
+điều hướng đồ thị thực thể bằng cách theo dõi các mối quan hệ và duyệt qua các collection lưu trữ.
+
+Chiến lược được đề xuất của chúng tôi là một kế hoạch truy xuất mặc định load lazy cho tất cả các thực thể và collection.
+Nếu bạn ánh xạ tất cả các mối quan hệ và collection của mình với FetchType.LAZY, Hibernate sẽ chỉ load dữ liệu mà bạn
+đang truy cập vào thời điểm này. Trong quá trình bạn điều hướng đồ thị thực thể của các thực thể mô hình miền của bạn,
+Hibernate sẽ load dữ liệu theo yêu cầu, từng phần một. Bạn sau đó có thể ghi đè lên hành vi này theo từng trường hợp
+khi cần thiết.
+
+Để thực hiện load lazy, Hibernate dựa vào các đối tượng trình bày thực thể được tạo ra tại thời gian chạy được gọi là
+`proxies` và trình bọc thông minh - `smart wrappers` cho các collection.
+
+12.1.1 Understanding entity proxies
+
+Hãy xem xét phương thức getReference() của API EntityManager. Trong phần 10.2.3, bạn đã có cái nhìn đầu tiên về thao tác
+này và cách nó có thể trả về một proxy. Hãy tiếp tục khám phá tính năng quan trọng này và tìm hiểu cách các proxy hoạt động:
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyProxyCollections.java
+
+Item item = em.getReference(Item.class, ITEM_ID);       // No SELECT
+assertEquals(item.getId(), ITEM_ID);                    //
+
+Gọi phương thức getter của id (không truy cập trường!) không kích hoạt quá trình khởi tạo.
+
+Đoạn mã này không thực thi bất kỳ SQL nào đối với cơ sở dữ liệu. Hibernate chỉ tạo ra một proxy cho đối tượng Item:
+nó trông (và có vẻ) giống như thực thể thực sự, nhưng đó chỉ là một placeholder (phần giữ chỗ). Trong persistence context,
+trong bộ nhớ, bạn hiện có proxy này ở trạng thái persistent, như được hiển thị trong hình 12.1.
+
+Proxy là một instance của một lớp con được tạo ra tại thời gian chạy của Item, mang theo giá trị id của thể hiện
+thực thể mà nó đại diện. Đây là lý do tại sao Hibernate (tuân theo JPA) yêu cầu rằng các lớp thực thể phải có ít nhất một
+constructor không tham số public hoặc protected (lớp cũng có thể có các constructor khác). Lớp thực thể và các phương thức
+của nó không được là final; nếu không, Hibernate không thể tạo ra một proxy. Lưu ý rằng đặc tả JPA không đề cập đến proxies;
+việc cài đặt lazy loading là trách nhiệm của nhà cung cấp JPA.
+
+Nếu bạn gọi bất kỳ phương thức nào trên proxy mà không phải là "phương thức lấy định danh," bạn sẽ kích hoạt quá trình khởi tạo
+của proxy và truy cập vào cơ sở dữ liệu. Nếu bạn gọi item.getName(), SQL SELECT để tải Item sẽ được thực thi.
+Ví dụ trước đã gọi item.getId() mà không kích hoạt quá trình khởi tạo vì getId() là phương thức lấy bộ nhận dạng trong
+ánh xạ cụ thể; phương thức getId() đã được đánh dấu bằng @Id. Nếu @Id nằm trên một trường, thì việc gọi getId(), giống như
+việc gọi bất kỳ phương thức nào khác, sẽ kích hoạt quá trình khởi tạo của proxy!
+
+(Hãy nhớ rằng chúng tôi thường ưa thích ánh xạ và truy cập trên trường, bởi vì điều này cho phép bạn linh hoạt hơn khi
+thiết kế các phương thức truy cập; xem phần 3.2.3. Việc gọi getId() mà không khởi tạo proxy có ý nghĩa quan trọng hơn
+hay không là tùy thuộc vào bạn.)
+
+Khi sử dụng proxies, hãy cẩn thận khi so sánh các lớp. Bởi vì Hibernate tạo ra lớp proxy, nó có tên gọi trông hơi lạ và
+nó không bằng với Item.class:
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyProxyCollections.java
+
+assertNotEquals(item.getClass(), Item.class);       // Lớp proxy được tạo ra tại thời gian chạy, có tên giống như Item_$$_javassist_1.
+assertEquals(
+    HibernateProxyHelper.getClassWithoutInitializingProxy(item),
+    Item.class
+);
+
+Nếu bạn thực sự cần lấy loại thực tế được đại diện bởi một proxy, hãy sử dụng HibernateProxyHelper.
+
+JPA cung cấp PersistenceUtil, mà bạn có thể sử dụng để kiểm tra trạng thái khởi tạo của một thực thể hoặc bất kỳ
+thuộc tính nào của nó:
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyProxyCollections.java
+
+PersistenceUtil persistenceUtil = Persistence.getPersistenceUtil();
+assertFalse(persistenceUtil.isLoaded(item));
+assertFalse(persistenceUtil.isLoaded(item, "seller"));
+assertFalse(Hibernate.isInitialized(item));
+// assertFalse(Hibernate.isInitialized(item.getSeller()));   // Sẽ kích hoạt quá trình khởi tạo của item!
+
+Phương thức tĩnh isLoaded() cũng chấp nhận tên của một thuộc tính của thể hiện thực thể (proxy) cụ thể và kiểm tra
+trạng thái khởi tạo của nó. Hibernate cung cấp một API thay thế với Hibernate.isInitialized(). Tuy nhiên, nếu bạn gọi
+item.getSeller(), proxy của item sẽ được khởi tạo trước đó!
+
+
+[Hibernate Feature]
+Hibernate cũng cung cấp một phương thức tiện ích để khởi tạo proxy một cách nhanh chóng:
+
+Hibernate.initialize(item);
+// select * from ITEM where ID = ?
+assertFalse(Hibernate.isInitialized(item.getSeller()));
+Hibernate.initialize(item.getSeller());
+// select * from USERS where ID = ?
+
+Cuộc gọi đầu tiên truy cập cơ sở dữ liệu và tải dữ liệu của Item, điền vào proxy với tên, giá và các thông tin khác của Item.
+
+Người bán của Item là một mối quan hệ @ManyToOne được ánh xạ với FetchType.LAZY, do đó khi Item được tải, Hibernate tạo ra một proxy User.
+Bạn có thể kiểm tra trạng thái của proxy của người bán và tải nó một cách thủ công, tương tự như Item. Hãy nhớ rằng giá trị
+mặc định của JPA cho @ManyToOne là FetchType.EAGER! Thông thường, bạn muốn ghi đè để có một kế hoạch truy xuất mặc định
+lazy loading, như đã hiển thị lần đầu trong phần 7.3.1 và lại ở đây.
+PATH: /model/src/main/java/org/jpwh/model/fetching/proxy/Item.java
+
+@Entity
+public class Item {
+    @ManyToOne(fetch = FetchType.LAZY)
+    public User getSeller() {
+        return seller;
+    }
+    // ...
+}
+
+Với kế hoạch truy xuất lười biếng như vậy, bạn có thể gặp phải một ngoại lệ LazyInitializationException.
+Hãy xem xét đoạn mã sau:
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyProxyCollections.java
+
+Item item = em.find(Item.class, ITEM_ID);               // [1]  Loads Item instance
+// select * from ITEM where ID = ?
+
+em.detach(item);                                        // [2] Detaches data
+em.detach(item.getSeller());
+// em.close();
+
+PersistenceUtil persistenceUtil = Persistence.getPersistenceUtil();     // [3] PersistenceUtil helper
+assertTrue(persistenceUtil.isLoaded(item));
+
+assertFalse(persistenceUtil.isLoaded(item, "seller"));
+
+assertEquals(item.getSeller().getId(), USER_ID);        // [4] Calls getter
+//assertNotNull(item.getSeller().getUsername());        // Throws an exception!
+
+1 Một thể hiện thực thể Item được tải trong persistence context. Seller của nó không được khởi tạo: đó là một proxy User.
+2 Bạn có thể thủ công tách dữ liệu ra khỏi persistence context hoặc persistence context và tách toàn bộ.
+3 Lớp trợ giúp tĩnh PersistenceUtil hoạt động mà không cần persistence context. Bạn có thể kiểm tra bất kỳ lúc nào
+liệu dữ liệu mà bạn muốn truy cập đã được tải hay chưa.
+4 Trong trạng thái đã tách, bạn có thể gọi phương thức getter của bộ nhận dạng của User proxy.
+Tuy nhiên, việc gọi bất kỳ phương thức nào khác trên proxy, như getUsername(), sẽ gây ra một ngoại lệ
+LazyInitializationException. Dữ liệu chỉ có thể được tải khi cần trong khi persistence context quản lý proxy, không trong
+trạng thái đã tách.
+
+Cách hoạt động của lazy loading cho các mối quan hệ one-to-one đôi khi khiến cho người dùng mới sử dụng Hibernate cảm thấy bối rối.
+Nếu bạn xem xét các mối quan hệ one-to-one dựa trên khóa chính chung (xem phần 8.1.1), một mối quan hệ chỉ có thể được
+tạo thành proxy nếu optional=false. Ví dụ, một Address luôn có một tham chiếu đến một User. Nếu mối quan hệ này có khả năng
+là null và optional, Hibernate phải truy vấn cơ sở dữ liệu trước để xác định liệu nó có nên áp dụng proxy hay null -
+và mục đích của lazy loading là không truy vấn cơ sở dữ liệu lúc nào cả.
+
+Bạn có thể kích hoạt tính năng lazy loading cho các mối quan hệ one-to-one tùy chọn thông qua việc biên dịch mã và ghi lại
+(bytecode instrumentation and interception), điều mà chúng tôi sẽ thảo luận sau trong chương này.
+
+Các proxy của Hibernate hữu ích không chỉ cho việc lazy loading đơn giản. Ví dụ, bạn có thể lưu trữ một Bid mới 
+mà không cần tải bất kỳ dữ liệu nào vào bộ nhớ:
+
+Item item = em.getReference(Item.class, ITEM_ID);
+User user = em.getReference(User.class, USER_ID);
+
+Bid newBid = new Bid(new BigDecimal("99.00"));
+newBid.setItem(item);
+newBid.setBidder(user);
+
+em.persist(newBid);                 // Trong quy trình này không có câu SQL SELECT, chỉ có một câu SQL INSERT duy nhất.
+// insert into BID values (?, ? ,? , ...)
+
+Hai cuộc gọi đầu tiên tạo ra các proxy của Item và User, tương ứng. Sau đó, các thuộc tính mối quan hệ item và bidder 
+của đối tượng Bid tạm thời được thiết lập với các proxy. Cuộc gọi persist() xếp hàng một câu SQL INSERT khi persistence context 
+được đẩy, và không cần phải thực hiện câu SQL SELECT nào để tạo hàng mới trong bảng BID. Tất cả các giá trị (khóa ngoại) 
+khóa có sẵn dưới dạng giá trị id của các proxy Item và User.
+
+Việc tạo proxy tại thời gian chạy như được cung cấp bởi Hibernate là một sự lựa chọn xuất sắc cho lazy loading mà không gây
+ra bất kỳ thay đổi nào đối với mã nguồn của các lớp mô hình miền của bạn. Lớp mô hình miền không cần phải triển khai bất kỳ
+(siêu) kiểu đặc biệt nào, như một số giải pháp ORM cũ hơn yêu cầu. Không cần sinh mã hoặc xử lý sau khi biên dịch bytecode,
+giúp đơn giản hóa quy trình xây dựng của bạn. Tuy nhiên, bạn nên nhận thức về một số khía cạnh tiêu biểu:
+
+- Các trường hợp mà các proxy tại thời gian chạy không hoàn toàn trong suốt là các mối quan hệ đa hình được kiểm tra bằng
+instanceof, vấn đề được thể hiện trong phần 6.8.1.
+- Với các proxy thực thể, bạn phải cẩn thận khi không truy cập trực tiếp vào trường khi viết các phương thức equals() và
+hashCode() tùy chỉnh, như đã thảo luận trong phần 10.3.2.
+- Proxy chỉ có thể được sử dụng để lazy loading các mối quan hệ thực thể. Chúng không thể được sử dụng để lazy loading
+các thuộc tính cơ bản hoặc thành phần nhúng cụ thể, chẳng hạn như Item#description hoặc User#homeAddress. Nếu bạn đặt gợi ý
+@Basic(fetch = FetchType.LAZY) trên một thuộc tính như vậy, Hibernate sẽ bỏ qua nó; giá trị sẽ được tải ngay khi thực thể
+chủ sở hữu được tải. Mặc dù có thể thực hiện được bằng biên dịch mã và ghi lại, nhưng chúng tôi xem xét rằng loại tối ưu hóa
+này hiếm khi hữu ích. Tối ưu hóa ở mức các cột cụ thể được chọn trong SQL không cần thiết nếu bạn không làm việc với (a)
+một số lượng lớn các cột tùy chọn/nullable hoặc (b) các cột chứa các giá trị lớn cần phải được truy xuất theo yêu cầu do
+giới hạn vật lý của hệ thống của bạn. Giá trị lớn được biểu diễn tốt nhất bằng các đối tượng chỉ định (LOBs); chúng cung
+cấp lazy loading theo định nghĩa (xem phần "Loại giá trị nhị phân và lớn" trong chương 5).
+- Các proxy cho phép lazy loading của các thể hiện thực thể. Đối với các bộ sưu tập lưu trữ, Hibernate có một phương pháp
+một chút khác biệt.
+

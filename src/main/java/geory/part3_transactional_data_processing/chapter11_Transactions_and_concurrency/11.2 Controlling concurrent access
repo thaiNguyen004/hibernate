@@ -96,7 +96,7 @@ giao dịch ghi nhưng không chặn các giao dịch đọc khác, và các gia
 nếu các giao dịch được thực thi một sau một, thay vì đồng thời. Một hệ thống quản lý cơ sở dữ liệu (DBMS) có thể không
 triển khai mức độ serializable chỉ bằng việc sử dụng khóa cấp dòng (row-level locks). Thay vào đó, DBMS phải cung cấp
 cơ chế khác để ngăn một hàng mới được thêm vào trở nên hiển thị đối với một giao dịch đã thực hiện một truy vấn đã
-trả về hàng đó. Một cơ chế thô sơ là khóa toàn bộ bảng cơ sở dữ liệu sau một ghi, để không có đọc giả ma (phantom reads) xảy ra.
+trả về hàng đó. Một cơ chế thô sơ là khóa toàn bộ bảng cơ sở dữ liệu sau một ghi, để không có đọc ảo (phantom reads) xảy ra.
 
 Cách mà một DBMS triển khai hệ thống khóa của nó thay đổi đáng kể; mỗi nhà cung cấp có chiến lược khác nhau. Bạn nên nghiên
 cứu tài liệu của DBMS của bạn để tìm hiểu thêm về hệ thống khóa của nó, cách khóa được nâng cấp
@@ -110,7 +110,7 @@ Việc biết cách các thuật ngữ kỹ thuật này được định nghĩa
 [CHOOSING AN ISOLATION LEVEL]
 
 Những người phát triển (bao gồm cả chúng tôi) thường không chắc chắn nên sử dụng mức độ cách ly giao dịch nào trong
-ứng dụng sản xuất. Mức độ cách ly quá cao có thể làm hại tính khả năng mở rộng của ứng dụng có tính cạnh tranh cao.
+ứng dụng sản xuất. Mức độ cách ly quá cao có thể làm hại tính khả năng mở rộng của ứng dụng concurrent cao.
 Mức độ cách ly không đủ có thể gây ra các lỗi tinh vi, khó tái hiện trong ứng dụng mà bạn sẽ không phát hiện ra cho
 đến khi hệ thống đang hoạt động trong điều kiện tải nặng.
 
@@ -127,13 +127,13 @@ Trước hết, đối với hầu hết các tình huống, hãy loại bỏ m�
 chưa được xác nhận của một giao dịch trong một giao dịch khác là rất nguy hiểm. Việc hoàn tác hoặc thất bại của một
 giao dịch có thể ảnh hưởng đến các giao dịch khác đang diễn ra đồng thời. Hoàn tác của giao dịch đầu tiên có thể làm
 sụp đổ các giao dịch khác, hoặc có thể gây ra tình trạng sai lệch trong cơ sở dữ liệu (người bán một món đấu giá có thể
-bị tính tiền hai lần - phù hợp với luật toàn vẹn cơ sở dữ liệu nhưng không chính xác). Có thể xảy ra instance các thay đổi
+bị tính tiền hai lần - phù hợp với luật toàn vẹn cơ sở dữ liệu nhưng không chính xác). Có thể xảy ra trường hợp các thay đổi
 được thực hiện bởi một giao dịch cuối cùng bị hoàn tác vẫn có thể được xác nhận vì chúng có thể được đọc và sau đó được
 truyền bởi một giao dịch khác thành công!
 
 Thứ hai, hầu hết các ứng dụng không cần mức độ cách ly "serializable". Đọc ảo không thường gây ra vấn đề, và mức độ cách ly
 này thường không mở rộng tốt. Rất ít ứng dụng hiện có sử dụng mức độ cách ly "serializable" trong sản xuất, mà thay vào đó
-phụ thuộc vào việc áp dụng (khóa pessimistic-pessimistic locks) một cách có hiệu quả trong một số tình huống cụ thể.
+phụ thuộc vào việc áp dụng (pessimistic locks) một cách có hiệu quả trong một số tình huống cụ thể.
 
 Tiếp theo, hãy xem xét mức độ cách ly "repeatable read". Mức độ này cung cấp tính lặp lại cho các kết quả truy vấn
 trong suốt một giao dịch cơ sở dữ liệu. Điều này có nghĩa là bạn sẽ không đọc các cập nhật đã được xác nhận từ cơ sở dữ
@@ -345,8 +345,8 @@ của ngôn ngữ SQL đã cấu hình của bạn và xem liệu nó có ghi đ
 Ngoài ra, luôn có sự tăng thêm của việc truy vấn cơ sở dữ liệu cho mỗi lần tăng phiên bản.
 
 Chúng tôi khuyến nghị rằng các dự án mới nên dựa vào phiên bản hóa bằng số, chứ không phải bằng dấu thời gian.
- Nếu bạn đang làm việc với lược đồ cơ sở dữ liệu cổ điển hoặc các lớp Java hiện có, có thể không thể giới thiệu một
- thuộc tính phiên bản hoặc dấu thời gian và cột mới. Nếu đó là trường hợp, Hibernate có một chiến lược thay thế cho bạn.
+Nếu bạn đang làm việc với lược đồ cơ sở dữ liệu cổ điển hoặc các lớp Java hiện có, có thể không thể giới thiệu một
+thuộc tính phiên bản hoặc dấu thời gian và cột mới. Nếu đó là trường hợp, Hibernate có một chiến lược thay thế cho bạn.
 
 
 [Hibernate Feature]
@@ -655,3 +655,68 @@ tắc nghẽn (deadlock).
 JPA 2.0 định nghĩa tùy chọn PessimisticLockScope.EXTENDED. Nó có thể được đặt làm gợi ý truy vấn bằng javax.persistence.lock.scope.
 Nếu được bật, hệ thống lưu trữ mở rộng phạm vi dữ liệu đã khóa để bao gồm bất kỳ dữ liệu nào trong bảng liên kết và bảng
 liên kết của các thực thể đã khóa. Tại thời điểm viết bài này, Hibernate không triển khai tính năng này.
+
+
+11.2.4 Avoiding deadlocks
+
+Deadlocks có thể xảy ra nếu hệ quản trị cơ sở dữ liệu của bạn phụ thuộc vào (khóa độc quyền-exclusive locks) để thực hiện
+cách ly giao dịch. Hãy xem xét đoạn công việc sau, cập nhật hai trường hợp thực thể Item theo một thứ tự cụ thể:
+
+tx.begin();
+EntityManager em = JPA.createEntityManager();
+
+Item itemOne = em.find(Item.class, ITEM_ONE_ID);
+itemOne.setName("First new name");
+
+Item itemTwo = em.find(Item.class, ITEM_TWO_ID);
+itemTwo.setName("Second new name");
+
+tx.commit();
+em.close();
+
+Hibernate thực thi hai câu lệnh SQL UPDATE khi ngữ cảnh bền vững (persistence context) được đẩy (flushed).
+Câu UPDATE đầu tiên khóa hàng đại diện cho Item một, và câu UPDATE thứ hai khóa Item hai:
+
+update ITEM set ... where ID = 1;   Locks row 1
+update ITEM set ... where ID = 2;   Attempts to lock row 2
+
+Một sự kẹt cứng có thể xảy ra (hoặc không thể xảy ra!) nếu một thủ tục tương tự, với thứ tự ngược lại của việc cập nhật các Item,
+được thực thi trong một giao dịch đồng thời:
+
+update ITEM set ... where ID = 2;   Locks row 2
+update ITEM set ... where ID = 1;   Attempts to lock row 1
+
+Trong trường hợp kẹt cứng, cả hai giao dịch đều bị chặn và không thể tiến lên được, mỗi giao dịch đang chờ đợi để một khóa
+được giải phóng. Khả năng xảy ra deadlock thường nhỏ, nhưng trong các ứng dụng có sự đồng thời cao, hai ứng dụng Hibernate
+có thể thực hiện loại cập nhật xen kẽ này. Lưu ý rằng bạn có thể không thấy được sự cố deadlock trong quá trình kiểm tra
+(trừ khi bạn viết các loại kiểm tra phù hợp). Deadlock có thể xuất hiện đột ngột khi ứng dụng phải xử lý một lượng giao dịch
+lớn trong môi trường sản xuất. Thông thường, hệ quản trị cơ sở dữ liệu (DBMS) sẽ kết thúc một trong những giao dịch bị kẹt
+sau một khoảng thời gian chờ đợi và ghi nhận lỗi; giao dịch còn lại có thể tiếp tục. Hoặc, tùy thuộc vào DBMS, DBMS có thể
+tự động phát hiện tình huống kẹt cứng và ngay lập tức hủy bỏ một trong các giao dịch.
+
+Bạn nên cố gắng tránh các lỗi giao dịch, vì chúng khó khắc phục trong mã ứng dụng. Một giải pháp là chạy kết nối cơ sở dữ liệu
+ở chế độ serializable khi cập nhật một hàng duy nhất khóa toàn bộ bảng. Giao dịch đồng thời phải chờ đợi cho đến khi giao dịch
+đầu tiên hoàn thành công việc của nó. Hoặc, giao dịch đầu tiên có thể lấy được khóa độc quyền trên tất cả dữ liệu khi bạn
+SELECT dữ liệu, như đã thể hiện trong phần trước. Sau đó, bất kỳ giao dịch đồng thời nào cũng phải chờ đợi cho đến khi những
+khóa này được giải phóng.
+
+Một tối ưu hóa thực tế khác giảm đáng kể khả năng xảy ra deadlock là sắp xếp các câu lệnh UPDATE theo giá trị khóa chính:
+Hibernate nên luôn cập nhật hàng có khóa chính 1 trước khi cập nhật hàng 2, bất kể dữ liệu đã được nạp và sửa đổi bởi
+ứng dụng theo thứ tự nào. Bạn có thể kích hoạt tối ưu hóa này cho toàn bộ đơn vị bền vững (persistence unit) với thuộc tính
+cấu hình hibernate.order_updates. Hibernate sau đó sắp xếp tất cả các câu lệnh UPDATE mà nó thực thi theo thứ tự tăng dần
+theo giá trị khóa chính của các thực thể và các phần tử collection đã được phát hiện trong quá trình đẩy ngữ cảnh (flushing).
+(Như đã đề cập trước đó, hãy đảm bảo bạn hiểu đầy đủ về hành vi giao dịch và khóa của sản phẩm DBMS của bạn.
+Ví dụ, sản phẩm cơ sở dữ liệu MVCC của bạn có thể tránh khóa đọc nhưng có khả năng phụ thuộc vào khóa độc quyền cho cách ly
+người viết, và bạn có thể thấy sự kẹt cứng.)
+
+Chúng tôi chưa có cơ hội đề cập đến phương thức EntityManager#lock(). Nó chấp nhận một thực thể persistent đã load và
+một chế độ khóa. Nó thực hiện việc khóa giống như bạn đã thấy với find() và một Query, ngoại trừ việc nó không nạp thực thể.
+Ngoài ra, nếu một thực thể có phiên bản đang được khóa theo cách bi quan, phương thức lock() thực hiện kiểm tra phiên bản
+trực tiếp trên cơ sở dữ liệu và có thể ném ra một OptimisticLockException. Nếu biểu diễn cơ sở dữ liệu không còn tồn tại nữa,
+Hibernate sẽ ném ra một EntityNotFoundException. Cuối cùng, phương thức EntityManager#refresh() cũng chấp nhận một chế độ khóa,
+với cùng một ý nghĩa.
+
+Chúng tôi đã bàn về kiểm soát đồng thời ở mức thấp nhất - cơ sở dữ liệu - và các tính năng khóa lạc quan và bi quan của JPA.
+Chúng tôi vẫn còn một khía cạnh nữa về đồng thời cần thảo luận: truy cập dữ liệu ngoài giao dịch.
+
+
