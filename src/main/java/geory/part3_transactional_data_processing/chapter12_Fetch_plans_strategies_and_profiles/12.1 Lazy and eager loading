@@ -176,6 +176,279 @@ này hiếm khi hữu ích. Tối ưu hóa ở mức các cột cụ thể đư�
 một số lượng lớn các cột tùy chọn/nullable hoặc (b) các cột chứa các giá trị lớn cần phải được truy xuất theo yêu cầu do
 giới hạn vật lý của hệ thống của bạn. Giá trị lớn được biểu diễn tốt nhất bằng các đối tượng chỉ định (LOBs); chúng cung
 cấp lazy loading theo định nghĩa (xem phần "Loại giá trị nhị phân và lớn" trong chương 5).
-- Các proxy cho phép lazy loading của các thể hiện thực thể. Đối với các bộ sưu tập lưu trữ, Hibernate có một phương pháp
+- Các proxy cho phép lazy loading của các thể hiện thực thể. Đối với các collection lưu trữ, Hibernate có một phương pháp
 một chút khác biệt.
+
+
+12.1.2 Lazy persistent collections
+
+Bạn có thể ánh xạ các collection persistent bằng cách sử dụng @ElementCollection cho một collection các phần tử kiểu cơ bản 
+hoặc nhúng hoặc bằng @OneToMany và @ManyToMany cho các mối quan hệ của các thực thể có nhiều giá trị. Khác với @ManyToOne, 
+các collection này mặc định là lazy loading (lazy-loaded). Bạn không cần phải chỉ định tùy chọn FetchType.LAZY trên ánh xạ.
+
+Khi bạn tải một đối tượng Item, Hibernate không tải ngay lập tức collection lười của nó chứa hình ảnh. Bộ sưu tập one-to-many
+lười cũng chỉ được tải khi cần thiết, khi được truy cập và yêu cầu.
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyProxyCollections.java
+
+Item item = em.find(Item.class, ITEM_ID);
+// select * from ITEM where ID = ?
+Set<Bid> bids = item.getBids();             // Collection isn't initialized
+PersistenceUtil persistenceUtil = Persistence.getPersistenceUtil();
+assertFalse(persistenceUtil.isLoaded(item, "bids"));            // It’s a Set
+assertTrue(Set.class.isAssignableFrom(bids.getClass()));
+assertNotEquals(bids.getClass(), HashSet.class);
+assertEquals(bids.getClass(),
+org.hibernate.collection.internal.PersistentSet.class);
+
+Hoạt động find() tải đối tượng thực thể Item vào persistence context, như bạn có thể thấy trong hình 12.2.
+Đối tượng Item có một tham chiếu đến một proxy User chưa được khởi tạo: seller. Nó cũng có một tham chiếu đến một Set
+chưa được khởi tạo của các bids và một List chưa được khởi tạo của images.
+
+Hibernate thực hiện lazy loadding (và kiểm tra lỗi) của các collection bằng các phiên bản đặc biệt của riêng nó được gọi là
+các bọc sưu tập (collection wrappers). Mặc dù các lượt đấu giá trông giống như một Set, Hibernate đã thay thế triển khai
+bằng một org.hibernate.collection.internal.PersistentSet trong lúc bạn không nhìn thấy.
+
+Đó không phải là một HashSet, nhưng nó có cùng hành vi. Đó là lý do tại sao việc lập trình với giao diện trong mô hình miền
+của bạn và chỉ tin tưởng vào Set và không phải HashSet là rất quan trọng. List và map hoạt động theo cách tương tự.
+
+Các collection đặc biệt này có thể phát hiện khi bạn truy cập chúng và tải dữ liệu của họ vào thời điểm đó. Ngay khi bạn
+bắt đầu lặp qua các bids, collection và tất cả các bids được thực hiện cho item sẽ được tải:
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyProxyCollections.java
+
+Bid firstBid = bids.iterator().next();
+// select * from BID where ITEM_ID = ?
+// Alternative: Hibernate.initialize(bids);
+
+
+[Hibernate Feature]
+
+Vì tiện lợi, để bạn không cần phải viết nhiều truy vấn không đáng kể, Hibernate cung cấp một cài đặt độc quyền trên các
+ánh xạ collection.
+
+PATH: /model/src/main/java/org/jpwh/model/fetching/proxy/Item.java
+
+@Entity
+public class Item {
+    @OneToMany(mappedBy = "item")
+    @org.hibernate.annotations.LazyCollection(
+        org.hibernate.annotations.LazyCollectionOption.EXTRA
+    )
+    public Set<Bid> getBids() {
+        return bids;
+    }
+    // ...
+}
+
+Với LazyCollectionOption.EXTRA, collection hỗ trợ các hoạt động không gây ra việc khởi tạo. Ví dụ, bạn có thể yêu cầu
+kích thước của collection:
+Item item = em.find(Item.class, ITEM_ID);
+// select * from ITEM where ID = ?
+assertEquals(item.getBids().size(), 3);
+// select count(b) from BID b where b.ITEM_ID = ?
+
+Phép thao tác size() gây ra một truy vấn SQL SELECT COUNT() nhưng không tải các bids vào bộ nhớ. Trên tất cả các
+collection extra lazy, các truy vấn tương tự được thực hiện cho các phép thao tác isEmpty() và contains().
+Một Set extra lazy kiểm tra sự trùng lặp bằng một truy vấn đơn giản khi bạn gọi add().
+Một List extra lazy chỉ tải một phần tử nếu bạn gọi get(index).
+Đối với Map, các phép thao tác extra lazy bao gồm containsKey() và containsValue().
+
+Proxy và collection thông minh của Hibernate là một cách tiện ích để thực hiện lazy loading, với một cân bằng tốt giữa
+tính năng và chi phí.
+Một phương pháp thay thế mà chúng ta đã đề cập trước đó là "interception" (thường được gọi là "interceptor").
+
+[Hibernate Feature]
+12.1.3 Lazy loading with interception
+
+Vấn đề cơ bản với lazy loading là rằng nhà cung cấp JPA phải biết khi nào để tải seller của một item hoặc collection các bids.
+Thay vì sử dụng các proxy được tạo trong thời gian chạy và các collection thông minh, nhiều nhà cung cấp JPA khác hoàn toàn
+phụ thuộc vào việc interception(ngăn chặn) cuộc gọi phương thức (method call interception). Ví dụ, khi bạn gọi someItem.getSeller(),
+nhà cung cấp JPA sẽ interception(ngăn chặn) cuộc gọi này và tải đối tượng User biểu thị người bán.
+
+Phương pháp này đòi hỏi mã đặc biệt trong lớp Item của bạn để thực hiện cuộc interception(ngăn chặn): phương thức getSeller()
+hoặc trường seller phải được bọc (wrapped). Bởi vì bạn không muốn viết mã này bằng tay, thường bạn chạy một công cụ tăng cường
+bytecode (bytecode enhancer) (được đóng gói cùng với nhà cung cấp JPA của bạn) sau khi biên dịch các lớp mô hình miền của bạn.
+Công cụ này sẽ tiêm mã interception(ngăn chặn) cần thiết vào các lớp đã biên dịch của bạn, thay đổi các trường và phương thức ở mức bytecode.
+
+Hãy thảo luận về lazy loading dựa trên việc interception(ngăn chặn) thông qua một số ví dụ. Trước hết, bạn có thể muốn vô hiệu hóa việc
+tạo proxy của Hibernate:
+
+PATH: /model/src/main/java/org/jpwh/model/fetching/interception/User.java
+@Entity
+@org.hibernate.annotations.Proxy(lazy = false)
+public class User {
+ // ...
+}
+
+Bây giờ, Hibernate sẽ không còn tạo proxy cho thực thể User nữa. Nếu bạn gọi `entityManager.getReference(User.class, USER_ID)`,
+một truy vấn SELECT sẽ được thực thi, giống như khi sử dụng phương thức `find`.
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyInterception.java
+
+User user = em.getReference(User.class, USER_ID); // Proxy đã bị vô hiệu hóa. `getReference()` sẽ trả về một thể hiện đã được khởi tạo.
+// select * from USERS where ID = ?
+assertTrue(Hibernate.isInitialized(user));
+
+Đối với các mối quan hệ thực thể đích đến User, chẳng hạn như người bán của một Item, gợi ý FetchType.LAZY không có tác dụng.
+
+PATH: /model/src/main/java/org/jpwh/model/fetching/interception/Item.java
+
+@Entity
+public class Item {
+    @ManyToOne(fetch = FetchType.LAZY)      // Has no effect, no User proxy
+
+    @org.hibernate.annotations.LazyToOne(               // Requires bytecode enhancement
+        org.hibernate.annotations.LazyToOneOption.NO_PROXY
+    )
+    protected User seller;
+    // ...
+}
+
+Thay vì vậy, cài đặt LazyToOneOption.NO_PROXY đặc biệt cho biết với Hibernate rằng công cụ tăng cường bytecode phải thêm
+mã interception(ngăn chặn) cho thuộc tính seller. Nếu thiếu tùy chọn này, hoặc nếu bạn không chạy công cụ tăng cường bytecode,
+mối quan hệ này sẽ được tải ngay lập tức và trường seller sẽ được điền ngay khi Item được tải, do proxy cho thực thể User
+đã bị vô hiệu hóa.
+
+Nếu bạn chạy công cụ tăng cường bytecode, Hibernate sẽ interception(ngăn chặn) việc truy cập vào trường seller và kích hoạt việc tải khi
+bạn tiếp xúc với trường này.
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyInterception.java
+
+Item item = em.find(Item.class, ITEM_ID);
+// select * from ITEM where ID = ?
+
+assertEquals(item.getSeller().getId(), USER_ID);
+// select * from USERS where ID = ?
+
+Thậm chí cả `item.getSeller()` cũng sẽ kích hoạt truy vấn SELECT.
+
+Điều này ít lười hơn so với sử dụng proxy. Hãy nhớ rằng bạn có thể gọi `User#getId()` trên một proxy mà không cần
+khởi tạo thực thể, như đã giải thích trong các phần trước. Với việc interception(ngăn chặn) (interception), mọi truy cập vào trường
+seller và việc gọi getSeller() đều sẽ kích hoạt quá trình khởi tạo.
+
+Đối với các mối quan hệ thực thể lười, proxy thường là lựa chọn tốt hơn so với việc interception(ngăn chặn). Trường hợp sử dụng interception(ngăn chặn)
+thường phổ biến hơn là đối với các thuộc tính của kiểu cơ bản, như String hoặc byte[], có thể chứa giá trị lớn.
+Chúng ta có thể bảo rằng LOB (xem "Binary and large value types" trong chương 5) nên được ưa chuộng cho các chuỗi lớn hoặc
+dữ liệu nhị phân, nhưng bạn có thể không muốn sử dụng kiểu java.sql.Blob hoặc java.sql.Clob trong mô hình miền của bạn.
+Với interception(ngăn chặn) và tăng cường bytecode, bạn có thể tải một trường đơn giản kiểu String hoặc byte[] theo yêu cầu.
+
+PATH: /model/src/main/java/org/jpwh/model/fetching/interception/Item.java
+@Entity
+public class Item {
+    @Basic(fetch = FetchType.LAZY)
+    protected String description;
+    // ...
+}
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/LazyInterception.java
+
+Item item = em.find(Item.class, ITEM_ID);
+// select NAME, AUCTIONEND, ... from ITEM where ID = ?
+
+Truy cập một trường lười (lazy property) sẽ tải tất cả các thuộc tính lười còn lại (như mô tả, người bán, vv.).
+assertTrue(item.getDescription().length() > 0);
+
+// select DESCRIPTION from ITEM where ID = ?
+// select * from USERS where ID = ?
+
+Khi Hibernate tải description của Item, nó cũng tải ngay lập tức seller và bất kỳ trường nào khác được interception(ngăn chặn).
+Hiện tại, Hibernate không hỗ trợ các nhóm fetch (fetch groups): bạn chỉ có tùy chọn tải tất cả hoặc không tải gì cả.
+
+Mặt trái của việc sử dụng interception(ngăn chặn) là chi phí của việc chạy công cụ tăng cường bytecode mỗi khi bạn xây dựng lại các lớp
+mô hình miền của bạn và phải chờ quá trình tạo mã kết thúc. Bạn có thể quyết định bỏ qua việc tạo mã kết thúc
+trong quá trình phát triển nếu hành vi của ứng dụng của bạn không phụ thuộc vào trạng thái tải của mô tả của một mặt hàng.
+Sau đó, khi xây dựng gói thử nghiệm và gói sản xuất, bạn có thể thực hiện công cụ tăng cường.
+
+Công cụ tăng cường bytecode của Hibernate 5 mới
+Rất tiếc, chúng tôi không thể đảm bảo rằng các ví dụ về ngăn chặn mà chúng tôi hiển thị ở đây sẽ hoạt động với phiên bản Hibernate 5 mới nhất.
+Công cụ tăng cường bytecode của Hibernate 5 đã được viết lại và hiện hỗ trợ nhiều hơn chỉ việc ngăn chặn để tải lười:
+công cụ tăng cường bytecode có thể tiêm mã vào các lớp mô hình miền của bạn để tăng tốc quá trình kiểm tra sự thay đổi
+(dirty checking) và tự động quản lý các mối quan hệ thực thể hai chiều. Tuy nhiên, vào thời điểm viết bài này, chúng tôi
+không thể làm cho công cụ tăng cường hoàn toàn mới này hoạt động và việc phát triển vẫn đang diễn ra. Chúng tôi khuyên bạn
+nên tham khảo tài liệu Hibernate hiện tại để biết thêm thông tin về tính năng tăng cường và cách cấu hình nó trong dự án của bạn
+bằng cách sử dụng các plugin Maven hoặc Gradle.
+
+Chúng tôi để quyết định có sử dụng ngăn chặn (interception) cho tải lười hay không tùy bạn lựa chọn - trong kinh nghiệm của
+chúng tôi, các trường hợp sử dụng tốt của nó hiếm khi xuất hiện. Lưu ý rằng chúng tôi chưa thảo luận về việc sử dụng
+bọc sưu tập (collection wrappers) khi thảo luận về ngăn chặn (interception): mặc dù bạn có thể kích hoạt ngăn chặn cho các
+trường thuộc tính sưu tập, Hibernate vẫn sử dụng các bọc sưu tập thông minh của nó. Lý do là các bọc sưu tập này, khác với
+các proxy thực thể, cần thiết cho các mục đích khác ngoài tải lười. Ví dụ, Hibernate sử dụng chúng để theo dõi việc thêm
+và loại bỏ các phần tử trong collection khi kiểm tra sự thay đổi (dirty checking). Bạn không thể vô hiệu hóa các bọc sưu tập
+trong ánh xạ của bạn; chúng luôn hoạt động. (Tất nhiên, bạn không bao giờ phải ánh xạ một collection bền vững; chúng là một tính năng,
+không phải là yêu cầu. Xem thảo luận trước đây của chúng tôi ở phần 7.1.) Mảng bền vững, bên cạnh đó, chỉ có thể được
+tải lười bằng cách sử dụng ngăn chặn trường - chúng không thể được bọc như các collection.
+
+Bạn đã thấy tất cả các tùy chọn có sẵn cho việc tải lười trong Hibernate. Tiếp theo, chúng tôi sẽ xem xét phương pháp ngược
+lại với việc tải dữ liệu theo yêu cầu: việc tải dữ liệu một cách nhanh chóng (eager fetching).
+
+12.1.4 Eager loading of associations and collections
+
+Chúng tôi đã đề xuất một kế hoạch truy xuất mặc định lazy, với FetchType.LAZY cho tất cả các ánh xạ liên kết và 
+các ánh xạ collection của bạn. Đôi khi, mặc dù không thường xuyên, bạn muốn điều ngược lại: chỉ định rằng một liên kết
+thực thể cụ thể hoặc collection cần luôn được nạp. Bạn muốn đảm bảo rằng dữ liệu này sẽ luôn có sẵn trong bộ nhớ mà không
+cần truy cập cơ sở dữ liệu bổ sung.
+
+Quan trọng hơn, bạn muốn đảm bảo rằng, ví dụ, bạn có thể truy cập seller của một item sau khi thể hiện Item đã ở trong
+trạng thái detached. Khi persistence context đã đóng, truy xuất lazy không còn khả dụng nữa. Nếu người bán là một
+proxy chưa khởi tạo, bạn sẽ nhận được một ngoại lệ LazyInitializationException khi bạn truy cập nó trong trạng thái tách rời.
+Để dữ liệu có sẵn trong trạng thái tách rời, bạn cần hoặc nạp nó thủ công trong khi persistence context vẫn mở hoặc,
+nếu bạn luôn muốn nạp nó, bạn nên thay đổi kế hoạch truy xuất của mình để trở nên nhanh chóng thay vì lười biếng.
+
+Hãy giả định rằng bạn luôn cần nạp seller và các bids của một Item:
+
+PATH: /model/src/main/java/org/jpwh/model/fetching/eagerjoin/Item.java
+
+@Entity
+public class Item {
+    @ManyToOne(fetch = FetchType.EAGER)
+    protected User seller;
+    @OneToMany(mappedBy = "item", fetch = FetchType.EAGER)
+    protected Set<Bid> bids = new HashSet<>();
+    // ...
+}
+
+Khác với FetchType.LAZY, mà là một gợi ý mà nhà cung cấp JPA có thể bỏ qua, FetchType.EAGER là một yêu cầu cứng.
+Nhà cung cấp phải đảm bảo rằng dữ liệu được nạp và có sẵn trong trạng thái tách rời; nó không thể bỏ qua thiết lập này.
+
+Hãy xem xét ánh xạ collection: liệu đó có phải là một ý tưởng tốt khi bạn nói, "Mỗi khi một item được nạp vào bộ nhớ,
+hãy nạp ngay bids của item nữa không"? Ngay cả khi bạn chỉ muốn hiển thị tên của item hoặc tìm hiểu khi phiên đấu giá
+kết thúc, tất cả các lượt đặt giá sẽ được nạp vào bộ nhớ. Luôn luôn nạp các collection một cách nhanh chóng, với FetchType.EAGER
+là kế hoạch truy xuất mặc định trong ánh xạ, thường không phải là một chiến lược tốt. Bạn cũng sẽ thấy sự xuất hiện của
+vấn đề sản phẩm Descartes nếu bạn nạp nhanh chóng nhiều collection, điều này chúng tôi sẽ thảo luận sau trong chương này.
+Tốt nhất nếu bạn để collection là FetchType.LAZY mặc định.
+
+Nếu bạn hiện tại sử dụng find() để tìm một Item (hoặc bắt buộc khởi tạo một proxy Item), cả người bán
+và tất cả các lượt đặt giá sẽ được nạp là các thể hiện persistent trong persistence context của bạn:
+
+PATH: /examples/src/test/java/org/jpwh/test/fetching/EagerJoin.java
+
+Item item = em.find(Item.class, ITEM_ID);
+// select i.*, u.*, b.*
+// from ITEM i
+// left outer join USERS u on u.ID = i.SELLER_ID
+// left outer join BID b on b.ITEM_ID = i.ID
+// where i.ID = ?
+
+em.detach(item);
+assertEquals(item.getBids().size(), 3);             //Trong trạng thái detach, bids có sẵn...
+assertNotNull(item.getBids().iterator().next().getAmount());
+assertEquals(item.getSeller().getUsername(), "johndoe")             //Và cả Seller
+
+
+Đối với phương thức find(), Hibernate thực thi một truy vấn SQL duy nhất và kết hợp ba bảng để truy xuất dữ liệu.
+Bạn có thể thấy nội dung của persistence context trong hình 12.3. Chú ý cách biểu diễn các ranh giới của đồ thị đã nạp: 
+collection của `images` chưa được nạp, và mỗi đối tượng Bid đều có tham chiếu đến một proxy User chưa khởi tạo,
+người đặt giá. Nếu bạn bây giờ tách ra (detach) đối tượng Item, bạn có thể truy cập seller và các bids đã nạp mà không
+gây ra một LazyInitializationException. Nếu bạn cố gắng truy cập các hình ảnh hoặc một trong những proxy của người bidder,
+bạn sẽ nhận được một ngoại lệ!
+
+Trong các ví dụ tiếp theo, chúng tôi giả định rằng mô hình miền của bạn có một kế hoạch truy xuất lười biếng mặc định.
+Hibernate chỉ sẽ nạp dữ liệu bạn yêu cầu một cách rõ ràng và các mối quan hệ và collection bạn truy cập.
+
+Tiếp theo, chúng tôi sẽ thảo luận về cách dữ liệu nên được nạp khi bạn tìm thấy một thể hiện thực thể bằng định danh và
+khi bạn điều hướng qua mạng lưới, sử dụng các con trỏ của các mối quan hệ và collection đã ánh xạ. Chúng tôi quan tâm đến
+việc SQL nào được thực thi và tìm kiếm chiến lược truy xuất lý tưởng.
+
+
 
