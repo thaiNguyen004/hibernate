@@ -1,0 +1,170 @@
+Khi một trạng thái của một thực thể thay đổi - ví dụ, khi nó là transient và trở thành persistent - các trạng thái của
+các thực thể liên quan cũng có thể được bao gồm trong chuyển đổi trạng thái này. Sự lan truyền này của các chuyển đổi
+trạng thái không được kích hoạt mặc định; mỗi thực thể đều có một vòng đời độc lập. Nhưng đối với một số mối quan hệ giữa
+các thực thể, bạn có thể muốn thực hiện các phụ thuộc vòng đời chi tiết.
+
+Ví dụ, trong phần 7.3, bạn đã tạo một mối quan hệ giữa các lớp thực thể Item và Bid. Trong trường hợp này, bạn không chỉ
+làm cho các bids của một item trở nên persistent tự động khi chúng được thêm vào item, mà chúng cũng bị xóa tự động khi item
+sở hữu bị xóa. Bạn đã hiệu quả biến Bid thành một lớp thực thể phụ thuộc vào một thực thể khác, Item.
+
+Các cài đặt lan truyền bạn đã bật trong ánh xạ quan hệ này bao gồm CascadeType.PERSIST và CascadeType.REMOVE. Chúng ta cũng
+đã nói về công tắc đặc biệt orphanRemoval và cách xóa lan truyền tại cấp độ cơ sở dữ liệu (với tùy chọn foreign key ON DELETE)
+ảnh hưởng đến ứng dụng của bạn.
+
+Bạn nên xem xét lại ánh xạ quan hệ này và các cài đặt lan truyền của nó; chúng tôi sẽ không lặp lại ở đây.
+Trong phần này, chúng tôi xem xét một số tùy chọn lan truyền khác ít được sử dụng.
+
+
+13.1.1 Available cascading options
+
+Bảng 13.1 tổng hợp tất cả các tùy chọn lan truyền có sẵn trong Hibernate. Lưu ý cách mỗi tùy chọn này liên quan đến
+một hoạt động của EntityManager hoặc Session.
+
+Cascading options for entity association mappings
+
+CascadeType.PERSIST:        When an entity instance is stored with EntityManager
+                     #persist(), at flush time any associated entity instance(s) are
+                     also made persistent.
+
+CascadeType.REMOVE          When an entity instance is deleted with EntityManager
+                    #remove(), at flush time any associated entity instance(s) are
+                    also removed.
+
+CascadeType.DETACH          When an entity instance is evicted-bị đuổi from the persistence context
+                    with EntityManager#detach(), any associated entity
+                    instance(s) are also detached.
+
+CascadeType.MERGE           When a transient or detached entity instance is merged into a persistence
+                    context with EntityManager#merge(), any associated transient or detached
+                    entity instance(s) are also merge
+
+CascadeType.REFRESH         When a persistent entity instance is refreshed with
+                    EntityManager#refresh(), any associated persistent entity
+                    instance(s) are also refreshed.
+
+CascadeType.REPLICATE       When a detached entity instance is copied into a database with
+                    Session#replicate(), any associated detached entity
+                    instance(s) are also copied
+CascadeType.ALL             Shorthand to enable all cascading options for the mapped association.
+
+
+Nếu bạn tò mò, bạn sẽ thấy nhiều tùy chọn lan truyền khác được định nghĩa trong enum org.hibernate.annotations.CascadeType.
+Tuy nhiên, ngày nay, tùy chọn thú vị duy nhất là REPLICATE và hoạt động Session#replicate().
+Tất cả các hoạt động Session khác đều có một phiên bản hoặc tùy chọn thay thế chuẩn trên API EntityManager, vì vậy bạn
+có thể bỏ qua các cài đặt này.
+Chúng ta đã bàn về các tùy chọn PERSIST và REMOVE. Hãy xem xét detachment, merging, refreshing và replication.
+
+13.1.2 Transitive detachment and merging
+
+Hãy nói chúng ta muốn lấy một mục (Item) và các lượt đấu giá (bids) tương ứng từ cơ sở dữ liệu và làm việc với dữ liệu này
+ở trạng thái tách rời (detached). Lớp Bid ánh xạ mối quan hệ này bằng một @ManyToOne. Đây là mối quan hệ hai chiều với ánh
+xạ bộ sưu tập @OneToMany trong Item:
+
+PATH: /model/src/main/java/org/jpwh/model/filtering/cascade/Item.java
+
+@Entity
+public class Item {
+    @OneToMany(
+        mappedBy = "item",
+        cascade = {CascadeType.DETACH, CascadeType.MERGE}
+    )
+    protected Set<Bid> bids = new HashSet<Bid>();
+    // ...
+}
+Tách rời dọc và hợp nhất qua các loại lan truyền DETACH và MERGE đã được kích hoạt. Bây giờ bạn tải mục (Item) và
+khởi tạo bộ sưu tập bids của nó:
+
+PATH: /examples/src/test/java/org/jpwh/test/filtering/Cascade.java
+
+Item item = em.find(Item.class, ITEM_ID);
+assertEquals(item.getBids().size(), 2);     // Initializes bids
+em.detach(item);
+
+Hoạt động EntityManager#detach() là một hoạt động lan truyền: nó loại bỏ thực thể Item khỏi persistence context cũng như tất
+cả các lượt đấu giá (bids) trong bộ sưu tập. Nếu các lượt đấu giá không được tải, chúng không bị tách rời.
+(Tất nhiên, bạn có thể đã đóng persistence context, tách rời tất cả các thực thể đã được tải.)
+
+Ở trạng thái tách rời, bạn thay đổi Item#name, tạo một lượt đấu giá (Bid) mới và liên kết nó với Item:
+
+PATH: /examples/src/test/java/org/jpwh/test/filtering/Cascade.java
+
+item.setName("New Name");
+Bid bid = new Bid(new BigDecimal("101.00"), item);
+item.getBids().add(bid);
+
+Bởi vì bạn đang làm việc với trạng thái thực thể và bộ sưu tập tách rời, bạn cần chú ý đặc biệt đến identity và equality.
+Như đã giải thích trong phần 10.3, bạn nên ghi đè lên các phương thức equals() và hashCode() trên lớp thực thể Bid:
+
+PATH: /model/src/main/java/org/jpwh/model/filtering/cascade/Bid.java
+
+@Entity
+public class Bid {
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (other == null) return false;
+        if (!(other instanceof Bid)) return false;
+        Bid that = (Bid) other;
+        if (!this.getAmount().equals(that.getAmount()))
+            return false;
+        if (!this.getItem().getId().equals(that.getItem().getId()))
+            return false;
+        return true;
+    }
+    @Override
+    public int hashCode() {
+        int result = getAmount().hashCode();
+        result = 31 * result + getItem().getId().hashCode();
+        return result;
+    }
+    // ...
+}
+
+Hai thực thể Bid là bằng nhau khi chúng có cùng số lượng và được liên kết với cùng một Item.
+
+Sau khi bạn hoàn thành các thay đổi ở trạng thái tách rời, bước tiếp theo là lưu trữ các thay đổi. 
+Sử dụng một persistence context mới, hợp nhất (merge) Item detached và để Hibernate phát hiện các thay đổi.
+
+PATH: /examples/src/test/java/org/jpwh/test/filtering/Cascade.java
+
+Item mergedItem = em.merge(item);                   // [1]  Merges item
+// select i.*, b.*
+// from ITEM i
+// left outer join BID b on i.ID = b.ITEM_ID
+// where i.ID = ?
+for (Bid b : mergedItem.getBids()) {                // [2] Bid has identifier value
+    assertNotNull(b.getId());
+}
+em.flush();
+// update ITEM set NAME = ? where ID = ?            // [3] Detect name change
+// insert into BID values (?, ?, ?, ...)
+
+1 Hibernate hợp nhất (merge) Item detached. Trước tiên, nó kiểm tra xem persistence context đã chứa một Item với giá trị
+định danh đã cho hay chưa. Trong trường hợp này, không có Item nào tồn tại, vì vậy Item được tải từ cơ sở dữ liệu.
+Hibernate đủ thông minh để biết rằng nó cũng cần lấy thông tin của các lượt đấu giá (bids) trong quá trình hợp nhất,
+vì vậy nó lấy chúng ngay lập tức trong cùng một truy vấn SQL. Sau đó, Hibernate sao chép các giá trị của Item detached
+lên phiên bản đã được tải, và sau đó trả về phiên bản đã tải ở trạng thái persistent cho bạn. Cùng quy trình này được
+áp dụng cho từng Bid, và Hibernate sẽ phát hiện rằng một trong các lượt đấu giá là mới.
+
+2 Hibernate đã làm cho lượt đấu giá (Bid) mới thành persistent trong quá trình hợp nhất. Giờ đây nó đã có giá trị định danh được gán.
+
+3 Khi bạn flush persistence context, Hibernate phát hiện rằng tên của Item đã thay đổi trong quá trình hợp nhất.
+Lượt đấu giá (Bid) mới cũng sẽ được lưu trữ.
+
+Merge lan truyền với các bộ sưu tập là một tính năng mạnh mẽ; hãy xem xét mức độ mã bạn phải viết mà không có Hibernate
+để thực hiện chức năng này.
+
+
+Eagerly fetching association khi merging
+
+Trong ví dụ trước đó, chúng tôi nói rằng Hibernate đủ thông minh để tải bộ sưu tập Item#bids khi bạn hợp nhất (merge) một Item tách rời.
+Hibernate luôn luôn tải các mối quan hệ thực thể tức thì với một JOIN khi hợp nhất, nếu CascadeType.MERGE đã được kích hoạt cho
+mối quan hệ đó. Điều này hợp lý trong trường hợp trước đó, khi bộ sưu tập Item#bids đã được khởi tạo, tách rời và sửa đổi.
+Hibernate tải bộ sưu tập khi hợp nhất với một JOIN là cần thiết và tối ưu. Nhưng nếu bạn hợp nhất một thực thể Item với một
+bộ sưu tập bids chưa được khởi tạo hoặc một proxy seller chưa được khởi tạo, Hibernate sẽ tải bộ sưu tập và proxy này với một
+JOIN khi hợp nhất. Hợp nhất (merge) sẽ khởi tạo các mối quan hệ này trên Item quản lý nó trả về.
+
+CascadeType.MERGE khiến Hibernate bỏ qua và hiệu quả ghi đè bất kỳ ánh xạ FetchType.LAZY nào (theo quy định của JPA).
+Hành vi này có thể không phù hợp trong một số trường hợp, và vào thời điểm viết bài này, nó không thể được cấu hình.
+
+13.1.3 Cascading refresh
