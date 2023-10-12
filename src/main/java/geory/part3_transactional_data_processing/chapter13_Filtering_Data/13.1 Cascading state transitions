@@ -167,4 +167,154 @@ JOIN khi hợp nhất. Hợp nhất (merge) sẽ khởi tạo các mối quan h�
 CascadeType.MERGE khiến Hibernate bỏ qua và hiệu quả ghi đè bất kỳ ánh xạ FetchType.LAZY nào (theo quy định của JPA).
 Hành vi này có thể không phù hợp trong một số trường hợp, và vào thời điểm viết bài này, nó không thể được cấu hình.
 
+
 13.1.3 Cascading refresh
+
+Lớp thực thể User có một mối quan hệ one-to-many với BillingDetails: mỗi người dùng của ứng dụng có thể có nhiều thẻ tín dụng,
+tài khoản ngân hàng và các thông tin liên quan khác. Nếu bạn chưa quen thuộc với lớp BillingDetails, hãy xem lại các ánh xạ
+trong chương 6.
+Bạn có thể ánh xạ mối quan hệ giữa User và BillingDetails như một mối quan hệ thực thể one-to-many unidirectional:
+
+PATH: /model/src/main/java/org/jpwh/model/filtering/cascade/User.java
+
+@Entity
+@Table(name = "USERS")
+public class User {
+    @OneToMany(cascade = {CascadeType.PERSIST, CascadeType.REFRESH})
+    @JoinColumn(name = "USER_ID", nullable = false)
+    protected Set<BillingDetails> billingDetails = new HashSet<>();
+    // ...
+}
+
+Các tùy chọn cascading được bật cho mối quan hệ này là PERSIST và REFRESH. Tùy chọn PERSIST giúp đơn giản hóa việc
+lưu trữ thông tin thanh toán; chúng trở thành persistent khi bạn thêm một thể hiện của BillingDetails vào bộ sưu tập
+của một User đã tồn tại.
+
+Trong phần 18.3, chúng tôi sẽ thảo luận về một kiến trúc trong đó persistence context có thể mở trong thời gian dài,
+dẫn đến các thể hiện thực thể được quản lý trong bối cảnh trở nên cũ. Do đó, trong một số cuộc trò chuyện kéo dài, bạn có
+thể muốn tải lại chúng từ cơ sở dữ liệu. Tùy chọn cascading REFRESH đảm bảo rằng khi bạn tải lại trạng thái của một
+thể hiện User, Hibernate cũng sẽ làm mới trạng thái của mỗi thể hiện BillingDetails liên kết với User:
+
+PATH: /examples/src/test/java/org/jpwh/test/filtering/Cascade.java
+
+User user = em.find(User.class, USER_ID);           [1] Loads User
+assertEquals(user.getBillingDetails().size(), 2);
+for (BillingDetails bd : user.getBillingDetails()) {        [2] Initializes collection
+    assertEquals(bd.getOwner(), "John Doe");
+}
+// Someone modifies the billing information in the database!
+em.refresh(user);                                               [3] Refreshes BillingDetails
+// select * from CREDITCARD join BILLINGDETAILS where ID = ?
+// select * from BANKACCOUNT join BILLINGDETAILS where ID = ?
+// select * from USERS
+// left outer join BILLINGDETAILS
+// left outer join CREDITCARD
+// left outer JOIN BANKACCOUNT
+// where ID = ?
+for (BillingDetails bd : user.getBillingDetails()) {
+    assertEquals(bd.getOwner(), "Doe John");
+}
+
+1 Một thể hiện của User được tải từ cơ sở dữ liệu.
+2 Sự tận dụng lazy của bộ sưu tập billingDetails được khởi tạo khi bạn lặp qua các phần tử hoặc khi bạn gọi hàm size().
+3 Khi bạn refresh() thể hiện User được quản lý, Hibernate cascade thao tác đến BillingDetails được quản lý và làm mới
+từng thể hiện với một SQL SELECT. Nếu không có một trong những thể hiện này còn lại trong cơ sở dữ liệu, Hibernate sẽ ném
+ra một EntityNotFoundException. Sau đó, Hibernate refreshes thể hiện User và eagerly loads toàn bộ bộ sưu tập billingDetails
+để tìm các BillingDetails mới. Đây là một trường hợp mà Hibernate không thông minh như nó có thể.
+
+Trước tiên, nó thực hiện một SQL SELECT cho mỗi thể hiện BillingDetails trong ngữ cảnh lưu trữ và được tham chiếu bởi
+bộ sưu tập. Sau đó, nó tải lại toàn bộ bộ sưu tập để tìm các BillingDetails đã thêm mới. Hibernate có thể rõ ràng thực hiện
+điều này với một lần SELECT. Tùy chọn cascading cuối cùng dành cho thao tác replicate() chỉ tồn tại trong Hibernate.
+
+13.1.4 Cascading replication
+
+Bạn lần đầu tiên thấy thao tác replicate trong phần 10.2.7. Thao tác không chuẩn này có sẵn trên API Session của Hibernate.
+Trường hợp sử dụng chính là sao chép dữ liệu từ một cơ sở dữ liệu vào cơ sở dữ liệu khác. Hãy xem xét ánh xạ mối quan hệ
+thực thể nhiều-đến-một giữa Item và User:
+
+PATH: /model/src/main/java/org/jpwh/model/filtering/cascade/Item.java
+
+@Entity
+public class Item {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "SELLER_ID", nullable = false)
+    @org.hibernate.annotations.Cascade(
+        org.hibernate.annotations.CascadeType.REPLICATE
+    )
+    protected User seller;
+    // ...
+}
+
+Ở đây, bạn bật tùy chọn cascading REPLICATE bằng một chú thích Hibernate. Tiếp theo, bạn tải một đối tượng Item và
+người bán của nó từ cơ sở dữ liệu nguồn:
+
+PATH: /examples/src/test/java/org/jpwh/test/filtering/Cascade.java
+
+tx.begin();
+EntityManager em = JPA.createEntityManager();
+Item item = em.find(Item.class, ITEM_ID);
+assertNotNull(item.getSeller().getUsername());      Initializes lazy Item#seller
+tx.commit();
+em.close();
+
+Sau khi bạn đóng persistence context, các thể hiện thực thể Item và User ở trạng thái detached (tách rời khỏi bối cảnh).
+Tiếp theo, bạn kết nối với cơ sở dữ liệu và write dữ liệu detached:
+
+PATH: /examples/src/test/java/org/jpwh/test/filtering/Cascade.java
+
+tx.begin();
+EntityManager otherDatabase = // ... get EntityManager
+otherDatabase.unwrap(Session.class)
+        .replicate(item, ReplicationMode.OVERWRITE);
+// select ID from ITEM where ID = ?
+// select ID from USERS where ID = ?
+tx.commit();
+// update ITEM set NAME = ?, SELLER_ID = ?, ... where ID = ?
+// update USERS set USERNAME = ?, ... where ID = ?
+otherDatabase.close();
+
+Khi bạn gọi replicate() trên đối tượng Item detached, Hibernate thực hiện các câu lệnh SQL SELECT để xác định liệu Item
+và seller của nó đã có trong cơ sở dữ liệu hay chưa. Sau đó, khi commit, khi bối cảnh lưu trữ được đẩy, Hibernate sẽ ghi
+các giá trị của Item và seller vào cơ sở dữ liệu đích. Trong ví dụ trước, những dòng này đã tồn tại, vì vậy bạn sẽ thấy
+một lệnh UPDATE cho mỗi dòng, ghi đè lên các giá trị trong cơ sở dữ liệu. Nếu cơ sở dữ liệu đích không chứa Item hoặc User,
+thì sẽ thực hiện hai lệnh INSERT.
+
+Tùy chọn cascading cuối cùng mà chúng tôi sẽ thảo luận là một cài đặt toàn cục, cho phép tính năng gắn kết xuyên suốt cho
+tất cả các mối quan hệ thực thể.
+
+13.1.5 Enabling global transitive persistence
+
+Một object persistence layer được cho là thực hiện tính persistence thông qua khả năng truy cập-Reachable nếu bất kỳ instance nào
+trở thành persistent mỗi khi ứng dụng tạo một tham chiếu đến instance đó từ một instance khác đã trở thành bền vững.
+Trong hình thức tinh khiết nhất của persistence thông qua khả năng truy cập-reachable, cơ sở dữ liệu có một đối tượng cấp cao
+hoặc đối tượng gốc từ đó tất cả các đối tượng bền vững có thể truy cập. Lý tưởng, một thể hiện nên trở thành transient
+(tạm thời) và bị xóa khỏi cơ sở dữ liệu nếu nó không thể truy cập thông qua các tham chiếu từ đối tượng gốc bền vững.
+
+Tuy nhiên, Hibernate hoặc bất kỳ giải pháp ORM nào khác cũng không thực hiện điều này. Trên thực tế, không có đối tượng
+gốc bền vững tương đương nào trong bất kỳ cơ sở dữ liệu SQL nào, và không có trình thu gom rác bền vững nào có thể phát hiện
+các thể hiện không được tham chiếu. Các cơ sở dữ liệu hướng đối tượng (mạng) có thể thực hiện một thuật toán thu gom rác,
+tương tự như thuật toán được thực hiện cho các đối tượng trong bộ nhớ bởi JVM; nhưng tùy chọn này không có sẵn trong thế giới ORM,
+và quét tất cả các bảng để tìm các hàng không được tham chiếu không thể thực hiện một cách chấp nhận được.
+
+Tuy nhiên, vẫn có giá trị trong khái niệm của persistence thông qua khả năng truy cập. Nó giúp bạn biến các thể hiện transient
+thành bền vững và truyền tải trạng thái của chúng vào cơ sở dữ liệu mà không cần nhiều cuộc gọi đến trình quản lý lưu trữ.
+
+Bạn có thể kích hoạt tính chất cascaded persistence cho tất cả các mối quan hệ thực thể trong metadata ánh xạ orm.xml của bạn,
+như là một thiết lập mặc định của đơn vị lưu trữ (persistence unit).
+
+PATH: /model/src/main/resources/filtering/DefaultCascadePersist.xml
+
+<persistence-unit-metadata>
+    <persistence-unit-defaults>
+        <cascade-persist/>
+    </persistence-unit-defaults>
+</persistence-unit-metadata>
+
+Hiện nay, Hibernate xem xét tất cả các mối quan hệ thực thể trong mô hình miền được ánh xạ bởi persistence unit này như là
+CascadeType.PERSIST. Mỗi khi bạn tạo một tham chiếu từ một entity instance persistent đến một entity instance transient,
+Hibernate tự động biến thể hiện transient đó thành persistent.
+
+Các tùy chọn cascading thực tế là các phản ứng được định nghĩa trước đối với các sự kiện vòng đời trong persistence engine.
+Nếu bạn cần thực hiện một procedure tùy chỉnh khi dữ liệu được lưu trữ hoặc tải, bạn có thể triển khai các trình lắng nghe
+sự kiện và các bộ chặn của riêng bạn.
+
