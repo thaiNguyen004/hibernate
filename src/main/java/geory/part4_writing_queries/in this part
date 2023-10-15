@@ -1,0 +1,18 @@
+Trong phần 4, chúng tôi giới thiệu các tính năng truy vấn dữ liệu và trình bày chi tiết về các ngôn ngữ truy vấn và API.
+Không phải tất cả các chương trong phần này được viết theo kiểu hướng dẫn; chúng tôi mong rằng bạn sẽ xem xét phần này
+của cuốn sách thường xuyên khi xây dựng ứng dụng và tìm kiếm giải pháp cho một vấn đề truy vấn cụ thể.
+
+Bắt đầu từ chương 14, chúng tôi sẽ nói về việc tạo và thực thi các truy vấn bằng cách sử dụng các basic query API,
+preparing và thực thi queries, và tối ưu hóa việc thực thi truy vấn.
+
+Tiếp tục ở chương 15, chúng tôi sẽ đề cập đến các ngôn ngữ truy vấn, viết truy vấn JPQL và truy vấn theo tiêu chí,
+truy xuất dữ liệu một cách hiệu quả thông qua các liên kết (joins), và truy vấn báo cáo và truy vấn con (subselects).
+
+Chương 16 sâu hơn vào các tùy chọn truy vấn nâng cao: biến đổi kết quả truy vấn, lọc bộ sưu tập (collections), và truy vấn
+theo tiêu chí (query-by-criteria) bằng API Hibernate.
+
+Cuối cùng, chương 17 mô tả các kỹ thuật tùy chỉnh như chuyển sang JDBC, ánh xạ kết quả truy vấn SQL, tùy chỉnh các hoạt
+động CRUD, và gọi các stored procedures.
+
+Sau khi đọc phần này, bạn sẽ có khả năng lấy bất kỳ dữ liệu nào bạn muốn từ cơ sở dữ liệu bằng cách sử dụng các kỹ thuật
+truy vấn khác nhau và tùy chỉnh quyền truy cập theo nhu cầu.

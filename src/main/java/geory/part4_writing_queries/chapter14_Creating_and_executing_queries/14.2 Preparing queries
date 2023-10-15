@@ -1,0 +1,199 @@
+Một truy vấn có một số khía cạnh: nó xác định dữ liệu nào sẽ được tải từ cơ sở dữ liệu và các ràng buộc áp dụng,
+như mã định danh của một mục (Item) hoặc tên của một người dùng (User). Khi bạn viết một truy vấn, bạn không nên mã hóa
+các đối số này vào chuỗi truy vấn bằng cách nối chuỗi. Thay vào đó, bạn nên sử dụng các định vị tham số và sau đó gán
+các giá trị đối số trước khi thực thi.
+
+Điều này cho phép bạn tái sử dụng truy vấn với các giá trị đối số khác nhau trong khi đảm bảo an toàn trước các cuộc
+tấn công SQL injection.
+
+Tùy thuộc vào giao diện người dùng của bạn, bạn thường cũng cần phân trang. Bạn giới hạn số dòng trả về từ cơ sở dữ liệu
+thông qua truy vấn của bạn. Ví dụ, bạn có thể muốn trả về chỉ các hàng kết quả từ 1 đến 20 vì bạn chỉ có thể hiển thị
+một lượng dữ liệu cố định trên mỗi màn hình, sau đó một chút sau đó bạn muốn các hàng từ 21 đến 40, và cứ thế.
+
+Hãy bắt đầu với việc gán tham số.
+
+14.2.1 Protecting against SQL injection attacks
+Bảo vệ chống lại cuộc tấn công SQL injection
+
+Nếu bạn không thực hiện việc gán tham số vào thời gian chạy, bạn sẽ bị buộc viết mã kém chất lượng:
+
+String searchString = getValueEnteredByUser();
+Query query = em.createQuery(
+    "select i from Item i where i.name = '" + searchString + "'"
+);
+
+Bạn không nên bao giờ viết mã như thế này, bởi vì một người dùng độc ác có thể tạo ra một chuỗi tìm kiếm để thực thi
+mã trên cơ sở dữ liệu mà bạn không mong muốn hoặc dự định - tức là bằng cách nhập giá trị của searchString vào hộp tìm kiếm
+dưới dạng foo' and callSomeStoredProcedure() và 'bar' = 'bar.
+
+Như bạn có thể thấy, chuỗi searchString ban đầu không còn đơn giản là tìm kiếm một chuỗi mà còn thực thi một thủ tục được
+lưu trữ trong cơ sở dữ liệu! Các ký tự nháy không được thoát; vì vậy cuộc gọi đến thủ tục được lưu trữ là một biểu thức
+hợp lệ khác trong truy vấn. Nếu bạn viết một truy vấn như vậy, bạn mở ra một lỗ hổng bảo mật lớn trong ứng dụng của bạn
+bằng cách cho phép thực thi mã tùy ý trên cơ sở dữ liệu của bạn. Đây là một cuộc tấn công SQL injection. Không bao giờ
+truyền giá trị chưa kiểm tra từ đầu vào của người dùng vào cơ sở dữ liệu! May mắn thay, có một cơ chế đơn giản để ngăn lỗi này.
+
+API JDBC bao gồm chức năng gắn an toàn giá trị vào tham số SQL. Nó biết chính xác những ký tự trong giá trị tham số cần phải
+thoát để loại bỏ lỗ hổng trước đây. Ví dụ, trình điều khiển cơ sở dữ liệu thoát các ký tự dấu nháy đơn trong chuỗi searchString
+được cung cấp và không còn xem xét chúng như các ký tự điều khiển mà là một phần của giá trị chuỗi tìm kiếm.
+Hơn nữa, khi bạn sử dụng tham số, cơ sở dữ liệu có thể lưu trữ trước hiệu quả các câu lệnh chuẩn bị trước,
+cải thiện hiệu suất đáng kể.
+
+Có hai cách tiếp cận cho việc gán tham số: tham số có tên và tham số vị trí. JPA hỗ trợ cả hai tùy chọn, nhưng bạn không
+thể sử dụng cả hai cùng một lúc cho một truy vấn cụ thể.
+
+
+
+14.2.2 Binding named parameters
+Ràng buộc các tham số được đặt tên
+
+Với tham số có tên, bạn có thể viết lại truy vấn trong phần trước như sau:
+
+String searchString = // ...
+Query query = em.createQuery(
+    "select i from Item i where i.name = :itemName"
+).setParameter("itemName", searchString);
+
+Dấu hai chấm (:) tiếp theo là tên tham số có tên, ở đây là itemName. Trong bước thứ hai, bạn gán một giá trị cho tham số itemName.
+Mã này sạch sẽ hơn, an toàn hơn và hoạt động tốt hơn, vì bạn có thể tái sử dụng một câu lệnh SQL đã được biên dịch nếu
+chỉ giá trị tham số thay đổi.
+
+Bạn có thể lấy một Set của Parameters từ một Query, hoặc để có thêm thông tin về mỗi tham số (như tên hoặc kiểu Java bắt buộc)
+hoặc để kiểm tra rằng bạn đã gán tất cả các tham số đúng cách trước khi thực thi:
+
+for (Parameter<?> parameter : query.getParameters()) {
+    assertTrue(query.isBound(parameter));
+}
+
+Phương thức setParameter() là một thao tác chung có thể gán tất cả các loại đối số.
+Chỉ cần một chút sự giúp đỡ cho temporal types:
+
+Date tomorrowDate = // ...
+Query query = em.createQuery(
+    "select i from Item i where i.auctionEnd > :endDate"
+).setParameter("endDate", tomorrowDate, TemporalType.TIMESTAMP);
+
+
+Hibernate cần biết bạn muốn chỉ ngày, thời gian hoặc dấu thời gian đầy đủ được gán. Ví dụ, bạn cần chỉ rõ liệu bạn chỉ muốn ngày,
+thời gian hoặc dấu thời gian đầy đủ được gán.
+
+Để thuận tiện, một thể hiện thực thể cũng có thể được truyền vào phương thức setParameter().
+
+Item someItem = // ...
+Query query = em.createQuery(
+    "select b from Bid b where b.item = :item"
+).setParameter("item", someItem);
+
+
+
+Hibernate gán giá trị của mã định danh của Item cụ thể đã cho. Sau đó, bạn sẽ thấy rằng b.item là một cách rút gọn cho b.item.id.
+
+Đối với các truy vấn theo tiêu chí (criteria queries), có một cách dài và một cách ngắn để gán tham số:
+
+String searchString = // ...
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery criteria = cb.createQuery();
+Root<Item> i = criteria.from(Item.class);
+Query query = em.createQuery(
+    criteria.select(i).where(
+        cb.equal(
+            i.get("name"),
+            cb.parameter(String.class, "itemName")
+        )
+    )
+).setParameter("itemName", searchString);
+
+
+Ở đây, bạn đặt giữ chỗ tham số itemName kiểu String vào CriteriaQuery, sau đó gán giá trị bình thường với phương thức
+Query#setParameter().
+
+Một cách thay thế, với ParameterExpression, bạn không cần đặt tên cho giữ chỗ tham số, và việc gắn đối số là an toàn kiểu
+(bạn không thể gắn một số nguyên vào một ParameterExpression<String>):
+
+String searchString = // ...
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery criteria = cb.createQuery(Item.class);
+Root<Item> i = criteria.from(Item.class);
+ParameterExpression<String> itemNameParameter = cb.parameter(String.class);
+Query query = em.createQuery(
+    criteria.select(i).where(
+        cb.equal(
+            i.get("name"),
+            itemNameParameter
+        )
+    )
+).setParameter(itemNameParameter, searchString);
+
+
+Một tùy chọn ít được sử dụng và không an toàn bằng cách gán giá trị là tham số truy vấn theo vị trí (positional query parameters).
+
+
+14.2.3 Using positional parameters
+
+Nếu bạn muốn, bạn có thể sử dụng tham số theo vị trí thay vì tham số có tên: đéo
+
+
+14.2.4 Paging through large result sets - Phân trang qua các tập kết quả lớn
+
+Một kỹ thuật thường được sử dụng để xử lý các tập kết quả lớn là phân trang. Người dùng có thể xem kết quả của
+yêu cầu tìm kiếm của họ (ví dụ, cho các mục cụ thể) dưới dạng một trang. Trang này hiển thị một tập hạn chế (ví dụ, 10 mục)
+vào một lúc, và người dùng có thể chuyển đến các trang trước và sau bằng tay để xem phần còn lại của kết quả.
+
+Giao diện Query hỗ trợ phân trang của kết quả truy vấn. Trong truy vấn này, trang được yêu cầu bắt đầu ở giữa tập kết quả:
+
+Query query = em.createQuery("select i from Item i");
+query.setFirstResult(40).setMaxResults(10);
+
+Bắt đầu từ hàng thứ 40, bạn truy xuất 10 hàng tiếp theo. Cuộc gọi đến setFirstResults(40) bắt đầu tập kết quả ở hàng 40.
+Cuộc gọi đến setMaxResults(10) giới hạn tập kết quả truy vấn thành 10 hàng được trả về bởi cơ sở dữ liệu. Bởi vì không có
+cách tiêu chuẩn để biểu thị phân trang trong SQL, Hibernate biết cách để làm việc này một cách hiệu quả trên hệ thống
+quản lý cơ sở dữ liệu cụ thể của bạn.
+
+Quan trọng cần nhớ rằng phân trang hoạt động ở mức SQL, trên các hàng kết quả. Giới hạn kết quả thành 10 hàng không nhất
+thiết là giới hạn kết quả thành 10 thể hiện của Item! Trong phần 15.4.5, bạn sẽ thấy một số truy vấn có lấy động không
+thể kết hợp với phân trang dựa trên hàng ở mức SQL, và chúng tôi sẽ thảo luận về vấn đề này một lần nữa.
+
+Bạn thậm chí có thể thêm tùy chọn phân trang linh hoạt này vào một truy vấn SQL:
+
+Query query = em.createNativeQuery("select * from ITEM");
+query.setFirstResult(40).setMaxResults(10);
+
+Hibernate sẽ viết lại truy vấn SQL của bạn để bao gồm các từ khóa và mệnh đề cần thiết để giới hạn số hàng trả về theo trang
+bạn đã chỉ định.
+
+Trong thực tế, bạn thường kết hợp phân trang với một truy vấn đếm riêng. Nếu bạn hiển thị một trang các mục, bạn cũng thông báo
+cho người dùng biết tổng số mục. Ngoài ra, bạn cần thông tin này để quyết định xem còn trang nào để hiển thị và xem người dùng
+có thể nhấp để chuyển đến trang tiếp theo không. Thông thường, điều này yêu cầu hai truy vấn có một chút khác biệt:
+ví dụ, select i from Item i kết hợp với setMaxResults() và setFirstResult() sẽ lấy một trang các mục,
+và select count(i) from Item i sẽ lấy tổng số mục có sẵn.
+
+
+
+[Hibernate Feature]
+
+Việc (duy trì-maintain) hai truy vấn gần giống nhau là một công việc phụ mà bạn nên tránh. Một chiêu được ưa chuộng là
+chỉ viết một truy vấn nhưng thực thi nó với một con trỏ cơ sở dữ liệu trước để lấy tổng số kết quả:
+
+Query query = em.createQuery("select i from Item i");
+org.hibernate.Query hibernateQuery =            [1] Unwraps API
+        query.unwrap(org.hibernate.jpa.HibernateQuery.class).getHibernateQuery();   [2] Executes query with cursor
+org.hibernate.ScrollableResults cursor =
+        hibernateQuery.scroll(org.hibernate.ScrollMode.SCROLL_INSENSITIVE);
+cursor.last();      [3] Counts rows
+int count = cursor.getRowNumber()+1;
+cursor.close();     [4] Closes cursor
+query.setFirstResult(40).setMaxResults(10);
+
+1. Unwrap API của Hibernate để sử dụng (con trỏ cuộn-scrollable cursors).
+2. Thực hiện truy vấn bằng con trỏ cơ sở dữ liệu; điều này không lấy tập kết quả vào bộ nhớ.
+3. Chuyển đến hàng cuối cùng trong kết quả trong cơ sở dữ liệu, sau đó lấy số hàng.
+Vì số hàng là dựa trên số không, cộng thêm 1 để lấy tổng số hàng.
+4. Bạn phải đóng con trỏ cơ sở dữ liệu.
+5. Thực hiện truy vấn một lần nữa và truy xuất một trang dữ liệu bất kỳ.
+
+Có một vấn đề đáng kể với chiến lược thuận tiện này: trình điều khiển JDBC và/hoặc hệ thống quản lý cơ sở dữ liệu (DBMS)
+của bạn có thể không hỗ trợ con trỏ cơ sở dữ liệu. Hơn nữa, con trỏ có vẻ hoạt động, nhưng dữ liệu được truy xuất một
+cách tĩnh lặng vào bộ nhớ ứng dụng; con trỏ không hoạt động trực tiếp trên cơ sở dữ liệu. Trình điều khiển của Oracle và MySQL
+đã được biết đến là gây khó khăn, và chúng tôi còn nhiều điều để nói về cuộn và con trỏ trong phần tiếp theo.
+Sau này trong cuốn sách này, trong phần 19.2, chúng tôi sẽ thảo luận thêm về các chiến lược phân trang trong một môi trường
+ứng dụng. Truy vấn của bạn đã sẵn sàng để thực thi.
+

@@ -1,0 +1,170 @@
+Sau khi bạn đã tạo và chuẩn bị một Query, bạn đã sẵn sàng để thực thi nó và truy xuất kết quả vào bộ nhớ.
+Truy xuất toàn bộ tập kết quả vào bộ nhớ một lần là cách phổ biến nhất để thực hiện một truy vấn; chúng tôi gọi điều
+này là "listing". Còn một số tùy chọn khác có sẵn mà chúng tôi cũng sẽ thảo luận sau, chẳng hạn như scrolling và iterating.
+
+14.3.1 Listing all results
+
+Phương thức getResultList() thực thi truy vấn và trả về kết quả dưới dạng một danh sách java.util.List:
+
+Query query = em.createQuery("select i from Item i");
+List<Item> items = query.getResultList();
+
+Hibernate thực hiện một hoặc nhiều câu lệnh SQL SELECT ngay lập tức, tùy theo kế hoạch lấy dữ liệu của bạn.
+Nếu bạn ánh xạ bất kỳ mối quan hệ hoặc bộ sưu tập nào với FetchType.EAGER, Hibernate phải lấy chúng bên cạnh dữ liệu
+bạn muốn truy xuất với truy vấn của bạn. Tất cả dữ liệu được tải vào bộ nhớ, và bất kỳ thể hiện thực thể nào mà
+Hibernate truy xuất đều ở trạng thái persistent và được quản lý bởi persistence unit.
+
+Tất nhiên, persistence unit không quản lý kết quả chiếu của scalar. Truy vấn sau đây trả về một danh sách chuỗi:
+
+Query query = em.createQuery("select i.name from Item i");
+List<String> itemNames = query.getResultList();
+
+Với một số truy vấn, bạn biết rằng kết quả chỉ có một kết quả duy nhất - ví dụ, nếu bạn chỉ muốn giá Bid cao nhất
+hoặc chỉ một Item.
+
+14.3.2 Getting a single result
+
+Bạn có thể thực hiện một truy vấn trả về một kết quả duy nhất bằng phương thức getSingleResult():
+
+TypedQuery<Item> query = em.createQuery(
+    "select i from Item i where i.id = :id", Item.class
+).setParameter("id", ITEM_ID);
+Item item = query.getSingleResult();
+
+Cuộc gọi đến getSingleResult() trả về một thể hiện Item. Điều này cũng hoạt động cho các kết quả scalar:
+
+TypedQuery<String> query = em.createQuery(
+    "select i.name from Item i where i.id = :id", String.class
+).setParameter("id", ITEM_ID);
+String itemName = query.getSingleResult();
+
+Bây giờ, điều không đẹp: nếu không có kết quả, getSingleResult() sẽ ném một NoResultException. Truy vấn này cố gắng
+tìm một mục với một mã số không tồn tại:
+
+try {
+    TypedQuery<Item> query = em.createQuery(
+        "select i from Item i where i.id = :id", Item.class
+    ).setParameter("id", 1234l);
+
+    Item item = query.getSingleResult();
+    // ...
+} catch (NoResultException ex) {
+    // ...
+}
+
+Bạn có thể mong đợi một giá trị null cho loại truy vấn hoàn toàn vô hại như thế này. Điều này khá bi thảm, vì nó buộc bạn
+phải bảo vệ mã này bằng một khối try/catch. Trên thực tế, nó buộc bạn phải luôn bọc một cuộc gọi của getSingleResult(),
+vì bạn không thể biết liệu hàng(s) sẽ có mặt hay không.
+
+Nếu có nhiều hơn một kết quả, getSingleResult() sẽ ném một NonUniqueResultException. Điều này thường xảy ra với loại
+ruy vấn như sau:
+
+try {
+    Query query = em.createQuery(
+        "select i from Item i where name like '%a%'"
+    );
+    Item item = (Item) query.getSingleResult();
+    // ...
+} catch (NonUniqueResultException ex) {
+    // ...
+}
+
+Truy vấn tất cả kết quả vào bộ nhớ là cách thực hiện truy vấn phổ biến nhất. Hibernate hỗ trợ một số phương pháp khác
+mà bạn có thể thấy thú vị nếu bạn muốn tối ưu hóa tiêu thụ bộ nhớ và cách thực thi của một truy vấn.
+
+[Hibernate Feature]
+
+14.3.3 Scrolling with database cursors
+Plain JDBC cung cấp một tính năng được gọi là bộ kết quả có thể cuộn-scrollable result sets. Kỹ thuật này sử dụng một
+con trỏ mà hệ thống quản lý cơ sở dữ liệu duy trì. Con trỏ chỉ đến một hàng cụ thể trong kết quả của một truy vấn,
+và ứng dụng có thể di chuyển con trỏ về phía trước và phía sau. Bạn cũng có thể nhảy trực tiếp đến một hàng với con trỏ.
+
+Một trong những tình huống mà bạn nên cuộn qua kết quả của một truy vấn thay vì tải tất cả vào bộ nhớ liên quan đến
+bộ kết quả quá lớn để fit vào bộ nhớ. Thông thường, bạn cố gắng hạn chế kết quả hơn bằng cách thắt chặt điều kiện
+trong truy vấn. Đôi khi điều này không thể thực hiện, có lẽ vì bạn cần tất cả dữ liệu nhưng muốn lấy nó theo từng bước.
+Chúng tôi sẽ hiển thị một quy trình xử lý theo lô như vậy trong phần 20.1.
+
+JPA không chuẩn hóa việc cuộn qua kết quả bằng con trỏ cơ sở dữ liệu, vì vậy bạn cần giao diện org.hibernate.ScrollableResults
+có sẵn trong org.hibernate.Query độc quyền:
+
+Session session = em.unwrap(Session.class);
+org.hibernate.Query query = session.createQuery(
+    "select i from Item i order by i.id asc"            [1] Creates query
+);
+org.hibernate.ScrollableResults cursor =                [2] Opens cursor
+        query.scroll(org.hibernate.ScrollMode.SCROLL_INSENSITIVE);
+cursor.setRowNumber(2);                                 [3] Jumps to third row
+Item item = (Item) cursor.get(0);       [4] Gets column value
+cursor.close();                         [5] Closes cursor
+
+Bắt đầu bằng cách tạo một org.hibernate.Query [1] và mở một con trỏ [2]. Sau đó, bạn bỏ qua hai hàng kết quả đầu tiên,
+nhảy đến hàng thứ ba [3] và lấy giá trị cột đầu tiên của hàng đó [4]. Không có cột trong JPQL, vì vậy đây là phần tử chiếu
+đầu tiên: ở đây, i trong mệnh đề select. Có thêm ví dụ về việc chiếu ở trong chương tiếp theo. Luôn đóng con trỏ [5]
+trước khi kết thúc giao dịch cơ sở dữ liệu!
+
+Như đã đề cập trước đây trong chương này, bạn cũng có thể sử dụng unwrap() API truy vấn Hibernate từ một javax.persistence.Query
+thông thường bạn đã xây dựng bằng CriteriaBuilder. Một truy vấn org.hibernate.Criteria độc quyền cũng có thể được thực thi
+bằng cuộn thay vì list(); con trỏ ScrollableResults trả về hoạt động cũng tương tự.
+
+Các hằng số ScrollMode của API Hibernate tương đương với các hằng số trong JDBC thông thường. Trong ví dụ trước đó,
+ScrollMode.SCROLL_INSENSITIVE có nghĩa là con trỏ không nhạy cảm với các thay đổi được thực hiện trong cơ sở dữ liệu,
+đảm bảo rằng không dirty reads, unrepeatable reads hoặc phantom reads nào có thể trượt vào kết quả của bạn trong khi cuộn.
+Các chế độ khác có sẵn là SCROLL_SENSITIVE và FORWARD_ONLY. Một con trỏ nhạy cảm tiết lộ cho bạn dữ liệu đã được sửa đổi
+đã cam kết trong khi con trỏ đang mở; và với một con trỏ forward-only, bạn không thể nhảy đến một vị trí tuyệt đối trong
+kết quả.
+
+Lưu ý rằng bộ nhớ cache persistence unit của Hibernate vẫn cung cấp unrepeatable reads cho các thể hiện thực
+thể ngay cả khi có con trỏ nhạy cảm, vì vậy thiết lập này chỉ có thể ảnh hưởng đến các giá trị scalar đã được sửa đổi mà
+bạn chiếu trong kết quả.
+
+Hãy nhớ rằng một số trình điều khiển JDBC không hỗ trợ cuộn qua bộ kết quả với con trỏ cơ sở dữ liệu một cách đúng đắn,
+mặc dù có vẻ như nó hoạt động. Với trình điều khiển MySQL, ví dụ, trình điều khiển luôn lấy toàn bộ bộ kết quả của một
+truy vấn vào bộ nhớ ngay lập tức; vì vậy bạn chỉ cuộn qua bộ kết quả trong bộ nhớ ứng dụng. Để có được việc lấy dữ liệu
+hàng theo hàng thực sự, bạn phải thiết lập kích thước truy vấn JDBC thành Integer.MIN_VALUE (như được giải thích trong phần 14.5.4)
+và chỉ sử dụng ScrollMode.FORWARD_ONLY. Kiểm tra hành vi và tài liệu của hệ quản trị cơ sở dữ liệu của bạn và trình
+điều khiển JDBC trước khi sử dụng con trỏ.
+
+Một hạn chế quan trọng của việc cuộn qua bộ kết quả bằng con trỏ cơ sở dữ liệu là nó không thể kết hợp với việc lấy dữ liệu
+động bằng mệnh đề join fetch trong JPQL. Việc gắn kết hoạt động với có thể có nhiều hàng một lúc, vì vậy bạn không thể lấy
+dữ liệu từng hàng. Hibernate sẽ ném ra một ngoại lệ nếu bạn cố gắng scroll() một truy vấn với mệnh đề gắn kết động.
+Một lựa chọn khác để lấy tất cả dữ liệu cùng một lúc là cuộn qua bộ kết quả.
+
+
+[Hibernate Feature]
+14.3.4 Iterating through a result
+
+Hãy giả sử bạn biết rằng hầu hết các thể hiện của đối tượng mà truy vấn của bạn sẽ trả về đã có sẵn trong bộ nhớ.
+Chúng có thể nằm trong persistence unit hoặc trong bộ nhớ cache chia sẻ cấp độ thứ hai (xem phần 20.2). Trong trường hợp
+như vậy, có thể hợp lý để duyệt qua kết quả truy vấn bằng API truy vấn org.hibernate.Query riêng của Hibernate.
+
+Session session = em.unwrap(Session.class);
+
+org.hibernate.Query query = session.createQuery(
+    "select i from Item i"
+);
+Iterator<Item> it = query.iterate(); // select ID from ITEM
+while (it.hasNext()) {
+    Item next = it.next(); // select * from ITEM where ID = ?
+    // ...
+}
+Hibernate.close(it);
+
+Iterator phải được đóng, entweder khi Session đã được đóng hoặc thủ công
+
+Khi bạn gọi query.iterate(), Hibernate thực hiện truy vấn của bạn và gửi một câu lệnh SQL SELECT đến cơ sở dữ liệu.
+Tuy nhiên, Hibernate sửa đổi một chút truy vấn và thay vì truy xuất tất cả cột từ bảng ITEM, nó chỉ truy xuất các giá
+trị của khóa chính/primary key.
+Sau đó, mỗi lần bạn gọi next() trên Iterator, một truy vấn SQL bổ sung được kích hoạt và phần còn lại của hàng ITEM được nạp.
+Rõ ràng, điều này sẽ gây ra vấn đề n+1 selects trừ khi Hibernate có thể tránh được các truy vấn bổ sung khi gọi next().
+Điều này sẽ xảy ra nếu Hibernate có thể tìm thấy dữ liệu của mục trong bộ nhớ đệm của ngữ cảnh lưu trữ hoặc trong bộ nhớ đệm cấp 2.
+Iterator được trả về bởi iterate() phải được đóng. Hibernate sẽ tự động đóng nó khi EntityManager hoặc Session được đóng.
+Nếu quy trình lặp của bạn vượt quá số lượng tối đa của con trỏ mở trong cơ sở dữ liệu của bạn, bạn có thể đóng Iterator
+thủ công bằng Hibernate.close(iterator).
+Iterator ít khi hữu ích, xem xét rằng trong ví dụ, tất cả các mục đấu giá phải được lưu trong bộ nhớ đệm để làm cho
+quy trình này hoạt động tốt. Tương tự như cuộn với con trỏ, bạn không thể kết hợp nó với các mệnh đề truy vấn động và
+join fetch; Hibernate sẽ ném ra một ngoại lệ nếu bạn thử.
+Đến nay, các ví dụ mã đều nhúng chuỗi truy vấn vào mã Java. Điều này không không hợp lý đối với các truy vấn đơn giản,
+nhưng khi bạn bắt đầu xem xét các truy vấn phức tạp phải được chia thành nhiều dòng, điều đó trở nên khó sử dụng.
+Thay vào đó, bạn có thể đặt tên cho mỗi truy vấn và di chuyển nó vào các chú thích hoặc tệp XML.
+
+
