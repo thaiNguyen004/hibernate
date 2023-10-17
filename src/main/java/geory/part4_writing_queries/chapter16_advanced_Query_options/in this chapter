@@ -1,0 +1,21 @@
+In this chapter
+- Transforming query results
+- Filtering collections
+- Query-by-criteria with the Hibernate API
+
+Chương này giải thích các tùy chọn truy vấn mà bạn có thể xem xét là tùy chọn hoặc nâng cao:
+biến đổi kết quả truy vấn-Transforming query results, lọc collection và API truy vấn Hibernate criteria.
+Trước hết, chúng ta sẽ thảo luận về API ResultTransformer của Hibernate, với đó bạn có thể áp dụng một bộ
+biến đổi kết quả vào kết quả truy vấn để lọc hoặc sắp xếp kết quả với mã của riêng bạn thay vì hành vi
+mặc định của Hibernate.
+
+Trong các chương trước, chúng tôi luôn khuyên bạn nên cẩn thận khi ánh xạ bộ sưu tập, vì đó hiếm khi đáng đầu tư công sức.
+Trong chương này, chúng tôi giới thiệu collection filters, một tính năng gốc của Hibernate làm cho bộ sưu tập persistent
+có giá trị hơn.
+
+Cuối cùng, chúng ta xem xét một tính năng Hibernate độc quyền khác, API truy vấn Criteria org.hibernate và một số tình huống
+khi bạn có thể ưa thích nó hơn so với truy vấn theo tiêu chí JPA tiêu chuẩn.
+
+Hãy bắt đầu với việc biến đổi kết quả truy vấn.
+
+

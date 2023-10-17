@@ -1,0 +1,107 @@
+[Hibernate Feature]
+
+Sử dụng các giao diện org.hibernate.Criteria và org.hibernate.Example, bạn có thể xây dựng các truy vấn theo cách lập trình
+bằng cách tạo và kết hợp các thể hiện org.hibernate.criterion.*.
+Bạn sẽ thấy cách sử dụng các API này và cách biểu thị selection, restriction, joins và projection.
+Chúng tôi giả định rằng bạn đã đọc chương trước và bạn biết cách các thao tác này được dịch ra SQL.
+Tất cả các ví dụ truy vấn được hiển thị ở đây đều có một ví dụ JPQL hoặc tiêu chí JPA tương đương
+trong chương trước, vì vậy bạn có thể dễ dàng chuyển đổi qua lại nếu bạn cần so sánh cả ba API.
+
+Hãy bắt đầu với một số ví dụ selection cơ bản.
+
+16.3.1 Selection and ordering
+
+Truy vấn sau đây tải tất cả các phiên bản Item:
+PATH: /examples/src/test/java/org/jpwh/test/querying/advanced/
+HibernateCriteria.java
+
+org.hibernate.Criteria criteria = session.createCriteria(Item.class);
+List<Item> items = criteria.list();
+
+Bạn tạo một org.hibernate.Criteria bằng cách sử dụng Session. Hoặc bạn có thể tạo một DetachedCriteria
+mà không cần một persistence context mở.
+
+PATH: /examples/src/test/java/org/jpwh/test/querying/advanced/
+HibernateCriteria.java
+
+DetachedCriteria criteria = DetachedCriteria.forClass(Item.class);
+List<Item> items = criteria.getExecutableCriteria(session).list();
+
+Khi bạn sẵn sàng để thực thi truy vấn, "đính kèm" nó vào một Session bằng cách sử dụng getExecutableCriteria().
+Lưu ý rằng đây là một tính năng duy nhất của API criteria Hibernate. Với JPA, bạn luôn cần ít nhất một EntityManagerFactory
+để có được một CriteriaBuilder.
+
+Bạn có thể khai báo thứ tự của kết quả, tương đương với mệnh đề order by trong JPQL. Truy vấn sau đây tải tất cả các instance
+User được sắp xếp theo thứ tự tăng dần theo tên và họ:
+
+PATH: /examples/src/test/java/org/jpwh/test/querying/advanced/
+HibernateCriteria.java
+
+List<User> users =
+    session.createCriteria(User.class)
+        .addOrder(Order.asc("firstname"))
+        .addOrder(Order.asc("lastname"))
+        .list();
+
+Trong ví dụ này, mã được viết theo kiểu fluent (sử dụng chuỗi phương thức); các phương thức như addOrder() trả về
+org.hibernate.Criteria ban đầu.
+Tiếp theo, chúng ta sẽ xem xét việc hạn chế các bản ghi được selection.
+
+
+16.3.2 Restriction
+
+Truy vấn sau đây trả về tất cả các thể hiện Item có tên "Foo":
+PATH: /examples/src/test/java/org/jpwh/test/querying/advanced/
+HibernateCriteria.java
+
+List<Item> items =
+    session.createCriteria(Item.class)
+        .add(Restrictions.eq("name", "Foo"))
+        .list();
+
+Giao diện Restrictions là nhà máy tạo ra restriction riêng lẻ mà bạn có thể thêm vào Criteria. Các thuộc tính được xác định
+bằng chuỗi đơn giản, ở đây là Item#name với "name". Bạn cũng có thể khớp các phần từ con, tương tự như toán tử like trong
+JPQL. Truy vấn sau đây tải tất cả các thể hiện User với tên người dùng bắt đầu bằng "j" hoặc "J".
+
+PATH: /examples/src/test/java/org/jpwh/test/querying/advanced/
+HibernateCriteria.java
+
+List<User> users = session.createCriteria(User.class)
+                    .add(Restrictions.like("username", "j", MatchMode.START).ignoreCase()).list();
+
+MatchMode.START tương đương với dấu hoa thị j% trong JPQL. Các chế độ khác bao gồ EXACT, END và ANYWHERE.
+Bạn có thể đặt tên cho các thuộc tính lồng nhau của các kiểu nhúng, chẳng hạn như Address của một User,
+bằng cách sử dụng ký hiệu dấu chấm.
+
+PATH: /examples/src/test/java/org/jpwh/test/querying/advanced/
+HibernateCriteria.java
+
+List<User> users =
+    session.createCriteria(User.class)
+        .add(Restrictions.eq("homeAddress.city", "Some City"))
+        .list();
+
+Một tính năng duy nhất của API criteria Hibernate là khả năng viết các đoạn mã SQL thuần túy trong các restriction.
+Truy vấn sau đây tải tất cả các thể hiện User với username ngắn hơn tám ký tự:
+
+PATH: /examples/src/test/java/org/jpwh/test/querying/advanced/
+HibernateCriteria.java
+
+List<User> users = session.createCriteria(User.class)
+    .add(Restrictions.sqlRestriction(
+        "length({alias}.USERNAME) < ?",
+        8,
+        StandardBasicTypes.INTEGER
+    )).list();
+
+Hibernate gửi đoạn mã SQL đến cơ sở dữ liệu như vậy. Bạn cần có thẻ {alias} để thêm tiền tố cho bất kỳ bí danh bảng nào
+trong SQL cuối cùng; nó luôn tham chiếu đến bảng mà thực thể gốc được ánh xạ tới (ở đây là USERS). Bạn cũng áp dụng
+một tham số vị trí (không hỗ trợ các tham số được đặt tên bởi API này) và xác định kiểu dữ liệu của nó là
+StandardBasicTypes.INTEGER.
+
+Hệ thống query criteria của Hibernate có khả năng mở rộng: bạn có thể bọc hàm SQL LENGTH() trong bản cài đặt của riêng bạn
+của giao diện org.hibernate.criterion.Criterion.
+
+Sau khi bạn thực hiện việc selection và restriction, bạn muốn thêm phần projection vào truy vấn của bạn để xác định dữ liệu
+mà bạn muốn truy xuất.
+
