@@ -1,0 +1,113 @@
+Ứng dụng sẽ là một ứng dụng máy chủ không có trạng thái, điều này có nghĩa là không có trạng thái ứng dụng nào sẽ được
+quản lý trên máy chủ giữa các yêu cầu từ client. Ứng dụng sẽ đơn giản, trong đó chỉ hỗ trợ hai use cases:
+chỉnh sửa một auction item và đặt một bid cho một item.
+
+Hãy xem xét các workflows này như là cuộc trò chuyện: các units of work từ góc nhìn của người dùng ứng dụng.
+Góc nhìn của người dùng ứng dụng không nhất thiết phải giống với góc nhìn của chúng ta là nhà phát triển về hệ thống;
+nhà phát triển thường xem xét một system transaction là một unit of work. Bây giờ chúng ta tập trung vào sự không phù hợp
+này và cách góc nhìn của người dùng ảnh hưởng đến thiết kế mã máy chủ và mã client. Chúng tôi bắt đầu với cuộc
+trò chuyện đầu tiên: chỉnh sửa một item.
+
+18.2.1 Editing an auction item
+
+The client là một ứng dụng console EJB văn bản đơn giản. Hãy xem xét cuộc trò chuyện "edit an auction item" với client 
+trong hình 18.2.
+
+Client hiển thị danh sách các auction item cho user; user chọn một item. Sau đó, client hỏi người dùng muốn thực hiện 
+thao tác nào. Cuối cùng, sau khi nhập tên mới, client hiển thị một thông báo xác nhận thành công. Hệ thống hiện đã 
+sẵn sàng cho cuộc trò chuyện tiếp theo. Client ví dụ bắt đầu lại và hiển thị danh sách các auction item.
+
+Trình tự của các cuộc gọi cho conversation này được hiển thị trong hình 18.3. Đây chính là roadmap của bạn cho phần
+còn lại của phần này.
+
+Hãy xem xét một cách kỹ hơn về điều này thông qua mã; bạn có thể tham khảo các mục trong hình minh họa để theo dõi chúng ta 
+đang ở đâu. Mã bạn thấy tiếp theo là từ một test case mô phỏng client, theo sau là mã từ các thành phần phía máy chủ
+xử lý các cuộc gọi của client này.
+
+Client thu thập danh sách các thực thể Item từ máy chủ để bắt đầu cuộc trò chuyện [1] và cũng yêu cầu rằng tập hợp Item#bids
+được nạp một cách tức thì với `true`. Vì máy chủ không giữ trạng thái cuộc trò chuyện, client phải làm công việc này:
+
+PATH: /apps/app-stateless-server/src/test/java/org/jpwh/test/stateless/
+AuctionServiceTest.java
+
+List<Item> items;           <-- Client must manage application state: a list of items
+items = service.getItems(true);     <-- Get all items in detached state, and load bids.
+
+The server-side code handles the call with the help of DAOs:
+
+PATH: /apps/app-stateless-server/src/main/java/org/jpwh/stateless/
+AuctionServiceImpl.java
+
+@javax.ejb.Stateless
+@javax.ejb.Local(AuctionService.class)
+@javax.ejb.Remote(RemoteAuctionService.class)
+public class AuctionServiceImpl implements AuctionService {
+
+    @Inject
+    protected ItemDAO itemDAO;
+
+    @Inject
+    protected BidDAO bidDAO;
+
+    @Override
+    @TransactionAttribute(TransactionAttributeType.REQUIRED)
+    public List<Item> getItems(boolean withBids) {
+        return itemDAO.findAll(withBids);
+    }
+    // ...
+}
+
+(Bạn có thể bỏ qua các interface được khai báo ở đây; chúng đơn giản nhưng cần thiết cho các cuộc gọi từ xa và
+kiểm thử cục bộ của một EJB.) Bởi vì không có giao dịch nào đang hoạt động khi client gọi getItems(), một giao dịch mới
+sẽ được bắt đầu. Giao dịch sẽ tự động được ghi nhận khi phương thức kết thúc.
+Chú thích @TransactionAttribute là tùy chọn trong trường hợp này; hành vi mặc định yêu cầu một giao dịch trên các
+cuộc gọi phương thức EJB.
+
+Phương thức EJB `getItems()` gọi ItemDAO để truy xuất một danh sách các thực thể Item. [2]
+Container của Java EE tự động tìm kiếm và tiêm vào (inject) ItemDAO và EntityManager được thiết lập trên DAO.
+Bởi vì không có EntityManager hoặc ngữ cảnh (persistence context) liên quan đến giao dịch hiện tại, một ngữ cảnh persistence
+mới được bắt đầu và được kết hợp với giao dịch. Ngữ cảnh persistence được xả và đóng khi giao dịch được xác nhận.
+Đây là một tính năng tiện lợi của EJB không có trạng thái (stateless EJB); bạn không cần phải làm nhiều việc để sử dụng JPA
+trong một giao dịch.
+
+Một danh sách các thực thể Item ở trạng thái "detached" (sau khi ngữ cảnh persistence đã bị đóng) được trả về cho client [3]. 
+Bạn không cần phải lo lắng về việc serialization (chuyển đổi thành dạng dữ liệu để truyền qua mạng) ngay bây giờ; 
+miễn là List và Item cùng với tất cả các kiểu dữ liệu có thể tiếp cận khác đều implement interface Serializable,
+thì framework của EJB sẽ lo lắng cho việc này.
+
+Tiếp theo, client đặt tên mới cho một Item được chọn và yêu cầu máy chủ lưu thay đổi đó bằng cách gửi Item ở trạng thái
+"detached" và đã được chỉnh sửa [4]:
+
+PATH: /apps/app-stateless-server/src/test/java/org/jpwh/test/stateless/
+AuctionServiceTest.java
+
+detachedItem.setName("Pretty Baseball Glove");
+detachedItem = service.storeItem(detachedItem);     // Gọi service và thực hiện thay đổi. Current Item instance sau đó được trả về.
+
+Máy chủ lấy thực thể Item ở trạng thái "detached" và yêu cầu ItemDAO thực hiện việc làm cho các thay đổi trở nên persistent [5],
+bằng cách merge các sửa đổi bên trong:
+
+PATH: /apps/app-stateless-server/src/main/java/org/jpwh/stateless/
+AuctionServiceImpl.java
+
+public class AuctionServiceImpl implements AuctionService {
+    // ...
+    @Override
+    public Item storeItem(Item item) {
+        return itemDAO.makePersistent(item);
+    }
+    // ...
+}
+
+Trạng thái cập nhật - kết quả của quá trình gộp - được trả về cho client. Cuộc trò chuyện hoàn thành và client có
+thể bỏ qua trạng thái cập nhật của Item trả về. Tuy nhiên, client biết rằng giá trị trả về này là trạng thái mới nhất và
+bất kỳ trạng thái trước đó mà client đang giữ trong cuộc trò chuyện, chẳng hạn như danh sách các thực thể Item,
+đã lỗi thời và có thể nên bị loại bỏ. Cuộc trò chuyện sau này nên bắt đầu với trạng thái mới: sử dụng Item trả về mới
+nhất hoặc bằng cách lấy danh sách mới.
+
+Bây giờ bạn đã thấy cách thực hiện một cuộc trò chuyện duy nhất - toàn bộ unit of work, từ góc nhìn của user - với hai 
+giao dịch hệ thống trên máy chủ. Bởi vì bạn chỉ tải dữ liệu trong giao dịch hệ thống đầu tiên và trì hoãn việc ghi thay đổi 
+cho giao dịch cuối cùng, cuộc trò chuyện này là tương tự một atomic: thay đổi không được lưu vĩnh viễn cho đến khi bước 
+cuối cùng hoàn thành thành công. Hãy mở rộng điều này với use case thứ hai: placing a bid for an item.
+
+
