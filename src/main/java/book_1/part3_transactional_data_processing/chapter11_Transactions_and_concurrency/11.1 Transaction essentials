@@ -1,0 +1,257 @@
+Chức năng của ứng dụng đòi hỏi rằng một số việc phải được thực hiện trong một lần thực hiện.
+Ví dụ, khi một (phiên đấu giá-auction) kết thúc, ứng dụng CaveatEmptor phải thực hiện ba nhiệm vụ
+khác nhau:
+
+1. Tìm bid chiến thắng (với số tiền cao nhất) cho món đấu giá.
+2. Thu phí cho người bán món đấu giá (seller).
+3. Thông báo thành công cho người bán và người đấu giá.
+
+Nhưng điều gì xảy ra nếu bạn không thể tính tiền cho các chi phí đấu giá do một lỗi trong hệ thống thẻ tín dụng bên ngoài? 
+Business Requirements có thể nêu rõ rằng hoặc tất cả các hành động đã liệt kê phải thành công hoặc không có hành động nào 
+phải thành công. Nếu vậy, bạn gọi những bước này là một transaction hoặc một unit of work.
+
+Nếu có một bước đơn lẻ thất bại, toàn bộ unit of work phải thất bại.
+
+INDEX
+11.1.1 ACID attributes
+11.1.2 Database and system transactions
+11.1.3 Programmatic transactions with JTA
+11.1.4 Handling exceptions
+11.1.5 Declarative transaction demarcation
+
+
+11.1.1 ACID attributes
+ACID là viết tắt của atomicity, consistency, isolation, durability (nguyên tố, nhất quán, cách ly, bền vững). 
+Nguyên tố (atomicity) là khái niệm cho biết tất cả các hoạt động trong một transaction thực hiện như một atomic unit.
+Hơn nữa, các transaction cho phép nhiều người dùng làm việc song song với cùng dữ liệu mà không làm ảnh hưởng đến consistency
+của dữ liệu (tuân thủ các quy tắc tích hợp cơ sở dữ liệu). Một transaction cụ thể không nên được nhìn thấy bởi các
+transaction đang chạy song song khác; chúng nên chạy trong tình trạng (cách ly-isolation). Những thay đổi được thực hiện
+trong một transaction nên có (tính bền vững-durable), ngay cả khi hệ thống gặp sự cố sau khi transaction hoàn thành thành công.
+
+Ngoài ra, bạn muốn (tính đúng đắn-correctness) của một transaction. Ví dụ, các quy tắc kinh doanh quy định rằng ứng dụng phải tính phí
+cho người bán một lần, không phải hai lần. Đây là một giả định hợp lý, nhưng bạn có thể không thể biểu thị nó bằng các ràng
+buộc cơ sở dữ liệu. Do đó, correctness của một transaction là trách nhiệm của ứng dụng, trong khi (tính nhất quán-consistency) là
+trách nhiệm của cơ sở dữ liệu. Cùng nhau, những đặc điểm này xác định các tiêu chí ACID.
+
+
+11.1.2 Database and system transactions
+Chúng ta cũng đã đề cập đến các system transactions và cơ sở dữ liệu. Hãy xem xét ví dụ cuối cùng một lần nữa: trong unit of work
+kết thúc một phiên đấu giá, chúng ta có thể đánh dấu đợt đấu giá chiến thắng trong hệ thống cơ sở dữ liệu. Sau đó,
+trong cùng unit of work đó, chúng ta liên lạc với hệ thống bên ngoài để tính tiền cho thẻ tín dụng của người bán.
+Đây là một giao dịch kéo dài qua một số (sub) hệ thống, với các giao dịch phụ phối trên có thể là một số tài nguyên
+như một kết nối cơ sở dữ liệu và một bộ xử lý thanh toán bên ngoài.
+
+Giao dịch cơ sở dữ liệu phải ngắn gọn, vì giao dịch mở tiêu tốn tài nguyên cơ sở dữ liệu và có thể ngăn truy
+cập song song do khóa độc quyền trên dữ liệu. Một giao dịch cơ sở dữ liệu duy nhất thường liên quan chỉ đến một lô thao tác
+cơ sở dữ liệu duy nhất.
+
+Để thực hiện tất cả các thao tác cơ sở dữ liệu của bạn bên trong một system transactions, bạn phải đặt ranh giới của
+unit of work đó. Bạn phải bắt đầu giao dịch và, tại một số điểm nào đó, tiến hành lưu các thay đổi (commit). Nếu xảy ra lỗi
+(hoặc trong quá trình thực hiện các hoạt động cơ sở dữ liệu hoặc khi tiến hành lưu giao dịch), bạn phải rollback
+các thay đổi để để lại dữ liệu ở trạng thái nhất quán - consistent. Quá trình này xác định một (sự đánh dấu giao dịch - transaction demarcation)
+và, tùy thuộc vào kỹ thuật bạn sử dụng, liên quan đến một mức độ can thiệp bằng tay nhất định. Nói chung, các ranh giới
+giao dịch mà bắt đầu và kết thúc một giao dịch có thể được đặt bằng cách lập trình trong mã ứng dụng hoặc theo cách khai báo.
+
+11.1.3 Programmatic transactions with JTA
+
+Trong môi trường Java SE, bạn sử dụng API JDBC để đánh dấu ranh giới giao dịch. Bạn bắt đầu một giao dịch bằng cách gọi 
+setAutoCommit(false) trên một JDBC Connection và kết thúc nó bằng cách gọi commit(). Bạn có thể bất kỳ lúc nào trong quá 
+trình giao dịch đang diễn ra, thực hiện một rollback ngay lập tức bằng cách gọi rollback().
+
+Trong một ứng dụng thao tác dữ liệu trong nhiều hệ thống, một unit of work cụ thể liên quan đến việc truy cập vào nhiều
+tài nguyên giao dịch. Trong trường hợp này, bạn không thể đạt được tính nguyên tử với JDBC một mình.
+Bạn cần một quản lý giao dịch có khả năng xử lý nhiều tài nguyên trong một giao dịch hệ thống. JTA tiêu chuẩn hóa quản lý
+giao dịch hệ thống và giao dịch phân tán, để bạn không cần lo lắng nhiều về các chi tiết cấp thấp. API chính trong JTA
+là giao diện UserTransaction với các phương thức begin() và commit() để bắt đầu và kết thúc một giao dịch hệ thống.
+
+Các API đánh dấu giao dịch khác
+JTA cung cấp một sự trừu tượng tốt về hệ thống giao dịch tài nguyên cơ bản, với lợi ích bổ sung là giao dịch hệ thống phân tán.
+Nhiều nhà phát triển vẫn tin rằng bạn chỉ có thể sử dụng JTA với các thành phần chạy trong máy chủ ứng dụng Java EE.
+Ngày nay, có sẵn các nhà cung cấp JTA độc lập chất lượng cao như Bitronix (được sử dụng cho mã ví dụ trong cuốn sách này)
+và Atomikos, và chúng dễ dàng cài đặt trên bất kỳ môi trường Java nào. Hãy coi những giải pháp này như các bể kết nối
+cơ sở dữ liệu có hỗ trợ JTA.
+
+Bạn nên sử dụng JTA mỗi khi có cơ hội và tránh sử dụng các API giao dịch độc quyền như org.hibernate.Transaction hoặc
+javax.persistence.EntityTransaction, những API này đã được tạo ra vào thời điểm JTA chưa phổ biến ngoài các container chạy EJB.
+
+Trong phần 10.2.1, chúng ta đã hứa sẽ xem xét lại giao dịch với tập trung vào xử lý exception. Dưới đây là mã, lần này
+hoàn chỉnh với rollback và xử lý exception.
+
+Listing 11.1 Unit of work điển hình có ranh giới giao dịch
+
+PATH: /examples/src/test/java/org/jpwh/test/simple/SimpleTransitions.java
+
+EntityManager em = null;
+UserTransaction tx = TM.getUserTransaction();
+try {
+    tx.begin();
+    em = JPA.createEntityManager();         // Application-managed
+    // ...
+    tx.commit();                            // Synchronizes/flushes persistence context
+} catch (Exception ex) {                    // Transacction rollback, exception handling
+    try {
+        if (tx.getStatus() == Status.STATUS_ACTIVE
+            || tx.getStatus() == Status.STATUS_MARKED_ROLLBACK)
+            tx.rollback();
+    } catch (Exception rbEx) {
+        System.err.println("Rollback of transaction failed, trace follows!");
+        rbEx.printStackTrace(System.err);
+    }
+    throw new RuntimeException(ex);
+} finally {
+    if (em != null && em.isOpen())
+        em.close();                         // You create it, you close it'
+}
+
+Phần phức tạp nhất của đoạn mã này dường như là việc xử lý exception; chúng ta sẽ thảo luận về phần này trong một phút.
+Trước hết, bạn cần hiểu cách quản lý giao dịch và EntityManager hoạt động cùng nhau.
+EntityManager là lazy; chúng ta đã đề cập trong chương trước rằng nó không tiêu thụ bất kỳ kết nối cơ sở dữ liệu nào
+cho đến khi cần thực hiện các câu lệnh SQL. Điều tương tự cũng đúng cho JTA: bắt đầu và commit một giao dịch trống
+không tốn kém khi bạn chưa truy cập vào bất kỳ tài nguyên giao dịch nào. Ví dụ, bạn có thể thực thi unit of work trống này
+trên máy chủ, cho mỗi yêu cầu từ khách hàng, mà không tiêu tốn bất kỳ tài nguyên nào hoặc giữ bất kỳ khóa cơ sở dữ liệu nào.
+
+Khi bạn tạo một EntityManager, nó tìm kiếm giao dịch hệ thống JTA đang diễn ra trong luồng thực thi hiện tại.
+Nếu EntityManager tìm thấy một giao dịch đang diễn ra, nó sẽ tham gia giao dịch bằng cách lắng nghe sự kiện giao dịch.
+Điều này có nghĩa là bạn nên luôn gọi UserTransaction#begin() và EntityManagerFactory#createEntityManager() trên cùng
+một luồng nếu bạn muốn chúng tham gia vào cùng một giao dịch. Theo mặc định, và như đã giải thích trong chương 10,
+Hibernate tự động flush nội dung lưu trữ khi giao dịch được commit.
+
+Nếu EntityManager không thể tìm thấy một giao dịch đã bắt đầu trên cùng một luồng khi nó được tạo ra, nó sẽ ở chế độ không
+đồng bộ đặc biệt. Trong chế độ này, JPA sẽ không tự động đẩy nội dung lưu trữ. Chúng ta sẽ nói thêm về hành vi này sau
+trong chương; đó là một tính năng tiện lợi của JPA khi bạn thiết kế các cuộc trò chuyện phức tạp hơn.
+
+FAQ: Có nên rollback giao dịch read-only để tăng tốc độ?
+
+Nếu mã trong một giao dịch chỉ đọc dữ liệu mà không sửa đổi nó, liệu bạn có nên rollback giao dịch thay vì commit nó?
+Điều này có thể nhanh hơn không? Rõ ràng, một số nhà phát triển đã thấy điều này nhanh hơn trong một số trường hợp đặc biệt,
+và niềm tin này đã lan rộng trong cộng đồng. Chúng tôi đã thử nghiệm điều này với các hệ thống cơ sở dữ liệu phổ biến
+hơn và không tìm thấy sự khác biệt nào. Chúng tôi cũng không thể tìm thấy bất kỳ nguồn thông tin nào cung cấp con số thực tế
+cho thấy sự khác biệt về hiệu suất. Không có lý do gì mà hệ thống cơ sở dữ liệu nên có một cách triển khai làm sạch
+không tối ưu - tại sao nó không nên sử dụng thuật toán làm sạch giao dịch nhanh nhất bên trong.
+
+Luôn luôn commit giao dịch của bạn và rollback nếu commit thất bại. Tuy nhiên, tiêu chuẩn SQL bao gồm câu lệnh
+SET TRANSACTION READ ONLY. Chúng tôi đề nghị bạn nên trước tiên kiểm tra xem cơ sở dữ liệu của bạn có hỗ trợ điều này không
+và xem xét các lợi ích về hiệu suất có thể có, nếu có.
+
+Trình quản lý giao dịch sẽ dừng một giao dịch khi nó đã chạy quá lâu. Hãy nhớ rằng bạn muốn giữ cho các giao dịch cơ sở
+dữ liệu ngắn nhất có thể trong một hệ thống OLTP bận rộn. Thời gian chờ mặc định phụ thuộc vào nhà cung cấp JTA - ví dụ,
+Bitronix mặc định là 60 giây. Bạn có thể ghi đè lựa chọn này một cách có chọn lọc, trước khi bạn bắt đầu giao dịch,
+bằng cách sử dụng UserTransaction#setTransactionTimeout().
+
+Chúng ta vẫn cần thảo luận về việc xử lý exception trong đoạn mã trước đó.
+
+
+11.1.4 Handling exceptions
+Nếu bất kỳ cuộc gọi EntityManager nào hoặc việc xả-flushing dữ liệu trong persistence context trong quá trình commit ném 
+ra một exception, bạn phải kiểm tra trạng thái hiện tại của giao dịch hệ thống. Khi một exception xảy ra, Hibernate đánh dấu 
+giao dịch để được rollback. Điều này có nghĩa là kết quả duy nhất có thể cho giao dịch này là rollback tất cả các thay đổi của nó. 
+Bởi vì bạn đã bắt đầu giao dịch, nhiệm vụ của bạn là kiểm tra STATUS_MARKED_ROLLBACK. Giao dịch cũng có thể vẫn ở trạng thái 
+STATUS_ACTIVE, nếu Hibernate không thể đánh dấu nó để rollback. Trong cả hai trường hợp, hãy gọi UserTransaction#rollback() 
+để hủy bỏ bất kỳ câu lệnh SQL nào đã được gửi đến cơ sở dữ liệu trong unit of work này.
+
+Tất cả các hoạt động JPA, bao gồm xả dữ liệu trong persistence context, đều có thể ném một RuntimeException.
+Nhưng các phương thức UserTransaction#begin(), commit() và thậm chí là rollback() đều ném một checked Exception.
+Ngoại lệ cho việc rollback đòi hỏi xử lý đặc biệt: bạn muốn bắt exception này và ghi log nó; nếu không, exception gốc đã
+dẫn đến việc rollback sẽ bị mất. Tiếp tục ném exception gốc sau khi rollback. Thông thường, bạn có một tầng nội tuyến khác
+trong hệ thống của bạn sẽ xử lý exception cuối cùng này, ví dụ như hiển thị một màn hình lỗi hoặc liên hệ với nhóm vận hành.
+Một lỗi trong quá trình rollback khó xử lý hơn một cách đúng đắn; chúng tôi đề xuất ghi log và thang tiến, vì một rollback
+thất bại cho thấy một vấn đề nghiêm trọng về hệ thống.
+
+[Hibernate Feature]
+Hibernate ném các exception có kiểu, tất cả các dạng con của RuntimeException giúp bạn xác định các lỗi:
+
+- HibernateException: Đây là lỗi thông thường và chung chung của Hibernate. Bạn phải kiểm tra message exception hoặc
+tìm hiểu thêm về nguyên nhân bằng cách gọi getCause() trên exception.
+
+- JDBCException: Đây là bất kỳ exception nào do lớp JDBC nội bộ của Hibernate ném ra. Loại exception này luôn do một
+câu lệnh SQL cụ thể gây ra, và bạn có thể lấy câu lệnh gây ra lỗi bằng cách sử dụng `getSQL()`. Ngoại lệ nội bộ do
+kết nối JDBC (trình điều khiển JDBC) ném ra có thể được lấy thông qua getSQLException() hoặc getCause(), và mã lỗi
+cụ thể cho cơ sở dữ liệu và nhà cung cấp có sẵn thông qua getErrorCode().
+
+- Hibernate bao gồm các dạng con của JDBCException và một bộ chuyển đổi nội bộ cố gắng chuyển đổi mã lỗi cụ thể cho
+nhà cung cấp ném ra bởi trình điều khiển cơ sở dữ liệu thành thông tin có ý nghĩa hơn. Bộ chuyển đổi tích hợp có
+thể tạo ra JDBC-ConnectionException, SQLGrammarException, LockAcquisitionException, DataException và ConstraintViolationException
+cho các ngôn ngữ cơ sở dữ liệu quan trọng nhất được hỗ trợ bởi Hibernate. Bạn có thể thay đổi hoặc cải thiện ngôn ngữ
+cho cơ sở dữ liệu của bạn hoặc kết nối một SQLExceptionConverterFactory để tùy chỉnh việc chuyển đổi này.
+
+Một số nhà phát triển có thể phấn khích khi thấy có quá nhiều dạng exception fine-grained mà Hibernate có thể ném ra.
+Tuy nhiên, điều này có thể dẫn bạn vào hướng sai. Ví dụ, bạn có thể bị cám dỗ bắt một ConstraintViolationException
+để validation. Nếu bạn quên đặt thuộc tính Item#name, và cột được ánh xạ của nó có giá trị NOT NULL
+trong cơ sở dữ liệu, Hibernate sẽ ném exception này khi bạn flush. Tại sao không bắt nó, hiển thị một thông báo lỗi
+(tùy thuộc vào mã lỗi và văn bản) cho người dùng ứng dụng và để họ sửa lỗi? Chiến lược này có hai điểm yếu quan trọng.
+
+Trước hết, việc ném các giá trị unchecked vào cơ sở dữ liệu để xem điều gì sẽ xảy ra không phải là chiến lược đúng
+cho ứng dụng có khả năng mở rộng. Bạn muốn thực hiện ít nhất một số kiểm tra tính toàn vẹn dữ liệu tại tầng ứng dụng.
+Thứ hai, các exception là không thể tránh khỏi cho unit of work hiện tại của bạn. Nhưng đây không phải cách người dùng
+ứng dụng sẽ hiểu một lỗi validation: họ mong đợi vẫn đang ở trong unit of work. Lập trình xung quanh sự
+không phù hợp này là khó khăn và khó khăn. Đề xuất của chúng tôi là bạn sử dụng các dạng exception fine-grained để hiển thị
+thông báo lỗi tốt hơn (fatal), không để validation. Ví dụ, bạn có thể bắt ConstraintViolationException một cách
+riêng biệt và hiển thị một màn hình nói rằng, "Lỗi ứng dụng: có người đã quên kiểm tra dữ liệu trước khi gửi nó đến cơ sở dữ liệu.
+Vui lòng báo cáo cho các lập trình viên." Đối với các exception khác, bạn có thể hiển thị một màn hình lỗi thông thường.
+
+Hành động này giúp bạn trong quá trình phát triển và cũng giúp bất kỳ kỹ sư hỗ trợ khách hàng nào phải quyết định nhanh chóng
+liệu đó có phải là lỗi ứng dụng (vi phạm ràng buộc, SQL sai) hay là hệ thống cơ sở dữ liệu đang bị quá tải (không thể có khóa).
+Đối với validation, bạn có một khung làm việc thống nhất có sẵn với Bean Validation. Từ một tập hợp duy nhất các quy tắc
+trong các chú thích trên các thực thể, Hibernate có thể xác minh tất cả các domain constraint và single-row constraint tại tầng 
+giao diện người dùng và có thể tự động tạo ra các quy tắc SQL DDL.
+
+Bây giờ bạn đã biết những exception bạn nên bắt và khi nào bạn nên mong đợi chúng. Một câu hỏi có lẽ đang trong tâm trí 
+của bạn: sau khi bạn đã bắt một exception và hoàn tác giao dịch hệ thống, bạn nên làm gì? Các exception được ném ra bởi 
+Hibernate là tử vong. Điều này có nghĩa là bạn phải đóng persistence context hiện tại. Bạn không được phép tiếp tục làm
+việc với EntityManager ném ra exception. Hiển thị một màn hình lỗi và/hoặc ghi log lỗi, sau đó cho phép người dùng bắt đầu
+cuộc trò chuyện lại với hệ thống bằng một giao dịch mới và persistence context.
+
+Như thường lệ, điều này không phải là toàn bộ hình ảnh. Một số exception tiêu chuẩn không tử vong:
+
+- javax.persistence.NoResultException: Ném khi một truy vấn hoặc TypedQuery được thực thi với getSingleResult()
+và không có kết quả trả về từ cơ sở dữ liệu. Bạn có thể bọc cuộc gọi truy vấn bằng mã xử lý exception và tiếp tục làm việc
+với persistence context. Giao dịch hiện tại sẽ không được đánh dấu để hoàn tác.
+
+- javax.persistence.NonUniqueResultException: Ném khi một truy vấn hoặc TypedQuery được thực thi với getSingleResult()
+và có nhiều kết quả trả về từ cơ sở dữ liệu. Bạn có thể bọc cuộc gọi truy vấn bằng mã xử lý exception và tiếp tục làm việc
+với persistence context. Hibernate sẽ không đánh dấu giao dịch hiện tại để hoàn tác.
+
+- javax.persistence.QueryTimeoutException: Ném khi một truy vấn hoặc TypedQuery mất quá nhiều thời gian để thực thi.
+Không đánh dấu giao dịch để hoàn tác. Bạn có thể muốn lặp lại truy vấn, nếu thích hợp.
+
+- javax.persistence.LockTimeoutException: Ném khi không thể có khóa tích cực. Có thể xảy ra trong quá trình flushing lưu trữ
+hoặc khóa tường minh (sẽ được nói đến sau trong chương này). Giao dịch không được đánh dấu để hoàn tác, và bạn có thể muốn
+lặp lại hoạt động. Hãy nhớ rằng việc không ngừng tấn công vào hệ thống cơ sở dữ liệu đã đang lâm vào tình trạng khó khăn sẽ
+không cải thiện tình hình.
+
+Điều đáng chú ý bị thiếu trong danh sách này là javax.persistence.EntityNotFoundException. Nó có thể được ném bởi các
+phương thức EntityManager#getReference() và refresh() cũng như lock(), mà bạn sẽ thấy sau trong chương này. Hibernate
+có thể ném nó khi bạn cố gắng truy cập tham chiếu/proxy của một thực thể và bản ghi cơ sở dữ liệu không còn tồn tại.
+Đó là một exception tử vong: nó đánh dấu giao dịch hiện tại để hoàn tác, và bạn phải đóng và bỏ persistence context.
+
+"Programmatic transaction demarcation" (Phân định giao dịch theo cách thủ công): Đây là cách tiếp cận trong đó mã ứng dụng
+phải viết mã để quản lý việc bắt đầu và kết thúc giao dịch. Điều này đòi hỏi mã ứng dụng sử dụng một giao diện giao dịch
+cụ thể như UserTransaction trong Java Transaction API (JTA). Trong trường hợp này, mã ứng dụng phải gọi các phương thức
+để bắt đầu, kết thúc hoặc hủy bỏ giao dịch một cách rõ ràng.
+
+"Declarative transaction demarcation" (Phân định giao dịch dưới dạng khai báo): Ở đây, việc quản lý giao dịch được thực hiện
+thông qua khai báo và không đòi hỏi viết thêm mã trong ứng dụng. Thay vì mã ứng dụng gọi các phương thức giao dịch trực tiếp,
+bạn chỉ định quy tắc và tùy chọn giao dịch trong cấu hình hoặc thông qua các chú thích (annotations) trên mã nguồn của bạn.
+Hệ thống hoặc framework sẽ tự động quản lý giao dịch dựa trên khai báo này mà bạn đã cung cấp.
+
+
+11.1.5 Declarative transaction demarcation - Phân định giao dịch khai báo
+Trong một ứng dụng Java EE, bạn có thể khai báo khi bạn muốn làm việc trong một giao dịch. Sau đó, trách nhiệm quản lý giao dịch
+sẽ nằm trong môi trường chạy của ứng dụng. Thông thường, bạn đặt ranh giới của giao dịch bằng cách sử dụng các chú thích
+trên các thành phần được quản lý của bạn (EJBs, CDI beans, vv).
+
+Bạn có thể sử dụng chú thích cũ hơn là @javax.ejb.TransactionAttribute để xác định biên giới của giao dịch một cách khai báo
+trên các thành phần EJB. Bạn có thể tìm thấy các ví dụ trong phần 18.2.1.
+
+Bạn cũng có thể áp dụng chú thích mới hơn và tổng quát hơn là @javax.transaction.Transactional cho bất kỳ thành phần
+được quản lý nào của Java EE. Bạn có thể tìm thấy một ví dụ trong phần 19.3.1.
+
+Tất cả các ví dụ khác trong chương này hoạt động trong môi trường Java SE thông thường, mà không cần một máy chủ chạy cụ thể.
+Do đó, từ bây giờ trở đi, bạn chỉ sẽ thấy mã phân định giao dịch theo cách lập trình cho đến khi chúng tôi tập trung vào
+các ví dụ cụ thể về ứng dụng Java EE.
+
+Tiếp theo, chúng ta sẽ tập trung vào khía cạnh phức tạp nhất của tính chất ACID: cách bạn cách ly các đơn vị công việc
+đang chạy đồng thời với nhau.
+
+
+

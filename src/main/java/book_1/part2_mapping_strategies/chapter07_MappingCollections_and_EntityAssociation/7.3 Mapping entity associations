@@ -1,0 +1,451 @@
+Ở đầu chương này, chúng tôi đã hứa sẽ nói về các mối quan hệ parent/children. Cho đến nay, bạn đã ánh xạ một entity, 
+Item. Hãy nói rằng đây là `parent`. Nó có một collection các con: the collection các instance Image. Thuật ngữ parent/children
+ngụ ý một loại dependency (phụ thuộc) về vòng đời nào đó, vì vậy một collection chuỗi hoặc thành phần nhúng là phù hợp.
+Các con cái hoàn toàn phụ thuộc vào cha mẹ; chúng sẽ luôn được lưu trữ, cập nhật và xóa cùng với cha mẹ, không bao giờ độc lập.
+Bạn đã ánh xạ một mối quan hệ parent/child! Parent là một entity, và Child nhiều nhưng thuộc value type.
+
+Bây giờ bạn muốn ánh xạ một mối quan hệ khác: an association between two entity classes. Các instance của họ không có vòng đời phụ thuộc. 
+Một instance có thể được lưu trữ, cập nhật và xóa mà không ảnh hưởng đến bất kỳ instance nào khác. Tự nhiên, đôi khi bạn 
+có sự phụ thuộc giữa các instance entity. Bạn cần kiểm soát tinh xảo hơn về cách mối quan hệ giữa hai lớp ảnh hưởng đến
+trạng thái của instance, không phải loại hoàn toàn phụ thuộc (nhúng). Liệu chúng ta vẫn nói về mối quan hệ parent/child không?
+Điều này thì mơ hồ, và mỗi người đều có định nghĩa riêng của họ. Chúng tôi sẽ cố gắng không sử dụng thuật ngữ đó từ bây giờ
+và sẽ thay vào đó dựa vào từ vựng chính xác hơn hoặc ít nhất là có định nghĩa rõ ràng.
+
+Mối quan hệ chúng tôi sẽ khám phá trong các phần tiếp theo luôn giống nhau, giữa các lớp entity Item và Bid, như được
+hiển thị trong hình 7.13. Mối quan hệ từ Bid đến Item là một mối quan hệ many-to-one. 
+Sau này, bạn sẽ làm cho mối quan hệ này thành bidirectioanl (mối quan hệ hai chiều), vì vậy inverse association 
+(mối quan hệ nghịch đảo) từ Item đến Bid sẽ là mối quan hệ one-to-many.
+
+Mối quan hệ many-to-one là mối quan hệ đơn giản nhất, vì vậy chúng tôi sẽ nói về nó trước.
+Các mối quan hệ khác, many-to-many và one-to-one, phức tạp hơn và chúng tôi sẽ thảo luận về chúng trong chương tiếp theo.
+
+Hãy bắt đầu với mối quan hệ many-to-one.
+
+[7.3.1] The simplest possible association (Mối quan hệ đơn giản nhất có thể)
+
+Chúng tôi gọi ánh xạ của thuộc tính Bid#item là một mối quan hệ gọi là `unidirectional many-to-one association`.
+Trước khi chúng tôi thảo luận về ánh xạ này, hãy xem xét lược đồ cơ sở dữ liệu trong hình 7.14.
+
+Listing 7.14 Bid has a single reference to an Item
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+bidirectional/Bid.java
+
+@Entity
+public class Bid {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ITEM_ID", nullable = false)
+    protected Item item;
+    // ...
+}
+
+Chú thích @ManyToOne đánh dấu một thuộc tính là an entity association (một mối quan hệ thực thể), và nó là bắt buộc.
+Rất tiếc, tham số fetch của nó `mặc định` là `EAGER`: điều này có nghĩa là Item liên quan được tải mỗi khi Bid được tải.
+Chúng tôi thường ưu tiên việc tải lười (lazy loading) là một chiến lược mặc định, và chúng tôi sẽ thảo luận thêm về nó
+sau trong phần 12.1.1.
+
+Một entity association many-to-one ánh xạ tự nhiên thành một cột khóa ngoại: ITEM_ID trong bảng BID. Trong JPA, điều này
+được gọi là cột nối (join column). Bạn không cần gì ngoài chú thích @ManyToOne trên thuộc tính. Tên mặc định cho cột nối
+là ITEM_ID: Hibernate tự động sử dụng một combination  (sự kết hợp) giữa tên thực thể đích và thuộc tính định danh của nó,
+được phân tách bằng dấu gạch dưới.
+
+Bạn có thể ghi đè cột khóa ngoại bằng chú thích @JoinColumn. Chúng tôi đã sử dụng nó ở đây vì một lý do khác:
+để khi Hibernate tạo ra lược đồ SQL, cột khóa ngoại trở thành NOT NULL. Một lượt đặt giá luôn phải có một tham chiếu đến
+một mặt hàng; nó không thể tồn tại một mình. (Lưu ý rằng điều này đã cho thấy một loại phụ thuộc vòng đời bạn phải ghi nhớ.)
+Hoặc bạn có thể đánh dấu mối quan hệ này là non-optional với @ManyToOne(optional = false) hoặc, như thường lệ,
+với @NotNull của Bean Validation.
+
+Điều này rất dễ dàng. Quan trọng đối với bạn cần nhận thức là bạn có thể viết một ứng dụng hoàn chỉnh và phức tạp mà không
+cần sử dụng bất kỳ thứ gì khác.
+
+Bạn không cần phải ánh xạ phía bên kia của mối quan hệ này; bạn có thể bỏ qua mối quan hệ one-to-many từ Item đến Bid.
+Chỉ có một cột khóa ngoại trong lược đồ cơ sở dữ liệu, và bạn đã ánh xạ nó. Chúng tôi nghiêm túc với điều này: khi bạn thấy
+một cột khóa ngoại và hai lớp thực thể liên quan, bạn có thể có lẽ nên ánh xạ nó bằng @ManyToOne và không thứ gì khác.
+
+Bây giờ bạn có thể lấy Item của mỗi Bid bằng cách gọi someBid.getItem(). Nhà cung cấp JPA sẽ giải tham chiếu khóa ngoại
+và tải Item cho bạn; nó cũng quản lý các giá trị khóa ngoại. Làm thế nào để lấy tất cả bids của một mặt hàng? Vâng, bạn
+viết một truy vấn và thực thi nó với EntityManager, bằng bất kỳ ngôn ngữ truy vấn nào Hibernate hỗ trợ. Ví dụ, trong JPQL,
+bạn sẽ sử dụng câu lệnh select b from Bid b where b.item = :itemParameter. Một trong những lý do bạn sử dụng công cụ ORM
+đầy đủ như Hibernate là, tất nhiên, bạn không muốn tự viết và thực thi truy vấn đó.
+
+[7.3.2] Making it bidirectional
+
+Ở đầu chương này, chúng ta đã có một danh sách các lý do mà ánh xạ của collection Item#images là một ý tưởng tốt. 
+Hãy làm tương tự cho collection Item#bids. collection này sẽ thực hiện mối quan hệ one-to-many giữa các class entity `Item` và `Bid`.
+Nếu bạn tạo và ánh xạ collection property này, bạn sẽ có:
+
+- Hibernate tự động thực hiện truy vấn SQL SELECT * from BID where ITEM_ID = ? khi bạn gọi someItem.getBids()
+và bắt đầu lặp qua các phần tử trong collection.
+- Bạn có thể cascade (lan truyền) các thay đổi trạng thái từ một Item đến tất cả các Bid được tham chiếu trong collection.
+Bạn có thể chọn những sự kiện vòng đời nào nên được bắc cầu: ví dụ, bạn có thể khai báo rằng tất cả các instance Bid
+được tham chiếu nên được lưu khi Item được lưu, để bạn không phải gọi EntityManager#persist() lặp đi lặp lại cho tất
+cả các bids.
+
+Tuy nhiên, đó không phải là một danh sách dài. Lợi ích chính của một ánh xạ one-to-many là truy cập dữ liệu thông qua
+việc điều hướng hay điều hướng truy cập dữ liệu. Đó là một trong những lời hứa cốt lõi của ORM, cho phép bạn truy cập
+dữ liệu bằng cách calling only methods of your Java domain model. Bộ máy ORM được ghi nhớ để tải dữ liệu cần thiết một
+cách thông minh trong khi bạn làm việc với một giao diện cấp cao của riêng bạn: someItem.getBids().iterator().next().getAmount(),
+và cứ thế.
+
+Thực tế là bạn có thể tùy ý casecade một số thay đổi trạng thái đối với các instance liên quan là một phần thưởng tốt.
+Tuy nhiên, hãy xem xét rằng một số phụ thuộc chỉ ra các valuetype ở cấp độ Java, không phải là thực thể. Hãy tự hỏi liệu
+bất kỳ bảng nào trong lược đồ có cột khóa ngoại BID_ID không. Nếu không, hãy ánh xạ lớp Bid là @Embeddable, không phải
+@Entity, bằng cách sử dụng các bảng giống như trước nhưng với một ánh xạ khác với các quy tắc cố định cho các thay đổi
+trạng thái truyền tiếp. Nếu bất kỳ bảng nào khác có tham chiếu khóa ngoại đến bất kỳ hàng BID nào, bạn cần có một thực
+thể Bid chung; nó không thể được ánh xạ nhúng vào một Item.
+
+Vậy, liệu bạn có nên ánh xạ collection Item#bids hay không? Bạn có được quyền truy cập dữ liệu thông qua điều hướng,
+nhưng giá bạn phải trả là mã Java bổ sung và phức tạp hơn nhiều. Điều này thường là một quyết định khó khăn.
+Bạn sẽ gọi someItem.getBids() bao nhiêu lần trong ứng dụng của bạn và sau đó truy cập/hiển thị tất cả các bids theo một
+thứ tự đã được định sẵn không? Nếu bạn chỉ muốn hiển thị một phần của các bids, hoặc nếu bạn cần lấy chúng theo một thứ tự
+khác mỗi khi bạn cần lấy và sử dụng các bid, bạn phải viết và thực thi các truy vấn một cách th củông bất kỳ, thì ánh xạ
+one-to-many và collection của nó chỉ là gánh nặng bảo trì. Theo kinh nghiệm của chúng tôi, đây thường là nguồn gốc thường
+xuyên của các vấn đề và lỗi, đặc biệt là đối với người mới học ORM. Trong trường hợp CaveatEmptor, câu trả lời là có,
+bạn thường xuyên gọi someItem.getBids() và sau đó hiển thị danh sách cho người dùng muốn tham gia đấu giá.
+
+Hình 7.15 cho thấy biểu đồ UML được cập nhật với mối quan hệ hai chiều này.
+
+Ánh xạ của collection và phía one-to-many như sau.
+Listing 7.15 Item has a collection of Bid references
+
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+bidirectional/Item.java
+@Entity
+public class Item {
+    @OneToMany(mappedBy = "item",
+    fetch = FetchType.LAZY)
+    protected Set<Bid> bids = new HashSet<>();
+    // ...
+}
+
+Annotation @OneToMany là bắt buộc. Trong trường hợp này, bạn cũng phải đặt tham số mappedBy.
+Đối số là tên của thuộc tính ở "phía bên kia."
+
+Hãy xem xét lại phía bên kia: ánh xạ many-to-one trong danh sách 7.15. Tên thuộc tính trong lớp Bid là item.
+Phía bid là người chịu trách nhiệm cho cột khóa ngoại, ITEM_ID, mà bạn đã ánh xạ bằng @ManyToOne. mappedBy cho
+Hibernate biết "load collection này bằng cách sử dụng cột khóa ngoại đã được ánh xạ bởi thuộc tính đã được chỉ định" - 
+trong trường hợp này, Bid#item. Tham số mappedBy luôn bắt buộc khi mối quan hệ one-to-many là hai chiều, khi bạn đã 
+ánh xạ cột khóa ngoại. Chúng tôi sẽ nói về điều đó lại trong chương tiếp theo.
+
+Mặc định cho tham số fetch của ánh xạ collection luôn là FetchType.LAZY. Bạn sẽ không cần tùy chọn này trong tương lai. 
+Đây là cài đặt mặc định tốt; phương thức đối lập sẽ là EAGER ít khi được sử dụng. Bạn không muốn tất cả các bid được tải
+ngay lập tức mỗi khi bạn tải một Item. Chúng nên được tải khi truy cập, theo nhu cầu.
+
+Lý do thứ hai để ánh xạ collection Item#bids là khả năng lan truyền các thay đổi trạng thái.
+
+[7.3.3] Cascading state
+
+Nếu trạng thái của một thực thể có thể được lan truyền qua một mối quan hệ đến một thực thể khác, bạn cần ít dòng mã hơn
+để quản lý các mối quan hệ. Đoạn mã sau tạo ra một Item mới và một Bid mới và sau đó liên kết chúng:
+
+Item someItem = new Item("Some Item");
+Bid someBid = new Bid(new BigDecimal("123.00"), someItem);
+someItem.getBids().add(someBid);        // don't forget
+
+
+Bạn phải xem xét cả hai phía của mối quan hệ này: constructor của Bid chấp nhận một item, được sử dụng để điền vào Bid#item.
+Để duy trì tính toàn vẹn của các instance trong bộ nhớ, bạn cần thêm bid vào Item#bids. Bây giờ, liên kết đã hoàn chỉnh từ
+góc nhìn của mã Java của bạn; tất cả các tham chiếu đã được thiết lập. Nếu bạn không chắc rằng tại sao bạn cần mã này,
+vui lòng xem phần 3.2.4.
+
+Hãy lưu item và các bids của nó trong cơ sở dữ liệu, trước và sau khi có tính năng tự động lan truyền.
+
+[ENABLING TRANSITIVE PERSISTENCE]
+Kích hoạt chuyển tiếp persistence
+
+Với ánh xạ hiện tại của @ManyToOne và @OneToMany, bạn cần mã sau để lưu một Item mới và một số instances Bid.
+
+Listing 7.16 Quản lý các instance entity độc lập riêng biệt
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+OneToManyBidirectional.java
+
+Item someItem = new Item("Some Item");
+em.persist(someItem);
+
+Bid someBid = new Bid(new BigDecimal("123.00"), someItem);
+someItem.getBids().add(someBid);
+em.persist(someBid);
+
+Bid secondBid = new Bid(new BigDecimal("456.00"), someItem);
+someItem.getBids().add(secondBid);
+em.persist(secondBid);
+
+tx.commit();
+
+
+Khi bạn tạo nhiều bids, gọi persist() cho mỗi bid có vẻ lặp lại. Các instance mới là transient và cần được biến thành persistent.
+Mối quan hệ giữa Bid và Item không ảnh hưởng đến vòng đời của họ. Nếu Bid là một valuetype, trạng thái của Bid sẽ tự động
+giống với Item sở hữu. Tuy nhiên, trong trường hợp này, Bid có trạng thái hoàn toàn độc lập riêng biệt.
+
+Chúng tôi đã nói trước đó rằng `fine-grained` control-(việc kiểm soát chi tiết mịn) đôi khi cần thiết để instance
+các phụ thuộc giữa các lớp thực thể liên quan; đây là một trong những trường hợp đó. Cơ chế cho điều này trong JPA là
+tùy chọn `cascade`. Ví dụ, để lưu tất cả các bids khi item được lưu, ánh xạ collection như sau:
+
+Listing 7.17 Cascading persistent state from Item to all bids
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+cascadepersist/Item.java
+
+
+[Cascading PERSIST]
+
+@Entity
+public class Item {
+    @OneToMany(mappedBy = "item", cascade = CascadeType.PERSIST)
+    protected Set<Bid> bids = new HashSet<>();
+    // ...
+}
+Tùy chọn "cascade" áp dụng cho từng hoạt động mà bạn muốn lan truyền, vì vậy bạn sử dụng `CascadeType.PERSIST`
+cho hoạt động `EntityManager#persist()`. Bây giờ bạn có thể đơn giản hóa mã mà liên kết các Item và Bid
+sau đó lưu chúng.
+
+Listing 7.18 All referenced bids are automatically made persistent
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+OneToManyCascadePersist.java
+
+Item someItem = new Item("Some Item");
+em.persist(someItem);                       // Lưu bids một cách tự động (sau này, vào thời điểm flush)
+
+Bid someBid = new Bid(new BigDecimal("123.00"), someItem);
+someItem.getBids().add(someBid);
+
+Bid secondBid = new Bid(new BigDecimal("456.00"), someItem);
+someItem.getBids().add(secondBid);
+
+tx.commit();            // Dirty checking; SQL execution
+
+
+Khi commit, Hibernate xem xét các instance Item đã quản lý/persistent và xem xét collection bids. Sau đó, nó gọi persist()
+bên trong từng instance Bid tham chiếu, lưu chúng cũng như Item. Giá trị được lưu trong cột BID#ITEM_ID được lấy từ mỗi
+instance Bid thông qua việc kiểm tra thuộc tính Bid#item. Cột khóa ngoại được "ánh xạ bởi" với @ManyToOne trên thuộc tính đó.
+
+@ManyToOne annotation cũng có tùy chọn cascade. Bạn sẽ không sử dụng điều này thường xuyên. Ví dụ, bạn không thể nói
+"khi bid được lưu, cũng lưu item". Item phải tồn tại trước; nếu không, bid sẽ không hợp lệ trong cơ sở dữ liệu.
+Hãy nghĩ về một @ManyToOne khả dĩ khác: thuộc tính Item#seller. User phải tồn tại trước khi họ có thể bán một Item.
+
+Transitive(chuyển tiếp) persistence là một khái niệm đơn giản, thường hữu ích với ánh xạ @OneToMany hoặc @ManyToMany.
+Tuy nhiên, bạn phải áp dụng transitive deletion cẩn thận.
+
+[Cascading deletion]
+Có vẻ hợp lý rằng việc xóa một item đồng nghĩa với việc xóa tất cả các bids cho item đó, vì chúng không còn liên quan
+đến item một cách độc lập nữa. Điều này chính là ý nghĩa của composition (biểu đồ UML có mũi tên đầy) trong biểu đồ UML.
+Với các tùy chọn cascade hiện tại, bạn phải viết mã sau để xóa một item:
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+OneToManyCascadePersist.java
+
+Item item = em.find(Item.class, ITEM_ID);
+for (Bid bid : item.getBids()) {
+    em.remove(bid);         // [1] Removes bids
+}
+em.remove(item);            // [2] Removes owner
+
+
+Trước tiên, bạn loại bỏ các bids [1],
+sau đó bạn loại bỏ chủ sở hữu: Item [2].
+
+Thứ tự xóa là quan trọng. Nếu bạn loại bỏ Item trước, bạn sẽ gặp lỗi vi phạm ràng buộc khóa ngoại, vì các thao tác SQL
+được xếp hàng theo thứ tự các cuộc gọi remove() của bạn. Trước hết, hàng(s) trong bảng BID phải được xóa,
+sau đó mới là hàng trong bảng ITEM.
+
+JPA cung cấp một tùy chọn cascade để giúp đỡ trong trường hợp này. The persistence engine có thể tự động xóa một
+thể hiện thực thể liên quan.
+
+Listing 7.19 Cascading removal from Item to all bids
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+cascaderemove/Item.java
+
+@Entity
+public class Item {
+    @OneToMany(
+        mappedBy = "item",
+        cascade = {CascadeType.PERSIST, CascadeType.REMOVE}
+    )
+    protected Set<Bid> bids = new HashSet<>();
+    // ...
+}
+
+Tương tự như trước đây với PERSIST, Hibernate hiện giờ cũng tự động lan truyền thao tác remove() cho mối quan hệ này.
+Nếu bạn gọi EntityManager#remove() trên một Item, Hibernate sẽ tải các phần tử trong collection bids và gọi remove()
+tự động trên mỗi thể hiện:
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+OneToManyCascadeRemove.java
+
+
+Item item = em.find(Item.class, ITEM_ID);
+em.remove(item);
+
+
+Collection phải được tải bởi vì mỗi đối tượng Bid là một thực thể độc lập và phải trải qua life cycle thông thường.
+Nếu có một phương thức rollback @PreRemove tồn tại trên lớp Bid, Hibernate phải thực hiện nó. Bạn sẽ thấy thêm về
+trạng thái đối tượng và các rollback call trong chương 13.
+
+Quá trình xóa này không hiệu quả: Hibernate phải luôn tải collection và xóa từng đối tượng Bid một cách riêng lẻ.
+Một câu lệnh SQL đơn lẻ sẽ có cùng hiệu quả đối với cơ sở dữ liệu: delete from BID where ITEM_ID = ?.
+
+Bạn biết điều này vì không ai trong cơ sở dữ liệu có tham chiếu khóa ngoại đến bảng BID. Hibernate không biết điều này
+và không thể tìm kiếm toàn bộ cơ sở dữ liệu để kiểm tra xem có bất kỳ hàng dòng nào có BID_ID nào đó.
+
+Nếu bạn sử dụng `Item#bids` như một collection của các thực thể (entities) thay vì các thành phần nhúng (embeddable components),
+khi bạn gọi `someItem.getBids().clear()`, Hibernate sẽ thực hiện một câu lệnh SQL DELETE đơn lẻ trong cơ sở dữ liệu để xóa
+tất cả các đối tượng Bid liên quan đến `someItem`.
+
+Tuy nhiên, nếu `Item#bids` là một collection của các thành phần nhúng thay vì các thực thể, Hibernate sẽ giả định rằng
+không ai có thể giữ một tham chiếu đến các đối tượng Bid và việc xóa chỉ là việc loại bỏ tham chiếu từ collection,
+không làm ảnh hưởng đến cơ sở dữ liệu.
+
+
+ENABLING ORPHAN REMOVAL
+
+JPA cung cấp một tùy chọn (không chắc đúng) cho phép kích hoạt cùng hành vi cho các mối quan hệ thực thể @OneToMany
+(và chỉ @OneToMany).
+
+Listing 7.20 Enabling orphan removal on a @OneToMany collection
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+orphanremoval/Item.java
+
+@Entity
+public class Item {
+    @OneToMany(mappedBy = "item",
+        cascade = CascadeType.PERSIST,
+        orphanRemoval = true)           // Include CascadeType.REMOVE
+    protected Set<Bid> bids = new HashSet<>();
+    // ...
+}
+
+Đối số `orphanRemoval=true `cho biết cho Hibernate rằng bạn muốn xóa một Bid một cách vĩnh viễn khi nó bị xóa khỏi collection.
+Dưới đây là một ví dụ về việc xóa một Bid duy nhất:
+
+Path: /examples/src/test/java/org/jpwh/test/associations/
+OneToManyOrphanRemoval.java
+
+Item item = em.find(Item.class, ITEM_ID);
+Bid firstBid = item.getBids().iterator().next();
+item.getBids().remove(firstBid);
+
+
+Hibernate giám sát collection và vào thời điểm commit transaction, nó sẽ nhận ra rằng bạn đã loại bỏ một phần tử khỏi collection.
+Hibernate hiện giờ xem xét Bid là bị bỏ rơi. Bạn đảm bảo rằng không ai khác có tham chiếu đến nó; duy nhất tham chiếu là
+tham chiếu bạn vừa xóa khỏi collection. Hibernate tự động thực hiện một SQL DELETE để xóa bản ghi Bid khỏi cơ sở dữ liệu.
+
+Tuy nhiên, bạn vẫn không thể có DELETE một lần nhấn như với một collection các thành phần. Hibernate tôn trọng các chuyển
+đổi trạng thái thực thể thường xuyên và các bids sẽ được tải và xóa một cách độc lập.
+
+Vì sao việc loại bỏ dữ liệu bị bỏ rơi được xem xét là bất lợi? Có lẽ nó không phải lúc nào cũng bất lợi. Trong trường hợp này,
+không có bảng nào khác trong cơ sở dữ liệu có tham chiếu khóa ngoại đến BID. Không có hậu quả gì khi xóa một hàng từ bảng BID;
+duy nhất tham chiếu trong bộ nhớ đến bids là trong Item#bids. Miễn là tất cả điều này đúng, không có vấn đề gì khi bật
+tính năng orphan removal (loại bỏ dữ liệu bị bỏ rơi). Đó là một tùy chọn thuận tiện, ví dụ, khi presentation layer của bạn
+có thể loại bỏ một phần tử từ một collection để xóa một thứ gì đó; bạn chỉ làm việc với các entity domain model,
+và bạn không cần gọi service để thực hiện thao tác này.
+
+Hãy xem xét điều gì xảy ra khi bạn tạo một bản ánh xạ collection User#bids - một @OneToMany khác, như được hiển thị
+trong hình 7.16. Đây là thời điểm tốt để kiểm tra kiến thức của bạn về Hibernate: các bảng và cấu trúc sơ đồ sẽ
+trông như thế nào sau thay đổi này? (Trả lời: Bảng BID có một cột khóa ngoại BIDDER_ID, tham chiếu đến USERS.)
+
+Cuộc thử nghiệm được hiển thị trong danh sách tiếp theo sẽ không đạt được.
+
+Listing 7.21 Hibernate không dọn sạch các tham chiếu trong bộ nhớ sau khi xóa cơ sở dữ liệu
+PATH: /examples/src/test/java/org/jpwh/test/associations/
+OneToManyOrphanRemoval.java
+
+
+User user = em.find(User.class, USER_ID);
+assertEquals(user.getBids().size(), 2);         // User thực hiện 2 bids
+
+Item item = em.find(Item.class, ITEM_ID);
+Bid firstBid = item.getBids().iterator().next(); // One bid removed
+item.getBids().remove(firstBid);
+
+
+// FAILURE!
+// assertEquals(user.getBids().size(), 1);
+assertEquals(user.getBids().size(), 2);         // Still two!
+
+Hibernate nghĩ rằng `Bid đã bị xóa` là "orphaned (mồ côi)" và có thể bị xóa tự động trong cơ sở dữ liệu, nhưng bạn vẫn 
+giữ tham chiếu đến nó trong collection khác, `User#bids`. Trạng thái cơ sở dữ liệu là ổn khi giao dịch này thực hiện commit;
+row đã bị xóa khỏi bảng BID chứa cả hai khóa ngoại, ITEM_ID và BIDDER_ID. Tuy nhiên, trong bộ nhớ, bạn có sự không nhất quán,
+vì nói rằng, "Xóa entity instance khi tham chiếu bị xóa khỏi collection" tự nhiên xung đột với các tham chiếu được chia sẻ.
+
+Thay vì loại bỏ orphan removal, hoặc thậm chí CascadeType.REMOVE, hãy luôn xem xét ánh xạ đơn giản hơn. Ở đây, Item#bids
+sẽ tốt như một collection các thành phần, được ánh xạ với @ElementCollection. Bid sẽ được ánh xạ với @Embeddable và
+có thuộc tính @ManyToOne bidder, trỏ đến một User. (Các thành phần nhúng có thể sở hữu các mối quan hệ không đối xứng
+với các thực thể.)
+
+Điều này sẽ cung cấp vòng đời mà bạn đang tìm kiếm: sự phụ thuộc đầy đủ vào thực thể sở hữu. Bạn phải tránh các tham chiếu
+được chia sẻ; biểu đồ UML (hình 7.16) làm cho mối quan hệ từ Bid đến User là một chiều. Loại bỏ User#bids collection;
+bạn không cần @OneToMany này. Nếu bạn cần tất cả các bids được thực hiện bởi một user, hãy viết một truy vấn:
+select b from Bid b where b.bidder = :userParameter. (Trong chương tiếp theo, bạn sẽ hoàn thành ánh xạ này với một
+@ManyToOne trong một thành phần nhúng.)
+
+
+[Hibernate Feature]
+ENABLING ON DELETE CASCADE ON THE FOREIGN KEY
+Tất cả các hoạt động xóa chúng ta đã thể hiện đều không hiệu quả; các bids phải được tải vào bộ nhớ và cần thực hiện nhiều
+lệnh SQL DELETE. Hệ quản trị cơ sở dữ liệu SQL hỗ trợ một tính năng khóa ngoại hiệu quả hơn: tùy chọn ON DELETE.
+Trong DDL, nó trông như sau: foreign key (ITEM_ID) references ITEM on delete cascade cho BID table. Tùy chọn này cho biết
+cho cơ sở dữ liệu duy trì tích hợp về tính toàn vẹn tham chiếu một cách trong suốt cho tất cả các ứng dụng truy cập cơ sở dữ liệu.
+Mỗi khi bạn xóa một hàng trong bảng ITEM, cơ sở dữ liệu sẽ tự động xóa bất kỳ hàng nào trong bảng BID có cùng giá trị khóa ITEM_ID.
+Bạn chỉ cần một câu lệnh DELETE duy nhất để loại bỏ tất cả dữ liệu phụ thuộc một cách đệ quy và không cần phải tải bất kỳ
+thứ gì vào bộ nhớ của ứng dụng (máy chủ).
+
+Bạn nên kiểm tra xem lược đồ của bạn đã bật tùy chọn này trên các khóa ngoại chưa. Nếu bạn muốn tùy chọn này được thêm
+vào lược đồ do Hibernate tạo ra, bạn có thể sử dụng chú thích Hibernate @OnDelete.
+
+Listing 7.22 Generating foreign key ON DELETE CASCADE in the schema
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+ondeletecascade/Item.java
+
+@Entity
+public class Item {
+    @OneToMany(mappedBy = "item", cascade = CascadeType.PERSIST)
+    @org.hibernate.annotations.OnDelete(
+        action = org.hibernate.annotations.OnDeleteAction.CASCADE
+    )
+    protected Set<Bid> bids = new HashSet<>();
+    // ...
+}
+
+
+Một trong những điều kỳ lạ của Hibernate được thể hiện ở đây: chú thích @OnDelete chỉ ảnh hưởng đến việc tạo lược đồ bởi
+Hibernate. Các cài đặt ảnh hưởng đến việc tạo lược đồ thường nằm ở phía "đối tượng được ánh xạ mappedBy" khác, nơi có
+ánh xạ khóa ngoại/cột kết nối. Chú thích @OnDelete thường xuất hiện kế bên @ManyToOne trong Bid. Tuy nhiên, khi mối quan hệ
+được ánh xạ hai chiều, Hibernate chỉ nhận ra nó ở phía @OneToMany.
+
+Bật tính năng xóa tự động khóa ngoại trong cơ sở dữ liệu không ảnh hưởng đến hành vi chạy của Hibernate. Bạn vẫn có thể
+gặp phải cùng một vấn đề như trong ví dụ ở danh sách 7.21. Dữ liệu trong bộ nhớ có thể không còn phản ánh đúng trạng thái
+trong cơ sở dữ liệu. Nếu tất cả các hàng liên quan trong bảng BID tự động bị xóa khi một hàng trong bảng ITEM bị xóa,
+mã ứng dụng của bạn phải chịu trách nhiệm làm sạch các tham chiếu và bắt kịp với trạng thái cơ sở dữ liệu. Nếu bạn không
+cẩn thận, bạn có thể thậm chí kết thúc việc lưu trữ một cái gì đó mà bạn hoặc người khác đã xóa trước đó.
+
+Các instances Bid không đi qua life cycle thường xuyên và callbacks như @PreRemove không có tác dụng.
+Ngoài ra, Hibernate không tự động xóa cache toàn cục cấp 2 tùy chọn, có thể chứa dữ liệu lỗi thời. Về cơ bản, các vấn đề
+bạn có thể gặp với database-level foreign key cascading giống như khi ứng dụng khác ngoài ứng dụng của bạn truy cập vào
+cùng cơ sở dữ liệu hoặc bất kỳ kích hoạt cơ sở dữ liệu nào khác tạo ra sự thay đổi. Hibernate có thể là một công cụ rất
+hiệu quả trong tình huống như vậy, nhưng còn có những phần khác để xem xét. Chúng tôi sẽ nói thêm về concurrency và caching
+sau trong cuốn sách này.
+
+Cache cấp 2 trong Hibernate là một cơ chế lưu trữ dữ liệu tạm thời (cache) ở mức cơ sở dữ liệu, giúp tối ưu hóa hiệu
+suất truy vấn dữ liệu từ cơ sở dữ liệu. Hibernate hỗ trợ nhiều loại cache cấp 2, ví dụ: Ehcache, Infinispan,
+và nhiều loại khác.
+
+Khi bạn thực hiện truy vấn dữ liệu từ Hibernate, dữ liệu có thể được lưu trong cache cấp 2 để giảm thiểu số lượng truy
+cập đến cơ sở dữ liệu thực sự. Tuy nhiên, cache cấp 2 không tự động xóa dữ liệu từ cache sau khi dữ liệu trong cơ sở dữ
+liệu đã thay đổi.
+
+Điều này có nghĩa là nếu bạn thay đổi hoặc cập nhật dữ liệu trực tiếp trong cơ sở dữ liệu mà không thông qua Hibernate
+(ví dụ: thông qua một phiên làm việc SQL), cache cấp 2 vẫn giữ lại phiên bản cũ của dữ liệu trong cache. Điều này có thể
+dẫn đến tình huống dữ liệu không đồng bộ giữa cache và cơ sở dữ liệu thực sự.
+
+Để giải quyết vấn đề này, bạn có thể thực hiện xóa cache cấp 2 một cách thủ công khi bạn biết rằng dữ liệu đã thay đổi.
+Hibernate cung cấp các phương thức hoặc cấu hình để xóa cache cấp 2 tại mức đơn vị thực thể hoặc toàn bộ cache tùy thuộc
+vào nhu cầu của bạn.
+
+
+Nếu bạn làm việc trên một schema mới, cách tiếp cận dễ dàng nhất là không bật chế độ database-level cascading
+(xóa tự động của cơ sở dữ liệu) và ánh xạ mối quan hệ thành phần trong mô hình miền dưới dạng emdedded/embeddable. Không phải mối quan hệ thực thể
+Hibernate sau đó có thể thực hiện các hoạt động SQL DELETE hiệu quả để loại bỏ toàn bộ composite. 
+Chúng tôi đã đưa ra khuyến nghị này trong phần trước: nếu bạn có thể tránh việc sử dụng sharedd references (tham chiếu chung), 
+hãy ánh xạ Bid thành @ElementCollection trong Item, không phải là một thực thể độc lập với các mối quan hệ @ManyToOne và 
+@OneToMany. Hoặc có thể bạn không ánh xạ bất kỳ collection nào và chỉ sử dụng ánh xạ đơn giản nhất:
+một cột khóa ngoại với @ManyToOne, unidirectional (không đối xứng) giữa các lớp @Entity.
+
+

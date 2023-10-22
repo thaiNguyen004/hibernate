@@ -1,0 +1,314 @@
+Trong phần này, chúng ta sẽ tìm hiểu cách xây dựng một ứng dụng JPA bằng
+cách sử dụng Spring và data access object design pattern (DAO).
+Mẫu thiết kế DAO tạo ra một giao diện trừu tượng đối với cơ sở dữ liệu,
+hỗ trợ các hoạt động truy cập mà không tiết lộ bất kỳ chi tiết nào
+về cơ sở dữ liệu.
+
+Bạn có thể sử dụng lý luận rằng các Spring Data JPA repositories mà chúng
+ta đã tạo và làm việc với đã làm điều này, và đó là đúng. Trong chương này,
+chúng ta sẽ thể hiện cách xây dựng một lớp DAO và chúng ta sẽ thảo luận về
+khi nào chúng ta nên ưa thích cách tiếp cận này thay vì sử dụng Spring Data JPA.
+
+Ứng dụng CaveatEmptor chứa các lớp Item và Bid (xem danh sách 14.1 và 14.2).
+Các đối tượng này sẽ bây giờ được quản lý với sự giúp đỡ của Spring Framework.
+Mối quan hệ giữa các bảng BID và ITEM sẽ được duy trì thông qua một trường khóa ngoại
+trên bảng BID. Một trường được đánh dấu bằng chú thích @javax.persistence.Transient
+sẽ bị loại trừ khỏi quá trình lưu trữ.
+
+Listing 14.1 The Item class
+
+Path: Ch14/spring-jpa-dao/src/main/java/com/manning/javapersistence/ch14
+➥ /Item.java
+
+@Entity
+public class Item {
+
+    @Id
+    @GeneratedValue(generator = "ID_GENERATOR")
+    private Long id;
+
+    @NotNull
+    @Size(
+        min = 2,
+        max = 255,
+        message = "Name is required, maximum 255 characters."
+    )
+    private String name;
+
+    @Transient
+    private Set<Bid> bids = new HashSet<>();
+    // . . .
+}
+
+Trường id là một định danh được tạo ra tự động.
+Trường name không được null và phải có kích thước từ 2 đến 255 ký tự.
+Mỗi Item có một tham chiếu đến tập hợp các Bids của nó. Trường này được đánh dấu bằng
+@Transient, vì vậy nó sẽ không được lưu trữ.
+
+Chúng ta sẽ chuyển sự chú ý của mình đến lớp Bid, như nó hiện giờ. Nó cũng là một thực thể,
+và mối quan hệ giữa Item và Bid là một many-to-one.
+
+Listing 14.2 The Bid class
+
+Path: Ch14/spring-jpa-dao/src/main/java/com/manning/javapersistence/ch14
+➥ /Bid.java
+
+@Entity
+public class Bid {
+    @Id
+    @GeneratedValue(generator = "ID_GENERATOR")
+    private Long id;
+
+    @NotNull
+    private BigDecimal amount;
+
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "ITEM_ID")
+    private Item item;
+    // . . .
+}
+
+Lớp thực thể Bid chứa trường id làm định danh được tạo ra tự động.
+Trường amount không được null.
+Mỗi Bid có một tham chiếu non-optional đến Item của nó. Việc truy xuất sẽ được
+thực hiện một cách lazy, và tên của cột kết nối là ITEM_ID.
+
+Để triển khai mẫu thiết kế DAO, chúng ta sẽ bắt đầu bằng việc tạo hai interface, ItemDao và BidDao,
+và chúng ta sẽ khai báo các hoạt động truy cập sẽ được triển khai:
+
+Path: Ch14/spring-jpa-dao/src/main/java/com/manning/javapersistence/ch14
+➥ /dao/ItemDao.java
+
+public interface ItemDao {
+
+    Item getById(long id);
+
+    List<Item> getAll();
+
+    void insert(Item item);
+
+    void update(long id, String name);
+
+    void delete(Item item);
+
+    Item findByName(String name);
+}
+
+Giao diện BidDao được khai báo như sau:
+
+Path: Ch14/spring-jpa-dao/src/main/java/com/manning/javapersistence/ch14
+➥ /dao/BidDao.java
+
+public interface BidDao {
+
+    Bid getById(long id);
+
+    List<Bid> getAll();
+
+    void insert(Bid bid);
+
+    void update(long id, String amount);
+
+    void delete(Bid bid);
+
+    List<Bid> findByAmount(String amount);
+
+}
+
+@Repository là một chú thích đánh dấu cho biết thành phần đại diện cho một DAO. Ngoài việc đánh dấu
+lớp được chú thích là một thành phần Spring, @Repository sẽ bắt lấy các ngoại lệ persistence cụ thể
+và dịch chúng thành các ngoại lệ unchecked của Spring.
+
+@Transactional sẽ làm cho tất cả các phương thức từ bên trong lớp trở nên transactional, như đã
+thảo luận ở phần 11.4.3.
+
+Một EntityManager không an toàn với luồng làm việc mặc định. Chúng ta sẽ sử dụng @PersistenceContext
+để container inject một đối tượng proxy an toàn với luồng. Ngoài việc tiêm sự phụ thuộc vào một quản lý
+EntityManager do container, chú thích @PersistenceContext còn có các tham số. Thiết lập persistence type 
+thành EXTENDED giữ persistence context trong suốt vòng đời của một bean.
+
+Triển khai của giao diện ItemDao, ItemDaoImpl, được hiển thị trong đoạn mã sau đây.
+
+Listing 14.3 The ItemDaoImpl class
+
+Path: Ch14/spring-jpa-dao/src/main/java/com/manning/javapersistence/ch14
+➥ /dao/ItemDaoImpl.java
+
+@Repository                 [1]
+@Transactional
+public class ItemDaoImpl implements ItemDao {
+
+    @PersistenceContext(type = PersistenceContextType.EXTENDED) [2]
+    private EntityManager em;
+
+    @Override
+    public Item getById(long id) {          [3]
+        return em.find(Item.class, id);
+    }
+
+    @Override
+    public List<Item> getAll() {            [4]
+        return (List<Item>) em.createQuery("from Item", Item.class)
+            .getResultList();
+    }
+
+    @Override
+    public void insert(Item item) {         [5]
+        em.persist(item);
+        for (Bid bid : item.getBids()) {
+            em.persist(bid);
+        }
+    }
+
+    @Override
+    public void update(long id, String name) {          [6]
+        Item item = em.find(Item.class, id);
+        item.setName(name);
+        em.persist(item);
+    }
+    @Override
+    public void delete(Item item) {             [7]
+        for (Bid bid : item.getBids()) {
+            em.remove(bid);
+        }
+        em.remove(item);
+    }
+
+    @Override
+    public Item findByName(String name) {           [8]
+        return em.createQuery("from Item where name=:name", Item.class)
+            .setParameter("name", name).getSingleResult();
+    }
+
+}
+
+
+1. Lớp ItemDaoImpl được chú thích bằng @Repository và @Transactional.
+
+2. Trường EntityManager em được tiêm vào ứng dụng, như đã chú thích bằng @PersistenceContext.
+Loại persistence EXTENDED có nghĩa là persistence context được duy trì trong suốt vòng đời
+của một bean.
+
+3. Truy xuất một Item theo id của nó.
+4. Truy xuất tất cả các thực thể Item.
+5. Lưu trữ một Item và tất cả các Bid của nó.
+6. Cập nhật trường name của một Item.
+7. Xóa tất cả các Bid thuộc về một Item và Item chính nó.
+8. Tìm kiếm một Item theo tên của nó.
+
+
+Listing 14.4 The BidDaoImpl class
+
+@Repository
+@Transactional
+public class BidDAOImpl implements BidDAO{
+
+    @PersistenceContext(type = PersistenceContextType.EXTENDED)
+    private EntityManager em;
+
+    @Override
+    public Bid getById(long id) {
+        return em.find(Bid.class, id);
+    }
+
+    @Override
+    public List<Bid> getAll() {
+        return em.createQuery("from Bid ", Bid.class).getResultList();
+    }
+
+    @Override
+    public void insert(Bid bid) {
+        em.persist(bid);
+    }
+
+    @Override
+    public void update(long id, String amount) {
+        Bid bid = em.find(Bid.class, id);
+        bid.setAmount(new BigDecimal(amount));
+        em.persist(bid);
+    }
+
+    @Override
+    public void delete(Bid bid) {
+        em.remove(bid);
+    }
+
+    @Override
+    public List<Bid> findByAmount(String amount) {
+        return em.createQuery("from Bid where amount=:amount", Bid.class)
+                .setParameter("amount", new BigDecimal(amount)).getResultList();
+    }
+}
+
+
+Lớp BidDaoImpl được chú thích bằng @Repository và @Transactional.
+
+Trường EntityManager em được tiêm vào ứng dụng, được chú thích bằng @PersistenceContext.
+Thiết lập persistence type thành EXTENDED giữ persistence context trong suốt vòng đời của một bean.
+
+
+
+Các hoạt động được thực hiện bởi BidDaoImpl bao gồm:
+1. Truy xuất một Bid theo id của nó.
+2. Truy xuất tất cả các thực thể Bid.
+3. Lưu trữ một Bid.
+4. Cập nhật trường amount của một Bid.
+5. Xóa một Bid.
+6. Tìm kiếm một Bid theo số tiền của nó.
+
+Để làm việc với cơ sở dữ liệu, chúng ta sẽ cung cấp một lớp đặc biệt, DatabaseService,
+sẽ đảm nhận nhiệm vụ điền dữ liệu vào cơ sở dữ liệu và xóa thông tin khỏi nó.
+
+Listing 14.5 The DatabaseService class
+
+Path: Ch14/spring-jpa-dao/src/test/java/com/manning/javapersistence/ch14
+➥ /DatabaseService.java
+
+public class DatabaseService {
+
+    @PersistenceContext(type = PersistenceContextType.EXTENDED)
+    private EntityManager em;
+
+    @Autowired
+    private ItemDAO itemDao;
+
+    @Transactional
+    public void init() {
+        for (int i = 0; i < 10; i++) {
+            String itemName = "Item " + (i + 1);
+            Item item = new Item();
+            item.setName(itemName);
+            Bid bid1 = new Bid(new BigDecimal(1000.0), item);
+            Bid bid2 = new Bid(new BigDecimal(1100.0), item);
+
+            itemDao.insert(item);
+        }
+    }
+
+    @Transactional
+    public void clear() {
+        em.createQuery("delete from Bid b").executeUpdate();
+        em.createQuery("delete from Item i").executeUpdate();
+    }
+}
+
+Trường EntityManager em được tiêm vào ứng dụng, như đã được chú thích bằng @PersistenceContext. 
+Thiết lập persistence type thành EXTENDED giữ persistence context trong suốt vòng đời của một bean.
+
+Trường ItemDao itemDao được tiêm vào ứng dụng, như đã chú thích bằng @Autowired. Bởi vì lớp ItemDaoImpl
+được chú thích bằng @Repository, Spring sẽ tạo ra bean cần thiết thuộc về lớp này để được tiêm vào đây.
+
+Tạo ra 10 đối tượng Item, mỗi đối tượng có 2 Bid và chèn chúng vào cơ sở dữ liệu.
+
+Xóa tất cả các đối tượng Bid và Item đã được chèn trước đó vào cơ sở dữ liệu.
+
+Tệp cấu hình tiêu chuẩn cho Spring là một lớp Java tạo và thiết lập các bean cần thiết.
+Chú thích @EnableTransactionManagement sẽ kích hoạt khả năng quản lý giao dịch dựa trên chú thích của Spring.
+Khi sử dụng cấu hình XML, chú thích này được phản ánh bằng phần tử tx:annotation-driven. Mọi tương tác với
+cơ sở dữ liệu nên diễn ra trong ranh giới của giao dịch và Spring cần một bean quản lý giao dịch.
+
+Chúng ta sẽ tạo tệp cấu hình sau cho ứng dụng.
+
+
+Listing 14.6 The SpringConfiguration class
+

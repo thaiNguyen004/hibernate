@@ -1,0 +1,90 @@
+6.1 Bảng cho mỗi lớp cụ thể với đa hình ngầm định
+
+Giả sử chúng ta tiếp tục với phương pháp đơn giản nhất được đề xuất: chính xác một bảng cho mỗi lớp cụ thể.
+Bạn có thể ánh xạ tất cả các thuộc tính của một lớp, bao gồm các thuộc tính kế thừa, vào các cột của bảng này,
+như được minh họa trong hình 6.1.
+
+Nếu bạn đang dựa vào đa hình ngầm định này, bạn sẽ ánh xạ các lớp cụ thể bằng cách sử dụng @Entity, như thông thường.
+Theo mặc định, các thuộc tính của lớp cha sẽ bị bỏ qua và không được lưu trữ!
+Bạn phải đánh dấu lớp cha bằng @MappedSuperclass để cho phép nhúng các thuộc tính của nó vào các bảng của các lớp con
+cụ thể; xem ví dụ dưới đây.
+
+Mapping BillingDetails (abstract superclass) with implicit polymorphism
+
+PATH: /model/src/main/java/org/jpwh/model/inheritance/mappedsuperclass/BillingDetails.java
+
+@MappedSuperclass
+    public abstract class BillingDetails {
+
+    @NotNull
+    protected String owner;
+    // ...
+}
+
+Bây giờ hãy ánh xạ các lớp con cụ thể
+
+@Entity
+@AttributeOverride(
+    name = "owner",
+    column = @Column(name = "CC_OWNER", nullable = false))
+public class CreditCard extends BillingDetails {
+    @Id
+    @GeneratedValue(generator = Constants.ID_GENERATOR)
+    protected Long id;
+
+    @NotNull
+    protected String cardNumber;
+
+    @NotNull
+    protected String expMonth;
+
+    @NotNull
+    protected String expYear;
+    // ...
+}
+
+Ánh xạ cho lớp BankAccount trông giống nhau, nên chúng tôi sẽ không hiển thị nó ở đây.
+
+Bạn có thể ghi đè các ánh xạ cột từ lớp cha trong một lớp con bằng cách sử dụng chú thích @AttributeOverride hoặc nhiều
+chú thích @AttributeOverrides. Ví dụ trước đã đổi tên cột OWNER thành CC_OWNER trong bảng CREDITCARD.
+
+Bạn có thể khai báo thuộc tính định danh trong lớp cha, với một tên cột và chiến lược tạo ra chung cho tất cả các lớp con,
+để bạn không phải lặp lại nó. Chúng tôi không làm điều này trong các ví dụ để cho bạn thấy rằng nó là tùy chọn.
+
+Vấn đề chính với ánh xạ kế thừa ngầm định là nó không hỗ trợ các mối quan hệ đa hình tốt. Trong cơ sở dữ liệu, thường bạn
+đại diện cho các mối quan hệ dưới dạng các mối quan hệ khóa ngoại. Trong mô hình được hiển thị trong hình 6.1, nếu các
+lớp con được ánh xạ vào các bảng khác nhau, một mối quan hệ đa hình đến lớp cha của chúng (BillingDetails trừu tượng)
+không thể được biểu diễn dưới dạng một mối quan hệ khóa ngoại đơn giản. Bạn không thể có một thực thể khác được ánh xạ
+với một khóa ngoại "tham chiếu đến BILLINGDETAILS" - không có bảng như vậy. Điều này sẽ gây khó khăn trong mô hình miền,
+vì BillingDetails liên quan đến User; cả bảng CREDITCARD và BANKACCOUNT đều cần một khóa ngoại tham chiếu đến bảng USERS.
+Không có vấn đề này nào có thể được giải quyết dễ dàng, vì vậy bạn nên xem xét một chiến lược ánh xạ thay thế.
+
+Các truy vấn đa hình trả về các thực thể của tất cả các lớp phù hợp với giao diện của lớp được truy vấn cũng gặp vấn đề.
+Hibernate phải thực hiện một truy vấn đối với lớp cha dưới dạng một số lời gọi SQL SELECT, một cho mỗi lớp con cụ thể.
+Truy vấn JPA select bd from BillingDetails bd đòi hỏi hai câu lệnh SQL:
+
+select
+ ID, OWNER, ACCOUNT, BANKNAME, SWIFT
+from
+ BANKACCOUNT
+select
+ ID, CC_OWNER, CARDNUMBER, EXPMONTH, EXPYEAR
+from
+ CREDITCARD
+
+
+Hibernate sử dụng một truy vấn SQL riêng biệt cho mỗi lớp con cụ thể. Tuy nhiên, các truy vấn đối với các lớp con cụ thể
+là đơn giản và hoạt động hiệu quả - Hibernate chỉ sử dụng một trong các câu lệnh này.
+
+Một vấn đề khái niệm khác với chiến lược ánh xạ này là rằng một số cột khác nhau, thuộc các bảng khác nhau, chia sẻ
+chính xác cùng một ý nghĩa. Điều này làm cho việc tiến hóa mô hình cơ sở dữ liệu phức tạp hơn.
+Ví dụ, việc đổi tên hoặc thay đổi kiểu của thuộc tính của lớp cha dẫn đến sự thay đổi trong nhiều cột trên nhiều bảng.
+Nhiều trong số các thao tác tái cấu trúc tiêu chuẩn được cung cấp bởi môi trường phát triển tích hợp của bạn sẽ đòi hỏi
+điều chỉnh thủ công, vì các quy trình tự động thường không tính đến các điều như @AttributeOverrides. Nó cũng khiến
+việc thực hiện các ràng buộc tích hợp cơ sở dữ liệu áp dụng cho tất cả các lớp con trở nên khó khăn hơn.
+
+Chúng tôi đề xuất tiếp cận này (chỉ) cho tầng cao nhất của phân cấp lớp của bạn, nơi đa hình thường không được yêu cầu và 
+khi sửa đổi lớp cha trong tương lai là không thể. Nó không phù hợp cho mô hình miền CaveatEmptor, nơi các truy vấn và 
+các thực thể khác đề cập đến BillingDetails.
+
+Với sự trợ giúp của hoạt động SQL UNION, bạn có thể loại bỏ hầu hết các vấn đề với các truy vấn đa hình và mối quan hệ.

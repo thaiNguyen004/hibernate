@@ -1,0 +1,142 @@
+Bởi vì JPA là một cơ chế transparent persistence - các lớp không biết về (khả năng-capability) persistence của chúng - nên 
+có thể viết logic ứng dụng mà không cần biết liệu dữ liệu nó hoạt động trên có đại diện cho trạng thái persistent 
+hay trạng thái tạm thời chỉ tồn tại trong bộ nhớ. Ứng dụng không cần phải quan tâm rằng một instance entity là persistent
+khi gọi các phương thức của nó. Ví dụ, bạn có thể gọi phương thức kinh doanh Item#calculateTotalPrice() mà không cần xem xét
+vấn đề persistence (ví dụ, trong một bài unit test).
+
+Bất kỳ ứng dụng nào có trạng thái persistent phải tương tác với dịch vụ persistence mỗi khi cần truyền trạng thái được 
+giữ trong bộ nhớ vào cơ sở dữ liệu (hoặc ngược lại). Nói cách khác, bạn phải gọi các giao diện Java Persistence 
+để lưu trữ và tải dữ liệu.
+
+Khi tương tác với cơ chế persistence theo cách đó, ứng dụng phải quan tâm đến trạng thái và vòng đời của một instance entity 
+đối với persistence. Chúng ta gọi đây là persistence life cycle: các trạng thái mà một instance entity trải qua trong suốt 
+cuộc đời của nó. Chúng ta cũng sử dụng thuật ngữ `unit of work`: một tập hợp các hoạt động (có thể) thay đổi trạng thái 
+được xem xét là một nhóm (thường là atomic). Một phần khác của câu đố là persistence context do dịch vụ persistence
+cung cấp. Hãy coi persistence context như một dịch vụ ghi nhớ tất cả các sửa đổi và thay đổi trạng thái bạn đã thực hiện
+trên dữ liệu trong một unit work cụ thể (điều này hơi đơn giản hóa, nhưng nó là một điểm khởi đầu tốt).
+
+Bây giờ chúng ta sẽ phân tích toàn bộ các thuật ngữ này: entity states, persistence context và managed scope.
+Bạn có thể quen thuộc hơn với việc nghĩ về các câu lệnh SQL bạn phải quản lý để lấy và đưa dữ liệu vào cơ sở dữ liệu;
+nhưng một trong những yếu tố quan trọng của thành công của bạn với Java Persistence là sự hiểu biết về quản lý trạng thái,
+vì vậy hãy tiếp tục đọc phần này.
+
+10.1.1 Entity instance states
+Các giải pháp ORM khác nhau sử dụng các thuật ngữ khác nhau và xác định các trạng thái và chuyển đổi trạng thái khác nhau
+cho persistence life cycle. Hơn nữa, các trạng thái được sử dụng bên trong có thể khác với những trạng thái được tiết lộ
+cho ứng dụng khách hàng. JPA xác định bốn trạng thái, ẩn đi sự phức tạp của việc triển khai nội bộ của Hibernate khỏi mã
+khách hàng.
+
+Hình 10.1 hiển thị các trạng thái này và các chuyển đổi của chúng.
+
+Biểu đồ trạng thái cũng bao gồm các cuộc gọi phương thức đến API EntityManager (và Query) mà gây ra các chuyển đổi.
+Chúng ta sẽ thảo luận về biểu đồ này trong chương này; hãy tham khảo nó mỗi khi bạn cần một cái nhìn tổng quan.
+Bây giờ hãy khám phá chi tiết về các trạng thái và chuyển đổi.
+
+TRẠNG THÁI TRANSIENT
+Các instance entity được tạo bằng toán tử new trong Java là trạng thái transient, có nghĩa là trạng thái của chúng sẽ bị mất 
+và thu gom rác ngay khi chúng không còn được tham chiếu nữa. Ví dụ, new Item() tạo ra một instance trạng thái transient của lớp Item, 
+giống như new Long() và new BigDecimal(). Hibernate không cung cấp bất kỳ chức năng rollback nào cho các instance transient; 
+nếu bạn sửa đổi giá của một Item transient, bạn không thể tự động hoàn tác thay đổi đó.
+
+Để một instance entity chuyển từ trạng thái transient sang trạng thái persistent, để trở thành trạng thái managed, 
+cần phải sử dụng một trong hai cách sau: gọi phương thức EntityManager#persist() hoặc tạo một tham chiếu từ một instance
+persistent đã tồn tại và bật chức năng cascade cho liên kết được ánh xạ đó.
+
+
+TRẠNG THÁI PERSISTENT
+Một instance entity persistent có một biểu diễn trong cơ sở dữ liệu. Nó được lưu trữ trong cơ sở dữ liệu - hoặc nó sẽ 
+được lưu trữ khi unit work hoàn thành. Đó là một instance thực có danh tính trong cơ sở dữ liệu, như được định 
+nghĩa trong phần 4.2; giá trị bộ nhận diện của cơ sở dữ liệu của nó được đặt thành giá trị khóa chính của biểu diễn 
+trong cơ sở dữ liệu.
+
+Ứng dụng có thể đã tạo các instance thực và sau đó biến chúng thành persistent bằng cách gọi EntityManager#persist().
+Có thể có các instance thực đã trở thành persistent khi ứng dụng tạo một tham chiếu đến đối tượng từ một instance persistent
+khác mà nhà cung cấp JPA đã quản lý. Một instance entity persistent có thể là một instance được lấy ra từ cơ sở dữ liệu
+thông qua việc thực thi một truy vấn, thông qua việc tìm kiếm theo danh tính hoặc thông qua việc điều hướng đồ thực thể
+bắt đầu từ một instance persistent khác.
+
+Các instance entity persistent luôn liên kết với một persistence context. Bạn sẽ thấy nhiều hơn về điều này trong một thời gian không xa.
+
+
+TRẠNG THÁI REMOVED
+Bạn có thể xóa một instance entity persistent khỏi cơ sở dữ liệu qua nhiều cách: Ví dụ, bạn có thể xóa nó bằng cách 
+sử dụng EntityManager#remove(). Nó cũng có thể trở thành có sẵn để xóa nếu bạn xóa một tham chiếu đến nó từ một bộ sưu tập
+được ánh xạ với tính năng orphan removal được kích hoạt.
+
+Một instance entity thì ở trong trạng thái removed: nhà cung cấp sẽ xóa nó vào cuối của một unit work. Bạn nên loại bỏ
+bất kỳ tham chiếu nào bạn có thể giữ đối với nó trong ứng dụng sau khi bạn đã hoàn thành công việc với nó - ví dụ,
+sau khi bạn đã hiển thị màn hình xác nhận việc xóa mà người dùng thấy.
+
+
+TRẠNG THÁI DETACHED
+Để hiểu về các instance entity detached, hãy xem xét việc tải một instance entity. Bạn gọi EntityManager#find() 
+để lấy một instance entity thông qua danh tính (biết trước) của nó. Sau đó, bạn kết thúc unit work của mình và đóng persistence context.
+Ứng dụng vẫn còn có một cánh cửa - một tham chiếu đến instance entity bạn đã load. Lúc này nó ở trong trạng thái detached,
+và dữ liệu đang trở nên lỗi thời. Bạn có thể loại bỏ tham chiếu và để bộ thu gom rác thu lại bộ nhớ. Hoặc, bạn có thể tiếp tục
+làm việc với dữ liệu trong trạng thái detached và sau đó gọi phương thức merge() để lưu các sửa đổi của bạn trong một unit work mới.
+Chúng tôi sẽ thảo luận về sự (tách rời-detachment) và (gộp lại-mergeing) một lần nữa sau trong chương này, trong một phần dành riêng.
+Bây giờ bạn nên đã hiểu cơ bản về trạng thái của các instance entity và các chuyển đổi của chúng.
+
+Chủ đề tiếp theo của chúng ta là persistence context: một dịch vụ cần thiết của bất kỳ nhà cung cấp Java Persistence nào.
+
+[10.1.2] The Persistence context
+
+Trong một ứng dụng Java Persistence, một EntityManager có một persistence context. Bạn tạo một persistence context 
+khi bạn gọi EntityManagerFactory#createEntityManager(). Ngữ cảnh được đóng khi bạn gọi EntityManager#close(). 
+Trong thuật ngữ JPA, đây là một persistence context được quản lý bởi ứng dụng; ứng dụng của bạn xác định phạm vi của 
+persistence context, đánh dấu unit of work.
+
+Persistence context theo dõi và quản lý tất cả các instance entity trong trạng thái persistent. Persistence context là 
+trung tâm của nhiều tính năng của nhà cung cấp JPA.
+
+Persistence context cho phép persistence engine tự động thực hiện kiểm tra trạng thái bẩn, phát hiện được instance entity 
+mà ứng dụng đã sửa đổi. Sau đó, nhà cung cấp đồng bộ hóa với cơ sở dữ liệu trạng thái của các thể hiện được theo dõi bởi 
+một persistence context, tự động hoặc khi cần. Thông thường, khi một unit of work hoàn thành, nhà cung cấp truyền trạng
+thái được giữ trong bộ nhớ vào cơ sở dữ liệu thông qua việc thực thi các câu lệnh SQL INSERT, UPDATE và DELETE
+(đều thuộc phần Ngôn ngữ [DML]). Quá trình xả này cũng có thể xảy ra vào các thời điểm khác. Ví dụ, Hibernate có thể đồng bộ
+hóa với cơ sở dữ liệu trước khi thực thi một truy vấn. Điều này đảm bảo rằng các truy vấn hiểu biết về các thay đổi
+đã được thực hiện trước đó trong unit of work.
+
+Persistence context hoạt động như một (bộ nhớ đệm cấp độ đầu tiên-first-level cache); nó ghi nhớ tất cả các instance entity
+bạn đã xử lý trong một unit of work cụ thể. Ví dụ, nếu bạn yêu cầu Hibernate load một instance entity bằng cách sử dụng
+giá trị khóa chính (tìm kiếm bằng danh tính), Hibernate có thể kiểm tra trước unit of work hiện tại trong persistence context.
+Nếu Hibernate tìm thấy instance entity trong persistence context, không có sự truy cập cơ sở dữ liệu xảy ra - đây là một đọc
+lặp cho ứng dụng. Các cuộc gọi liên tiếp em.find(Item.class, ITEM_ID) với cùng một persistence context sẽ cho kết quả giống nhau.
+
+Bộ nhớ đệm này cũng ảnh hưởng đến kết quả của các truy vấn tùy ý, được thực hiện ví dụ với API javax.persistence.Query.
+Hibernate đọc tập kết quả SQL của một truy vấn và chuyển đổi nó thành các instance entity. Quá trình này trước hết cố gắng
+giải quyết mọi instance entity trong persistence context bằng cách tìm kiếm theo danh tính. Chỉ khi không thể tìm thấy
+một thể hiện với cùng giá trị danh tính trong persistence context hiện tại, Hibernate mới đọc dữ liệu còn lại từ hàng kết quả.
+Hibernate bỏ qua bất kỳ dữ liệu nào có thể mới hơn trong tập kết quả, do cơ cấu cách ly giao dịch read-committed ở mức
+cơ sở dữ liệu, nếu instance entity đã tồn tại trong persistence context.
+
+Bộ nhớ đệm persistence context luôn luôn được kích hoạt - nó không thể tắt. Nó đảm bảo các điểm sau:
+- Persistence layer không dễ bị lỗi tràn ngăn xếp trong trường hợp có tham chiếu tròn trong đồ thực thể.
+- Không bao giờ có sự xung đột về biểu diễn của cùng một hàng cơ sở dữ liệu vào cuối của unit of work. Nhà cung cấp có thể 
+an toàn ghi tất cả các sửa đổi được thực hiện trên instance entity vào cơ sở dữ liệu.
+- Tương tự, các thay đổi được thực hiện trong một persistence context cụ thể luôn luôn được hiển thị ngay lập tức cho
+tất cả mã khác được thực thi trong unit of work và persistence context của nó. JPA đảm bảo đọc instance entity có thể lặp lại.
+
+Persistence context cung cấp phạm vi đảm bảo của đồ thực thể; trong phạm vi của một persistence context duy nhất,
+chỉ có một instance entity đại diện cho một hàng cơ sở dữ liệu cụ thể. Xem xét so sánh các tham chiếu entityA == entityB.
+Điều này đúng chỉ khi cả hai là tham chiếu đến cùng một thể hiện Java trên bộ nhớ heap. Bây giờ, xem xét so sánh
+entityA.getId().equals(entityB.getId()). Điều này đúng nếu cả hai có cùng giá trị định danh cơ sở dữ liệu.
+Trong một persistence context, Hibernate đảm bảo rằng cả hai so sánh sẽ cho kết quả giống nhau. Điều này giải quyết một
+trong những vấn đề căn bản về không khớp O/R mà chúng ta đã giới thiệu trong phần 1.2.3.
+
+
+Có nên sử dụng sự định danh theo phạm vi quá trình không?
+
+Đối với một ứng dụng web hoặc doanh nghiệp điển hình, việc sử dụng sự định danh theo phạm vi ngữ cảnh tích lũy
+(persistence context-scoped identity)
+thường được ưa chuộng. Sự định danh theo phạm vi quá trình (process-scoped identity), trong đó chỉ có một thể hiện 
+trên bộ nhớ đại diện cho hàng trong toàn bộ quá trình (JVM), có thể mang lại một số lợi ích tiềm năng về việc sử dụng bộ đệm. 
+Tuy nhiên, trong một ứng dụng đa luồng phức tạp, chi phí của việc luôn luôn đồng bộ hóa quyền truy cập chia sẻ đối với các instance entity
+trong một bản đồ định danh toàn cục là một giá trị quá đắt đỏ để trả. Việc mỗi luồng làm việc với một bản sao riêng biệt
+của dữ liệu trong mỗi ngữ cảnh tích lũy là một cách đơn giản và có khả năng mở rộng hơn.
+
+Vòng đời của các instance entity và các dịch vụ do persistence context cung cấp có thể khá khó hiểu ban đầu.
+Hãy xem một số ví dụ mã nguồn về kiểm tra sự thay đổi (dirty checking), bộ nhớ đệm (caching), và cách phạm vi định danh
+đảm bảo hoạt động trong thực tế. Để làm điều này, bạn sẽ làm việc với persistence manager API.
+
+

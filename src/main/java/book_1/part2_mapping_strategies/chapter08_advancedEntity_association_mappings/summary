@@ -1,0 +1,11 @@
+8.5 Tóm tắt
+- Bạn đã học cách ánh xạ các mối quan hệ phức tạp giữa các thực thể bằng cách sử dụng các kỹ thuật như 
+mối quan hệ one-to-one, one-to-many, many-to-many, ternary, và mối quan hệ với bản đồ (maps).
+- Đơn giản hóa mối quan hệ giữa các lớp của bạn, và bạn sẽ hiếm khi cần đến nhiều trong các kỹ thuật chúng tôi đã trình bày. 
+Cụ thể, bạn thường có thể biểu diễn mối quan hệ many-to-many giữa các thực thể bằng cách sử dụng hai mối quan hệ one-to-many 
+từ một lớp trung gian, hoặc với một collection các thành phần.
+- Trước khi thực hiện ánh xạ một collection phức tạp, luôn đảm bảo rằng bạn thực sự cần một collection. Hãy tự hỏi
+liệu bạn thường xuyên duyệt qua các phần tử trong nó hay không.
+- Các cấu trúc Java được trình bày trong chương này có thể làm cho việc truy cập dữ liệu dễ dàng đôi khi, nhưng thường
+làm phức tạp việc lưu trữ, cập nhật và xóa dữ liệu.
+

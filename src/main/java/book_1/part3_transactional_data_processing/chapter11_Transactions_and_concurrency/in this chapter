@@ -1,0 +1,33 @@
+In this chapter
+- Defining database and system transaction essentials
+(Xác định các yếu tố cần thiết của cơ sở dữ liệu và transaction hệ thống)
+
+- Controlling concurrent access with Hibernate and JPA
+(Kiểm soát truy cập đồng thời với Hibernate và JPA)
+
+- Using nontransactional data access
+(Sử dụng quyền truy cập dữ liệu phi transaction)
+
+Trong chương này, chúng ta cuối cùng sẽ nói về (giao dịch - transaction): cách bạn tạo và kiểm soát các unit of work 
+song song trong ứng dụng. Một unit of work là một nhóm hoạt động atomic. Transaction cho phép bạn đặt ranh giới của
+unit of work và giúp bạn cách ly một unit of work khỏi các unit of work khác. Trong một ứng dụng đa người dùng,
+bạn cũng có thể xử lý các unit of work này cùng một lúc.
+
+Để xử lý sự cạnh tranh, chúng ta trước tiên tập trung vào các unit of work ở mức thấp nhất:
+transaction cơ sở dữ liệu và hệ thống. Bạn sẽ tìm hiểu về các API để đánh dấu transaction và cách xác định các
+unit of work trong mã Java. Chúng ta sẽ thảo luận về cách duy trì tính cách ly và kiểm soát truy cập song song
+với các chiến lược bi quan và lạc quan.
+
+Cuối cùng, chúng ta sẽ xem xét một số trường hợp đặc biệt và các tính năng JPA, dựa trên việc truy cập cơ sở dữ liệu
+mà không cần transaction rõ ràng. Hãy bắt đầu với một số thông tin nền.
+
+
+Các tính năng chính mới trong JPA 2 bao gồm:
+- Có các chế độ khóa (lock modes) và các ngoại lệ (exceptions) mới cho khóa bi quan (pessimistic locking).
+- Bạn có thể đặt một chế độ khóa, bi quan hoặc lạc quan, cho một truy vấn (Query).
+- Bạn có thể đặt một chế độ khóa khi gọi EntityManager#find(), refresh(), hoặc lock(). Đối với các chế độ khóa bi quan,
+cũng đã được chuẩn hóa thông tin gợi ý về thời gian chờ.
+- Khi ngoại lệ mới QueryTimeoutException hoặc LockTimeoutException được ném ra, giao dịch không cần phải được quay lại.
+- Ngữ cảnh bền vững (persistence context) có thể ở chế độ không đồng bộ với việc xóa tự động bị tắt. Điều này cho phép
+bạn xếp hàng các sự thay đổi cho đến khi bạn tham gia vào một giao dịch và ngắt kết nối việc sử dụng EntityManager
+khỏi giao dịch.

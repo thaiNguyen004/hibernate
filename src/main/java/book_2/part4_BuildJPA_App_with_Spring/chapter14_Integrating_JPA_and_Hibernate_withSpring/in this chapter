@@ -1,0 +1,23 @@
+This chapter covers
+- Introducing Spring Framework and dependency
+injection
+- Examining the data access object (DAO) design
+pattern
+- Creating and generifying a Spring JPA application
+using the DAO design pattern
+- Creating and generifying a Spring Hibernate
+application using the DAO design pattern
+
+Trong chương này, chúng ta sẽ phân tích một vài khả năng khác nhau để
+tích hợp Spring và Hibernate. Spring là một framework Java nhẹ nhưng
+cũng linh hoạt và phổ biến. Nó là mã nguồn mở và có thể được sử dụng
+ở bất kỳ tầng nào trong ứng dụng Java.
+
+Chúng ta sẽ nghiên cứu các nguyên tắc đằng sau Spring Framework
+(dependency injection, còn được gọi là inversion of control), và chúng ta
+sẽ sử dụng Spring cùng với JPA hoặc Hibernate để xây dựng các ứng dụng
+Java Persistence.
+
+LƯU Ý: Để thực hiện các ví dụ từ mã nguồn, trước tiên bạn cần chạy tập lệnh
+Ch14.sql.
+

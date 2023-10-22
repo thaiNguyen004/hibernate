@@ -1,0 +1,308 @@
+Một mối quan hệ thực thể số nhiều theo định nghĩa là một collection các tham chiếu thực thể. 
+Bạn đã ánh xạ một trong những mối quan hệ này, một mối quan hệ one-to-many, trong chương trước, Item 7.3.2.
+Mối quan hệ one-to-many là loại mối quan hệ thực thể quan trọng nhất liên quan đến một collection. Chúng tôi thậm chí
+khuyến khích không sử dụng các kiểu mối quan hệ phức tạp hơn khi mối quan hệ many-to-one/one-to-many đơn giản có thể
+thực hiện công việc.
+
+Hãy nhớ rằng bạn không cần phải ánh xạ bất kỳ collection thực thể nào nếu bạn không muốn; bạn luôn có thể viết một truy
+vấn rõ ràng thay vì truy cập trực tiếp thông qua việc lặp qua các phần tử. Nếu bạn quyết định ánh xạ các collection của
+các tham chiếu thực thể, bạn có một số tùy chọn, và chúng tôi đã thảo luận về một số tình huống phức tạp hơn.
+
+[8.2.1] Considering one-to-many bags
+
+Đến nay, bạn chỉ thấy một chú thích `@OneToMany` được sử dụng trên một Set, nhưng bạn cũng có thể sử dụng ánh xạ dạng bag 
+cho một mối quan hệ bidirectional one-to-many. Tại sao bạn lại làm như vậy?
+
+Bag có hiệu suất hiệu quả nhất trong tất cả các collection bạn có thể sử dụng cho mối quan hệ bidirectional one-to-many. 
+Mặc định, các collection trong Hibernate được nạp khi chúng được truy cập lần đầu trong ứng dụng. Vì một bag không cần 
+duy trì index của các phần tử của nó (như một List) hoặc kiểm tra các phần tử trùng lặp (như một set), bạn có thể thêm 
+các phần tử mới vào bag mà không kích hoạt việc nạp dữ liệu. Điều này là một tính năng quan trọng nếu bạn định ánh xạ 
+một collection có thể lớn của các tham chiếu thực thể.
+
+Tuy nhiên, bạn không thể eager-fetch hai collection dạng bag cùng lúc: ví dụ, nếu bids và images của một Item được ánh xạ
+one-to-many dưới dạng bag. Điều này không phải là một sự mất mát lớn, vì việc nạp hai collection cùng một lúc luôn dẫn
+đến một tích chập; bạn muốn tránh loại hoạt động này dù collection là bag, set, hoặc list. Chúng ta sẽ quay lại với
+các chiến lược nạp dữ liệu trong chương 12. Nói chung, chúng ta có thể nói rằng một bag là collection nghịch đảo tốt nhất
+cho mối quan hệ one-to-many, nếu được ánh xạ dưới dạng `@OneToMany(mappedBy = "...")`.
+
+Để ánh xạ một mối quan hệ bidirectional one-to-many dưới dạng bag, bạn phải thay đổi kiểu của collection bids trong thực thể
+Item thành một Collection và sử dụng một triển khai ArrayList. Ánh xạ cho mối quan hệ giữa Item và Bid vẫn được giữ nguyên
+một cách cơ bản:
+
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/bag/Item.java
+
+@Entity
+public class Item {
+    @OneToMany(mappedBy = "item")
+    public Collection<Bid> bids = new ArrayList<>();
+    // ...
+}
+
+Phía Bid với @ManyToOne (đó là phía "mapped by"), và thậm chí cả các bảng, đều giống như trong phần 7.3.1.
+Một bag cũng cho phép các phần tử trùng lặp, điều này khác với set bạn đã ánh xạ trước đó.
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/OneToManyBag.java
+Item someItem = new Item("Some Item");
+em.persist(someItem);
+
+Bid someBid = new Bid(new BigDecimal("123.00"), someItem);
+someItem.getBids().add(someBid);
+someItem.getBids().add(someBid);        No persistent effect!
+em.persist(someBid);
+assertEquals(someItem.getBids().size(), 2);
+
+Nhưng thực tế thì điều này không có ý nghĩa trong trường hợp này, vì "duplicate" ở đây có nghĩa bạn đã thêm một tham 
+chiếu cụ thể đến cùng một đối tượng Bid nhiều lần. Bạn sẽ không thực hiện điều này trong mã ứng dụng của bạn. Ngay cả khi
+bạn thêm cùng một tham chiếu nhiều lần vào collection này, Hibernate vẫn bỏ qua nó. Phía quan trọng để cập nhật cơ sở dữ 
+liệu là phía @ManyToOne, và mối quan hệ đã được "mapped by" phía đó. Khi bạn nạp Item, collection không chứa các phần tử
+trùng lặp.
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/OneToManyBag.java
+Item item = em.find(Item.class, ITEM_ID);
+assertEquals(item.getBids().size(), 1)
+
+Như đã đề cập, ưu điểm của bags là collection không cần được khởi tạo khi bạn thêm một phần tử mới:
+
+PATH: /examples/src/test/java/org/jpwh/test/associations/OneToManyBag.java
+Item item = em.find(Item.class, ITEM_ID);
+Bid bid = new Bid(new BigDecimal("456.00"), item);
+item.getBids().add(bid);        <- No SELECT!
+em.persist(bid);
+
+Mã ví dụ này gây ra một lệnh SQL SELECT để nạp đối tượng Item. Nếu bạn sử dụng `em.getReference()` thay vì `em.find()`,
+Hibernate vẫn khởi tạo và trả về một Item proxy với một SELECT ngay sau khi bạn gọi `item.getBids()`. Nhưng miễn là bạn
+không lặp qua Collection, không cần thêm các truy vấn nữa, và một INSERT cho Bid mới sẽ được thực hiện mà không cần nạp
+tất cả các bids. Nếu collection là một Set hoặc một List, Hibernate sẽ nạp tất cả các phần tử khi bạn thêm một phần tử khác.
+
+Hãy thay đổi collection thành một danh sách cố định (persistent List).
+
+[8.2.2] Unidirectional and bidirectional list mappings
+
+Nếu bạn cần một danh sách thực sự để giữ vị trí của các phần tử trong một collection, bạn phải lưu vị trí đó trong một
+cột bổ sung. Đối với ánh xạ one-to-many, điều này cũng có nghĩa bạn nên thay đổi thuộc tính Item#bids thành List và khởi tạo
+biến với một ArrayList:
+
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+list/Item.java
+
+@Entity
+public class Item {
+    @OneToMany
+    @JoinColumn(
+        name = "ITEM_ID",
+        nullable = false
+    )
+    @OrderColumn(
+        name = "BID_POSITION",  // Defaults to BIDS_ORDER
+        nullable = false
+    )
+    public List<Bid> bids = new ArrayList<>();
+    // ...
+}
+
+Đây là một ánh xạ unidirectional: không có phía "mapped by" khác. Đối tượng Bid không có thuộc tính @ManyToOne. 
+Chú thích mới @OrderColumn được yêu cầu cho các chỉ số danh sách cố định, trong đó, như thường lệ, bạn nên đặt cột NOT NULL. 
+Xem xét cơ sở dữ liệu của bảng BID, với các cột join và order, được hiển thị trong hình 8.7.
+
+Chỉ số lưu trữ của mỗi collection bắt đầu từ số không và liên tục (không có khoảng trống). Hibernate sẽ thực hiện nhiều
+câu lệnh SQL có thể khi bạn thêm, loại bỏ và di chuyển các phần tử của danh sách. Chúng ta đã thảo luận về vấn đề hiệu
+suất này trong phần 7.1.6.
+
+Hãy làm cho ánh xạ này hai chiều, với một thuộc tính @ManyToOne trên đối tượng Bid:
+
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/list/Bid.java
+
+@Entity
+public class Bid {
+    @ManyToOne
+    @JoinColumn(
+        name = "ITEM_ID",
+        updatable = false, insertable = false
+    )
+    @NotNull
+    protected Item item;
+    // ...
+}
+
+Bạn có thể đã mong đợi mã khác— có thể là @ManyToOne(mappedBy="bids") và không có chú thích @JoinColumn bổ sung.
+Nhưng @ManyToOne không có thuộc tính mappedBy: nó luôn là phía "sở hữu" của mối quan hệ. Bạn phải làm cho phía kia,
+@OneToMany, trở thành phía mappedBy. Ở đây, bạn gặp vấn đề về khái niệm và một số quirks của Hibernate.
+
+collection Item#bids không còn là chỉ đọc nữa, vì Hibernate hiện phải lưu trữ chỉ số của mỗi phần tử. Nếu phía Bid#item
+là chủ sở hữu của mối quan hệ, Hibernate sẽ bỏ qua collection khi lưu dữ liệu và không ghi chỉ số của các phần tử.
+Bạn phải ánh xạ @JoinColumn hai lần và sau đó tắt ghi trên phía @ManyToOne bằng cách đặt updatable=false và insertable=false.
+Hibernate bây giờ xem xét phía collection khi lưu dữ liệu, bao gồm cả chỉ số của mỗi phần tử. @ManyToOne hiện thực sự chỉ
+có thể đọc, giống như nó nếu nó có thuộc tính mappedBy.
+
+Bidirectional List với mappedBy
+Hiện có một số báo cáo lỗi liên quan đến vấn đề này đang mở trên Hibernate; một phiên bản tương lai có thể cho phép việc 
+sử dụng @OneToMany(mappedBy) và @OrderColumn theo đúng tiêu chuẩn JPA trên một collection. Tại thời điểm viết, ánh xạ được
+hiển thị là biến thể duy nhất hoạt động cho một mối quan hệ one-to-many hai chiều với một danh sách cố định.
+
+Cuối cùng, trình tạo schema của Hibernate luôn dựa vào @JoinColumn của phía @ManyToOne. Do đó, nếu bạn muốn có schema
+chính xác được tạo ra, bạn nên thêm @NotNull ở phía này hoặc khai báo @JoinColumn(nullable=false). Trình tạo bỏ qua phía 
+@OneToMany và cột join của nó nếu có @ManyToOne.
+
+Trong một ứng dụng thực tế, bạn sẽ không ánh xạ mối quan hệ bằng một List. Việc duy trì thứ tự của các phần tử trong cơ 
+sở dữ liệu có vẻ như một trường hợp sử dụng phổ biến nhưng sau khi xem xét lại thì không rất hữu ích: đôi khi bạn muốn 
+hiển thị một danh sách với bid cao nhất hoặc mới nhất trước, hoặc chỉ hiển thị các lần đặt chỗ của một người dùng cụ thể,
+hoặc các lần đặt chỗ trong khoảng thời gian cụ thể. Không có một trong các thao tác này đòi hỏi một chỉ số danh sách cố định. 
+Như đã đề cập trong phần 3.2.4, hạn chế việc lưu trữ thứ tự hiển thị trong cơ sở dữ liệu; duy trì tính linh hoạt của nó 
+thông qua các truy vấn thay vì ánh xạ cố định. Hơn nữa, việc duy trì chỉ số khi ứng dụng loại bỏ, thêm hoặc dời các phần 
+tử trong danh sách có thể tốn kém và có thể gây ra nhiều câu lệnh SQL. Hãy ánh xạ cột join foreign key bằng @ManyToOne và bỏ collection.
+
+Tiếp theo là một tình huống khác với một mối quan hệ one-to-many optional: một mối quan hệ được ánh xạ vào một bảng nối trung gian.
+
+
+[8.2.3] Optional one-to-many with a join table
+
+Trong đoạn mã bạn đang xem xét việc thêm một thuộc tính buyer vào lớp Item. Khi bạn thêm thuộc tính này, bạn có thể truy cập
+người dùng đã đặt giá cao nhất thông qua lệnh someItem.getBuyer(). Nếu bạn thiết lập mối quan hệ này là hai chiều,
+mối quan hệ này cũng sẽ giúp hiển thị màn hình hiển thị tất cả các phiên đấu giá mà một người dùng cụ thể đã thắng:
+bạn gọi someUser.getBoughtItems() thay vì viết một truy vấn.
+
+Từ góc độ của lớp User, mối quan hệ này là một mối quan hệ one-to-many. Hình 8.8 hiển thị các lớp và mối quan hệ giữa chúng.
+
+Mối quan hệ này khác biệt so với mối quan hệ giữa Item và Bid vì đa dạng 0..* trong UML chỉ ra rằng tham chiếu là tùy chọn.
+Điều này không ảnh hưởng nhiều đến mô hình miền Java, nhưng nó có tác động đến các bảng cơ sở dữ liệu tương ứng.
+Bạn mong đợi một cột khóa ngoại BUYER_ID trong bảng ITEM. Cột này phải có thể chứa giá trị null, vì một người dùng có
+thể không mua một Item cụ thể (miễn là phiên đấu giá vẫn đang diễn ra).
+
+Bạn có thể chấp nhận rằng cột khóa ngoại có thể NULL và áp dụng các ràng buộc bổ sung: "Cho phép NULL chỉ nếu thời gian
+kết thúc phiên đấu giá chưa đến hoặc chưa có lượt đấu giá nào được thực hiện." Chúng tôi luôn cố gắng tránh các cột có
+thể chứa giá trị null trong một schema cơ sở dữ liệu quan hệ. Thông tin không xác định làm giảm chất lượng dữ liệu bạn lưu trữ.
+Bản ghi đại diện cho các mệnh đề là đúng; bạn không thể khẳng định điều gì đó mà bạn không biết. Hơn nữa, trong thực tế,
+nhiều nhà phát triển và DBA không tạo ra ràng buộc đúng và dựa vào mã ứng dụng thường bị lỗi để cung cấp tính toàn vẹn dữ liệu.
+
+Mối quan hệ tùy chọn giữa các thực thể, cho dù là một one-to-one hay one-to-many, được biểu diễn tốt nhất trong một cơ sở dữ
+liệu SQL bằng một bảng liên kết. Hình 8.9 cho thấy một ví dụ về schema.
+
+Bạn đã thêm một bảng liên kết vào trong chương trước của cuốn sách này, cho một mối quan hệ one-to-one. Để đảm bảo đa dạng
+của one-to-one, bạn đã áp dụng một ràng buộc duy nhất trên một cột khóa ngoại của bảng liên kết. Trong trường hợp hiện tại,
+bạn có một đa dạng one-to-many, vì vậy chỉ cần ITEM_ID là cột khóa chính duy nhất: chỉ có một User có thể mua một Item cụ thể,
+một lần. Cột BUYER_ID không phải duy nhất vì một User có thể mua nhiều Item.
+
+Phần ánh xạ của collection User#boughtItems rất đơn giản.
+
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/jointable/
+User.java
+
+@Entity
+@Table(name = "USERS")
+public class User {
+
+    @OneToMany(mappedBy = "buyer")
+    protected Set<Item> boughtItems = new HashSet<Item>();
+    // ...
+}
+
+Đây là phần bên chỉ đọc thông thường của một mối quan hệ bidirectional, với phần ánh xạ thực tế đến schema
+ở phía "mapped by," tức là Item#buyer:
+
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/jointable/
+Item.java
+
+@Entity
+public class Item {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "ITEM_BUYER",
+        joinColumns = @JoinColumn(name = "ITEM_ID"),    // Defaults to ID
+        inverseJoinColumns = @JoinColumn(name = "BUYER_ID")  // Defaults to BUYER_ID
+    )
+    protected User buyer;
+    // ...
+}
+
+Đây hiện là một mối quan hệ one-to-many/many-to-one sạch sẽ. Nếu một Item không được mua, không có hàng nào tương ứng
+trong bảng liên kết ITEM_BUYER. Bạn không có bất kỳ cột nào có giá trị NULL khó xử trong schema của bạn.
+Tuy nhiên, bạn nên viết một ràng buộc thủ tục và một trigger chạy trên INSERT, cho bảng ITEM_BUYER: "Chỉ cho phép
+insert buyer nếu thời gian kết thúc cuộc đấu cho Item cụ thể đã đến và người dùng đã đặt giá thắng."
+
+Ví dụ tiếp theo là ví dụ cuối cùng với các mối quan hệ one-to-many. Cho đến nay, bạn đã thấy các mối quan hệ one-to-many
+từ một thực thể đến thực thể khác. Một lớp thành phần nhúng có thể cũng có một mối quan hệ one-to-many đến một thực thể.
+
+[8.2.4] One-to-many association in an embeddable class
+
+Hãy xem xét lại phép ánh xạ thành phần có thể nhúng mà bạn đã lặp lại trong vài chương gần đây: Address của một User. 
+Bây giờ bạn mở rộng ví dụ này bằng cách thêm một mối quan hệ one-to-many từ Address đến Shipment:
+một collection được gọi là `deliveries`. Hình 8.10 hiển thị biểu đồ lớp UML cho mô hình này.
+Lớp Address là một lớp @Embeddable, không phải là một Entity. Nó có thể sở hữu một mối quan hệ unidirectional
+đến một thực thể; ở đây, đó là one-to-many đến Shipment. (Bạn sẽ thấy một lớp nhúng có một mối quan hệ many-to-one
+với một thực thể trong phần tiếp theo.)
+
+Lớp Address có một Set<Shipment> đại diện cho mối quan hệ này:
+PATH: /model/src/main/java/org/jpwh/model/associations/onetomany/
+embeddable/Address.java
+
+@Embeddable
+public class Address {
+    @NotNull
+    @Column(nullable = false)
+    protected String street;
+
+    @NotNull
+    @Column(nullable = false, length = 5)
+    protected String zipcode;
+
+    @NotNull
+    @Column(nullable = false)
+    protected String city;
+
+    @OneToMany
+    @JoinColumn(
+        name = "DELIVERY_ADDRESS_USER_ID",
+        nullable = false
+    )
+    protected Set<Shipment> deliveries = new HashSet<Shipment>();
+    // ...
+}
+
+Chiến lược ánh xạ đầu tiên cho mối quan hệ này sử dụng một @JoinColumn có tên là DELIVERY_ADDRESS_USER_ID.
+Cột này bị ràng buộc bởi khóa ngoại nằm trong bảng SHIPMENT, như bạn có thể thấy trong hình 8.11.
+
+Các thành phần nhúng không có bộ nhận dạng riêng của họ, vì vậy giá trị trong cột khóa ngoại là giá trị của bộ nhận dạng
+của User, bao gồm Địa chỉ. Ở đây, bạn cũng khai báo cột nối là nullable = false, vì vậy một Giao hàng phải có một địa chỉ
+giao hàng kèm theo. Tất nhiên, điều hướng bidirectional không thể thực hiện: Shipment không thể có một tham chiếu đến Address,
+vì các thành phần nhúng không thể có tham chiếu chung.
+
+Nếu mối quan hệ là optional và bạn không muốn có một cột nullable, bạn có thể ánh xạ mối quan hệ đó đến một bảng nối/liên kết trung gian,
+như được hiển thị trong hình 8.12. Ánh xạ của collection trong lớp Address bây giờ sử dụng một @JoinTable thay vì @JoinColumn:
+
+Path: /model/src/main/java/org/jpwh/model/associations/onetomany/
+embeddablejointable/Address.java
+
+@Embeddable
+public class Address {
+    @NotNull
+    @Column(nullable = false)
+    protected String street;
+
+    @NotNull
+    @Column(nullable = false, length = 5)
+    protected String zipcode;
+
+    @NotNull
+    @Column(nullable = false)
+    protected String city;
+
+    @OneToMany
+    @JoinTable(
+        name = "DELIVERIES",
+        joinColumns = @JoinColumn(name = "USER_ID"),
+        inverseJoinColumns = @JoinColumn(name = "SHIPMENT_ID")
+    )
+    protected Set<Shipment> deliveries = new HashSet<Shipment>();
+    // ...
+}
+
+Lưu ý rằng nếu bạn không khai báo cả @JoinTable và @JoinColumn, thì @OneToMany trong một lớp nhúng mặc định
+sử dụng chiến lược bảng nối.
+
+Từ bên trong lớp thực thể sở hữu, bạn có thể ghi đè các ánh xạ thuộc tính của một lớp nhúng bằng cách sử dụng @AttributeOverride,
+như được hiển thị trong phần 5.2.3.
+@AssociationOverride: Khi bạn có một lớp nhúng (embeddable class) chứa một mối quan hệ thực thể (entity association),
+bạn có thể sử dụng @AssociationOverride để ghi đè ánh xạ của mối quan hệ đó từ lớp nhúng. Điều này cho phép bạn tùy chỉnh cách ánh xạ
+mối quan hệ thực thể này từ lớp nhúng.
+
+Một ánh xạ bảng nối cũng có thể áp dụng trong các ánh xạ many-to-many thực sự.

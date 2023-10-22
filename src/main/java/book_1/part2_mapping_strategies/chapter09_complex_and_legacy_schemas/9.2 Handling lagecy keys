@@ -1,0 +1,376 @@
+Chúng tôi đã đề cập trong phần 4.2.3 rằng chúng tôi nghĩ rằng việc sử dụng các khóa chính tự nhiên có thể là một ý tưởng không tốt.
+
+Natural keys thường làm cho việc thay đổi data model trở nên khó khăn khi yêu cầu kinh doanh thay đổi. Chúng thậm chí có
+thể ảnh hưởng đến hiệu suất trong trường hợp cực đoan. Thật không may, nhiều legacy schema sử dụng các natural keys
+(hoặc tự nhiên hợp thành) một cách nặng nề; và vì lý do chúng tôi không khuyến khích việc sử dụng các khóa composite,
+nên có thể khó khăn để thay đổi legacy schema để sử dụng các khóa non-composite natural hoặc surrogate keys (khóa thay thế).
+Vì vậy, JPA hỗ trợ cả các khóa chính và khóa ngoại tự nhiên và hợp thành.
+
+[9.2.1] Mapping a natural primary key
+
+Nếu bạn gặp một bảng USERS trong legacy schema, có khả năng rằng trường USERNAME là khóa chính. Trong trường hợp này, 
+bạn sẽ không có một khóa thay thế (surrogate key) mà Hibernate tự động tạo ra. Thay vào đó, ứng dụng của bạn sẽ phải gán 
+giá trị của khóa chính khi lưu một thể hiện của lớp User (người dùng):
+
+PATH: /examples/src/test/java/org/jpwh/test/complexschemas/
+NaturalPrimaryKey.java
+
+User user = new User("johndoe");
+em.persist(user);
+
+Ở đây, tên người dùng (user's name) là một đối số của hàm tạo công khai (public constructor) duy nhất của lớp User.
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/naturalprimarykey/
+User.java
+
+@Entity
+@Table(name = "USERS")
+public class User {
+    @Id
+    protected String username;
+
+    protected User() {
+    }
+
+    public User(String username) {
+        this.username = username;
+    }
+    // ...
+}
+
+Hibernate hoạt động bằng cách gọi hàm tạo không đối số bảo vệ (protected no-argument constructor) khi nó tải dữ liệu
+của một đối tượng User từ cơ sở dữ liệu, sau đó gán trực tiếp giá trị của trường username. Khi bạn tạo một đối tượng
+User mới, bạn cần gọi hàm tạo công khai (public constructor) và truyền tên người dùng vào. Nếu bạn không khai báo một
+trình tạo mã số duy nhất (identifier generator) cho thuộc tính @Id, Hibernate mong đợi ứng dụng sẽ đảm nhận việc gán
+giá trị cho khóa chính.
+
+Đối với các khóa chính hợp thành (composite) hoặc tự nhiên, bạn có thể cần làm thêm một số công việc để quản lý việc
+gán giá trị cho khóa chính, vì chúng không phải lúc nào cũng được tự động tạo ra như khóa thay thế (surrogate key).
+Việc này đòi hỏi ứng dụng của bạn phải xác định và gán giá trị cho các thành phần của khóa chính hợp thành hoặc
+tự nhiên một cách thủ công.
+
+[9.2.2] Mapping a composite primary key
+
+Giả sử khóa chính của bảng USERS là một khóa chính hợp thành (composite key) bao gồm hai cột là USERNAME và DEPARTMENTNR.
+Bạn viết một lớp khóa chính hợp thành riêng biệt (composite identifier class) chỉ khai báo các thuộc tính của khóa chính
+và đặt tên lớp này là UserId:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/compositekey/
+embedded/UserId.java
+
+@Embeddable         [1] @Embeddable, Serializable class
+public class UserId implements Serializable {
+    protected String username;
+    protected String departmentNr;          [2] Automatically NOT NULL
+
+    protected UserId() {                    [3] Protected constructor
+    }
+
+    public UserId(String username, String departmentNr) {       [4] Public constructor
+        this.username = username;
+        this.departmentNr = departmentNr;
+    }
+
+    @Override
+    public boolean equals(Object o) {                  [5] Overrides equals() and hashCode()
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        UserId userId = (UserId) o;
+
+        if (!departmentNr.equals(userId.departmentNr)) return false;
+        if (!username.equals(userId.username)) return false;
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = username.hashCode();
+        result = 31 * result + departmentNr.hashCode();
+        return result;
+    }
+    // ...
+}
+
+1 Lớp này phải được đánh dấu bằng @Embeddable và Serializable — bất kỳ loại nào được sử dụng làm loại bảng chìa khóa
+trong JPA đều phải Serializable.
+
+2 Bạn không cần phải đánh dấu các thuộc tính của khóa composite là @NotNull; các cột cơ sở dữ liệu của chúng tự động
+là NOT NULL khi được nhúng làm khóa chính của một thực thể.
+
+3 Đặc tả JPA yêu cầu một hàm tạo không tham số công khai cho một lớp chứa bảng chìa khóa.
+Hibernate chấp nhận có khả năng truy cập bảo vệ.
+
+4 Chỉ có một hàm tạo công khai nên có các giá trị khóa làm đối số.
+
+5 Bạn phải ghi đè các phương thức equals() và hashCode() với cùng một ngữ nghĩa mà khóa composite có trong cơ sở dữ liệu của bạn.
+Trong trường hợp này, đây là một so sánh trực tiếp giữa các giá trị username và departmentNr.
+
+Đây là các phần quan trọng của lớp UserId. Có lẽ bạn cũng sẽ có một số phương thức getter để truy cập các giá trị thuộc tính.
+Bây giờ hãy ánh xạ thực thể User với loại bảng chìa khóa này như một @EmbeddedId:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/compositekey/
+embedded/User.java
+
+@Entity
+@Table(name = "USERS")
+public class User {
+    @EmbeddedId
+    protected UserId id;            //Optional: @AttributeOverrides
+
+    public User(UserId id) {
+        this.id = id;
+    }
+    // ...
+}
+
+Tương tự như cho các thành phần nhúng thông thường, bạn có thể ghi đè các thuộc tính cá nhân và các cột được ánh xạ của chúng,
+như bạn đã thấy trong phần 5.2.3. Hình 9.1 hiển thị schema cơ sở dữ liệu.
+
+Bất kỳ hàm tạo công khai nào của lớp User nên yêu cầu một thể hiện của UserId, để bắt buộc bạn cung cấp một giá trị
+trước khi lưu User (một lớp thực thể phải có một hàm tạo không tham số khác, tất nhiên):
+
+PATH: /examples/src/test/java/org/jpwh/test/complexschemas/
+CompositeKeyEmbeddedId.java
+
+UserId id = new UserId("johndoe", "123");
+User user = new User(id);
+em.persist(user);
+
+Đây là cách bạn load một instance của User
+
+PATH: /examples/src/test/java/org/jpwh/test/complexschemas/
+CompositeKeyEmbeddedId.java
+
+UserId id = new UserId("johndoe", "123");
+User user = em.find(User.class, id);
+assertEquals(user.getId().getDepartmentNr(), "123");
+
+Tiếp theo, giả sử DEPARTMENTNR là một khóa ngoại tham chiếu đến bảng DEPARTMENT, và bạn muốn đại diện cho mối quan hệ này
+trong mô hình domain Java như một mối quan hệ one-to-many.
+
+[9.2.3] Foreign keys in composite primary keys
+
+Tùy chọn ánh xạ đầu tiên của bạn là sử dụng chú thích đặc biệt @MapsId, được thiết kế cho mục đích này. Bắt đầu bằng việc
+đổi tên thuộc tính departmentNr thành departmentId trong UserId embedded identifier class đã được giới thiệu trong phần trước:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/compositekey/
+mapsid/UserId.java
+
+@Embeddable
+public class UserId implements Serializable {
+    protected String username;
+    protected Long departmentId;
+    // ...
+}
+
+Loại của thuộc tính hiện tại là Long, không phải là String. Tiếp theo, thêm mối quan hệ department bằng cách sử dụng ánh xạ
+@ManyToOne vào lớp thực thể User:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/compositekey/
+mapsid/User.java
+
+@Entity
+@Table(name = "USERS")
+public class User {
+    @EmbeddedId
+    protected UserId id;
+
+    @ManyToOne
+    @MapsId("departmentId")
+    protected Department department;
+
+    public User(UserId id) {
+        this.id = id;
+    }
+    // ...
+}
+
+Chú thích @MapsId cho biết cho Hibernate là để bỏ qua giá trị của UserId#departmentId khi lưu một thể hiện của User.
+Hibernate sử dụng giá trị của Department đã gán cho User#department khi lưu một hàng vào bảng USERS:
+
+PATH: /examples/src/test/java/org/jpwh/test/complexschemas/
+CompositeKeyMapsId.java
+
+Department department = new Department("Sales");
+em.persist(department);
+
+UserId id = new UserId("johndoe", null);        <-- Null?
+User user = new User(id);
+user.setDepartment(department);         <-- Required
+em.persist(user);
+
+Hibernate bỏ qua bất kỳ giá trị nào bạn đặt cho UserId#departmentId khi lưu; ở đây nó thậm chí được đặt thành null.
+Điều này có nghĩa là bạn luôn cần một thể hiện của Department khi lưu trữ một User. JPA gọi điều này là một ánh xạ identifier
+được dẫn xuất (derived identifier mapping).
+
+Khi bạn tải một User, chỉ cần cần thiết một phần tử nhận dạng của Department.
+
+PATH: /examples/src/test/java/org/jpwh/test/complexschemas/
+CompositeKeyMapsId.java
+
+UserId id = new UserId("johndoe", DEPARTMENT_ID);
+User user = em.find(User.class, id);
+assertEquals(user.getDepartment().getName(), "Sales");
+
+Chúng tôi không thích chiến lược ánh xạ này lắm. Dưới đây là một biến thể tốt hơn mà không sử dụng @MapsId:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/compositekey/
+readonly/User.java
+
+@Entity
+@Table(name = "USERS")
+public class User {
+    @EmbeddedId
+    protected UserId id;
+
+    @ManyToOne
+    @JoinColumn(
+        name = "DEPARTMENTID",     //Defaults to DEPARTMENT_ID
+        insertable = false, updatable = false      // Make it read-only
+    )
+    protected Department department;
+
+    public User(UserId id) {
+        this.id = id;
+    }
+    // ...
+}
+
+Với thuộc tính insertable=false, updatable=false đơn giản, bạn làm cho thuộc tính User#department chỉ có thể đọc.
+Điều đó có nghĩa là bạn chỉ có thể truy vấn dữ liệu bằng cách gọi someUser.getDepartment(), và bạn không có phương thức
+setDepartment() công khai nào. Thuộc tính có trách nhiệm cập nhật cột DEPARTMENTID trong bảng USERS là UserId#departmentId.
+
+Do đó, bây giờ bạn phải đặt giá trị của định danh của department cua UserId khi lưu một User mới:
+
+PATH: /examples/src/test/java/org/jpwh/test/complexschemas/
+CompositeKeyReadOnly.java
+
+Department department = new Department("Sales");
+em.persist(department);
+UserId id = new UserId("johndoe", department.getId());
+
+User user = new User(id);
+em.persist(user);
+assertNull(user.getDepartment());
+
+Lưu ý rằng User#getDepartment() trả về null vì bạn chưa đặt giá trị cho thuộc tính này. Hibernate chỉ điền giá trị của
+nó khi bạn tải một User từ cơ sở dữ liệu.
+
+PATH: /examples/src/test/java/org/jpwh/test/complexschemas/
+CompositeKeyReadOnly.java
+
+UserId id = new UserId("johndoe", DEPARTMENT_ID);
+User user = em.find(User.class, id);
+assertEquals(user.getDepartment().getName(), "Sales");
+
+Nhiều nhà phát triển thường ưa thích đóng gói tất cả những vấn đề này trong một hàm tạo:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/compositekey/
+readonly/User.java
+
+@Entity
+@Table(name = "USERS")
+public class User {
+    public User(String username, Department department) {
+        if (department.getId() == null)
+            throw new IllegalStateException(
+                "Department is transient: " + department);
+        this.id = new UserId(username, department.getId());
+        this.department = department;
+    }
+    // ...
+}
+
+Hàm tạo phòng thủ này bắt buộc cách mà một User phải được khởi tạo và thiết lập đúng tất cả các giá trị nhận dạng và thuộc tính.
+Nếu bảng USERS có một khóa chính composite, thì một khóa ngoại tham chiếu đến bảng đó cũng phải là một khóa chính composite.
+
+[9.2.4] Foreign keys to composite primary keys
+Ví dụ, mối quan hệ từ Item đến User, người bán, có thể yêu cầu một ánh xạ của một khóa ngoại composite.
+Hãy xem vào schema trong hình 9.3.
+
+Hibernate có thể ẩn chi tiết này trong mô hình domain Java. Dưới đây là ánh xạ của thuộc tính Item#seller:
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/compositekey/
+manytoone/Item.java
+
+@Entity
+public class Item {
+
+    @NotNull
+    @ManyToOne
+    @JoinColumns({
+        @JoinColumn(name = "SELLER_USERNAME",
+                referencedColumnName = "USERNAME"),
+        @JoinColumn(name = "SELLER_DEPARTMENTNR",
+                referencedColumnName = "DEPARTMENTNR")
+    })
+    protected User seller;
+    // ...
+}
+
+
+Có thể bạn chưa thấy chú thích @JoinColumns trước đó; đó là một danh sách các cột khóa ngoại composite đằng sau mối quan hệ này.
+Hãy chắc chắn bạn cung cấp thuộc tính referencedColumnName để liên kết nguồn và đích của khóa ngoại.
+Đáng tiếc, Hibernate sẽ không phàn nàn nếu bạn quên điều này, và bạn có thể gặp vấn đề về thứ tự cột sai trong schema được tạo ra.
+
+Trong các schema cũ, một khóa ngoại đôi khi không tham chiếu đến một khóa chính.
+
+[9.2.5] Foreign key referencing non-primary keys
+
+Ràng buộc khóa ngoại trên cột SELLER trong bảng ITEM đảm bảo rằng người bán của sản phẩm tồn tại bằng cách yêu cầu cùng
+một giá trị người bán có mặt trên một cột nào đó trong một hàng nào đó trên một bảng nào đó. Không có các quy tắc khác;
+cột đích không cần phải có ràng buộc khóa chính hoặc thậm chí là ràng buộc duy nhất. Bảng đích có thể là bất kỳ bảng nào.
+Giá trị có thể là một định danh số của người bán hoặc một chuỗi số khách hàng; chỉ cần loại dữ liệu phải giống nhau cho
+nguồn và đích của tham chiếu khóa ngoại.
+
+Tất nhiên, ràng buộc khóa ngoại thường tham chiếu đến cột(s) khóa chính. Tuy nhiên, trong các cơ sở dữ liệu cũ, đôi khi
+có các ràng buộc khóa ngoại không tuân theo quy tắc đơn giản này. Đôi khi, một ràng buộc khóa ngoại tham chiếu đến một
+cột duy nhất đơn giản - một cột duy nhất tự nhiên không phải là khóa chính. Hãy giả sử rằng trong CaveatEmptor, và như
+được hiển thị trong hình 9.4, bạn cần xử lý một cột khóa tự nhiên thừa kế được gọi là CUSTOMERNR trên bảng USERS.
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/naturalforeignkey/
+User.java
+
+@Entity
+@Table(name = "USERS")
+public class User implements Serializable {
+    @Id
+    @GeneratedValue(generator = Constants.ID_GENERATOR)
+    protected Long id;
+
+    @NotNull
+    @Column(unique = true)
+    protected String customerNr;
+    // ...
+}
+
+Đến nay, điều này không có gì đặc biệt; bạn đã thấy một ánh xạ thuộc tính duy nhất đơn giản như vậy trước đó. Khía cạnh
+thừa kế ở đây là cột SELLER_CUSTOMERNR trong bảng ITEM, với một ràng buộc khóa ngoại tham chiếu đến CUSTOMERNR
+của User thay vì ID của User:
+
+PATH: /model/src/main/java/org/jpwh/model/complexschemas/naturalforeignkey/
+Item.java
+
+@Entity
+public class Item {
+    @NotNull
+    @ManyToOne
+    @JoinColumn(
+        name = "SELLER_CUSTOMERNR",
+        referencedColumnName = "CUSTOMERNR"
+    )
+    protected User seller;
+    // ...
+}
+Bạn chỉ định thuộc tính referencedColumnName của @JoinColumn để khai báo mối quan hệ này. Hibernate hiện giờ biết rằng
+cột mục tiêu được tham chiếu là một khóa tự nhiên, không phải là khóa chính, và quản lý mối quan hệ khóa ngoại một
+cách tương ứng.
+
+Nếu khóa tự nhiên mục tiêu là một khóa tổng hợp, hãy sử dụng @JoinColumns như trong phần trước. May mắn thay, thường dễ dàng
+làm sạch một schema như vậy bằng cách tái cấu trúc các khóa ngoại để tham chiếu đến các khóa chính - nếu bạn có thể thay đổi
+cơ sở dữ liệu mà không làm phiền các ứng dụng khác chia sẻ dữ liệu.
+
+Điều này hoàn thành cuộc thảo luận của chúng tôi về các vấn đề liên quan đến khóa tự nhiên, khóa tổng hợp và khóa ngoại
+mà bạn có thể phải đối mặt khi cố gắng ánh xạ một schema thừa kế. Hãy tiến tới chiến lược đặc biệt thú vị khác:
+ánh xạ các thuộc tính cơ bản hoặc nhúng của một thực thể vào một bảng phụ.
+

@@ -1,0 +1,533 @@
+Các hoạt động join kết hợp dữ liệu từ hai (hoặc nhiều hơn) mối quan hệ. Gắn kết dữ liệu trong một truy vấn cũng
+cho phép bạn lấy nhiều trường hợp và collection liên quan trong một truy vấn duy nhất: ví dụ, để nạp một Item và
+tất cả các bids của nó trong một lần truy cập cơ sở dữ liệu. Bây giờ chúng tôi sẽ chỉ bạn cách hoạt động cơ bản của
+các phép join và cách sử dụng chúng để viết các chiến lược truy xuất động như vậy.
+
+Hãy xem trước cách các phép join hoạt động trong các truy vấn SQL, mà không có JPA.
+
+15.4.1 Joins with SQL
+
+Hãy bắt đầu với ví dụ đã được đề cập: join dữ liệu trong các bảng ITEM và BID, như được hiển thị trong hình 15.1.
+Cơ sở dữ liệu chứa ba item: item đầu tiên có ba bids, item thứ hai có một bid và mục thứ ba không có bid.
+Lưu ý rằng chúng tôi không hiển thị tất cả các cột; vì vậy có các đường nét chấm.
+
+Điều mà hầu hết mọi người nghĩ đến khi họ nghe đến từ "join" trong ngữ cảnh của cơ sở dữ liệu SQL là một inner join.
+Một inner join là loại join quan trọng nhất trong một số loại join và cũng là dễ hiểu nhất. Hãy xem xét câu lệnh
+SQL và kết quả trong hình 15.2. Câu lệnh SQL này chứa một inner join theo kiểu ANSI trong mệnh đề FROM.
+
+Nếu bạn join bảng ITEM và BID bằng inner join, với điều kiện rằng ID của một hàng ITEM phải khớp với giá trị ITEM_ID
+của một hàng BID, bạn sẽ có các mục kết hợp với các lượt đấu giá của chúng trong kết quả. Lưu ý rằng kết quả của
+phép thực hiện này chỉ chứa các item có các bid.
+
+Bạn có thể nghĩ về phép join hoạt động như sau: trước tiên, bạn lấy một tích của hai bảng, bằng cách lấy tất cả
+các kết hợp có thể của các hàng ITEM với các hàng BID. Thứ hai, bạn lọc các hàng kết hợp này bằng một điều kiện join:
+biểu thức trong mệnh đề ON. (Bất kỳ hệ thống cơ sở dữ liệu tốt nào đều có các thuật toán tinh vi hơn rất nhiều để đánh
+giá một phép join; thường không xây dựng một sản phẩm tiêu thụ bộ nhớ và sau đó lọc ra các hàng.)
+
+Điều kiện join là một biểu thức Boolean mà sẽ đánh giá thành true nếu hàng kết hợp phải được bao gồm trong kết quả.
+
+Rất quan trọng phải hiểu rằng điều kiện join có thể là bất kỳ biểu thức nào mà đánh giá thành true. Bạn có thể join
+dữ liệu theo cách tùy ý; bạn không bị giới hạn chỉ trong so sánh giá trị của các định danh.
+Ví dụ, điều kiện join trên i.ID = b.ITEM_ID và b.AMOUNT > 100 chỉ bao gồm các hàng từ bảng BID có giá trị AMOUNT lớn hơn 100.
+Cột ITEM_ID trong bảng BID có ràng buộc khóa ngoại, đảm bảo rằng một BID có một tham chiếu đến một hàng ITEM. Điều này
+không có nghĩa là bạn chỉ có thể join bằng cách so sánh các cột khóa chính và khóa ngoại. Các cột khóa thường là những
+toán tử phổ biến nhất trong điều kiện join, vì bạn thường muốn lấy thông tin liên quan cùng nhau.
+
+Nếu bạn muốn có tất cả các item, không chỉ những item có bid liên quan, và NULL thay vì dữ liệu đấu giá khi không có đấu giá
+tương ứng, bạn có thể viết một (left) outer join, như được hiển thị trong hình 15.3.
+
+Trong trường hợp của left outer join, mỗi hàng trong bảng ITEM (trái) mà không bao giờ thỏa mãn điều kiện join cũng được
+bao gồm trong kết quả, với giá trị NULL được trả về cho tất cả cột của BID. Right outer join hiếm khi được sử dụng;
+các nhà phát triển luôn nghĩ từ trái sang phải và đặt bảng "điều khiển" của phép join đầu tiên. Trong hình 15.4,
+bạn có thể thấy kết quả tương tự với BID thay vì ITEM là bảng điều khiển và một right outer join.
+
+Trong SQL, bạn thường chỉ định điều kiện join một cách rõ ràng. Thật không may, không thể sử dụng tên ràng buộc khóa ngoại
+để chỉ định cách hai bảng sẽ được join: select * from ITEM join BID on FK_BID_ITEM_ID không hoạt động.
+
+Bạn chỉ định điều kiện join trong mệnh đề ON cho một phép join theo kiểu ANSI hoặc trong mệnh đề WHERE cho một phép join
+theo kiểu theta: select * from ITEM i, BID b where i.ID = b.ITEM_ID. Đây là một inner join; ở đây bạn thấy rằng trước hết,
+một sản phẩm được tạo ra trong mệnh đề FROM.
+
+Bây giờ chúng tôi sẽ thảo luận về các tùy chọn join JPA. Hãy nhớ rằng Hibernate cuối cùng sẽ dịch tất cả các truy vấn thành SQL,
+vì vậy ngay cả khi cú pháp có chút khác biệt, bạn luôn nên tham khảo các hình minh họa trong phần này và xác nhận rằng bạn hiểu
+một cách chính xác kết quả SQL và tập dữ liệu kết quả trông như thế nào.
+
+
+15.4.2 Join options in JPA
+
+JPA cung cấp bốn cách để biểu diễn các phép join (inner và outer) trong các truy vấn:
+1. implicit association join with path expressions.
+2. Một phép join thông thường trong mệnh đề FROM với toán tử join (ordinary join in the FROM clause with the join operator).
+3. Một phép join với lấy dữ liệu (fetch join) trong mệnh đề FROM với toán tử join và từ khóa fetch để nạp dữ liệu một
+cách nhanh chóng (fetch join in the FROM clause with the join operator and the fetch keyword for eager fetching).
+4. Một phép join theo kiểu theta trong mệnh đề WHERE (theta-style join in the WHERE clause).
+
+Hãy bắt đầu với phép association join ngầm định (implicit association join).
+
+
+15.4.3 Implicit association joins
+
+Trong các truy vấn JPA, bạn không cần chỉ định một điều kiện join một cách rõ ràng. Thay vào đó, bạn chỉ cần chỉ định tên
+của một association của một lớp Java được ánh xạ. Điều này là tính năng giống nhau với điều mà chúng ta muốn có trong SQL:
+một điều kiện join được biểu diễn bằng tên ràng buộc khóa ngoại. Bởi vì bạn đã ánh xạ hầu hết, nếu không phải tất cả,
+các mối quan hệ khóa ngoại trong cơ sở dữ liệu của bạn, bạn có thể sử dụng tên của những association được ánh xạ này trong
+ngôn ngữ truy vấn. Điều này là một loại "đường dẫn ngữ pháp" (syntactical sugar), nhưng nó rất tiện lợi.
+
+Ví dụ, lớp thực thể Bid có một association many-to-one với một lớp thực thể Item được đặt tên là "item". Nếu bạn tham chiếu đến
+association này trong một truy vấn, Hibernate có đủ thông tin để suy ra biểu thức join với sự so sánh các cột khóa. Điều này
+giúp làm cho các truy vấn ngắn gọn hơn và dễ đọc hơn.
+
+Trong chương trước của cuốn sách này, chúng tôi đã chỉ bạn cách sử dụng biểu thức đường dẫn thuộc tính, bằng cách sử dụng
+dấu chấm (dot-notation): biểu thức đường dẫn với giá trị đơn như user.homeAddress.zipcode và biểu thức đường dẫn với giá trị
+tập hợp như item.bids. Bạn có thể tạo một biểu thức đường dẫn trong một truy vấn join ẩn.
+
+select b from Bid b where b.item.name like 'Fo%'
+------------------------------------------------
+Root<Bid> b = criteria.from(Bid.class);
+criteria.select(b).where(
+    cb.like(
+        b.get("item").<String>get("name"),
+        "Fo%"
+    )
+);
+
+Con đường `b.item.name` tạo ra một phép join ẩn trên các association many-to-one từ Bid đến Item - tên của association này là "item".
+Hibernate biết rằng bạn đã ánh xạ association này với khóa ngoại ITEM_ID trong bảng BID và tạo điều kiện join SQL tương ứng.
+Các phép join ẩn luôn được thực hiện theo hướng của các association many-to-one hoặc one-to-one, không bao giờ thông qua một
+association tập hợp (ví dụ: bạn không thể viết `item.bids.amount`).
+
+Có thể có nhiều phép join trong một biểu thức đường dẫn duy nhất:
+
+select b from Bid b where b.item.seller.username = 'johndoe'
+------------------------------------------------------------
+Root<Bid> b = criteria.from(Bid.class);
+criteria.select(b).where(
+    cb.equal(
+        b.get("item").get("seller").get("username"),
+        "johndoe"
+    )
+);
+
+Truy vấn này join các hàng từ các bảng BID, ITEM và USER. 
+
+Chúng tôi không khuyến nghị sử dụng "đường dẫn ngữ pháp" này cho các truy vấn phức tạp hơn. Phép join SQL quan trọng,
+và đặc biệt khi tối ưu hóa truy vấn, bạn cần có khả năng nhìn nhanh để xem chính xác có bao nhiêu phép join.
+Hãy xem xét truy vấn sau đây:
+
+select b from Bid b where b.item.seller.username = 'johndoe'
+    and b.item.buyNowPrice is not null
+-------------------------------------------------------------
+Root<Bid> b = criteria.from(Bid.class);
+criteria.select(b).where(
+    cb.and(
+        cb.equal(
+            b.get("item").get("seller").get("username"),
+            "johndoe"
+        ),
+        cb.isNotNull(b.get("item").get("buyNowPrice"))
+    )
+);
+
+Cần bao nhiêu phép join để biểu diễn một truy vấn như vậy trong SQL? Thậm chí nếu bạn trả lời đúng, cần nhiều hơn vài giây để hiểu.
+Câu trả lời là hai. SQL được tạo ra có dạng tương tự như sau:
+
+select b.*
+    from BID b
+        inner join ITEM i on b.ITEM_ID = i.ID
+        inner join USER u on i.SELLER_ID = u.ID
+        where u.USERNAME = 'johndoe'
+            and i.BUYNOWPRICE is not null;
+
+
+Một cách thay thế, thay vì sử dụng các phép join với các biểu thức đường dẫn phức tạp như vậy, bạn có thể viết các phép
+join thông thường một cách rõ ràng trong mệnh đề FROM.
+
+15.4.4 Explicit joins
+
+JPA phân biệt giữa các mục đích bạn có thể muốn khi thực hiện phép join. Giả sử bạn đang truy vấn các item; có hai lý do
+mà bạn có thể muốn join chúng với các bid.
+
+1. Bạn có thể muốn giới hạn các item được trả về bởi truy vấn dựa trên một tiêu chí áp dụng cho các bid của chúng.
+Ví dụ, bạn có thể muốn tất cả các mục có một lượt đấu giá có giá trị lớn hơn 100, điều này yêu cầu một phép join inner.
+Ở đây, bạn không quan tâm đến các mục không có lượt đấu giá.
+
+2. Mặt khác, bạn có thể quan tâm chủ yếu đến các item, nhưng có thể muốn thực hiện một phép join outer chỉ vì bạn muốn lấy
+tất cả các bid cho các item được truy vấn trong một câu SQL duy nhất, điều mà chúng tôi gọi là eager join fetching
+trước đây. Hãy nhớ rằng bạn thích ánh xạ tất cả các mqh theo cách lười biếng theo mặc định, vì vậy một truy vấn eager fetch
+sẽ ghi đè lên chiến lược truy vấn mặc định khi chạy thời gian cho một trường hợp sử dụng cụ thể.
+
+Hãy trước tiên viết một số truy vấn sử dụng phép join với mục đích giới hạn. Nếu bạn muốn lấy các trường hợp Item và giới
+hạn kết quả cho các mục có các lượt đấu giá với một số lượng cụ thể, bạn phải gán một bí danh cho liên kết được join.
+Sau đó, bạn tham chiếu đến bí danh trong mệnh đề WHERE để giới hạn dữ liệu bạn muốn:
+
+select i from Item i
+    join i.bids b
+    where b.amount > 100
+---------------------------------------
+Root<Item> i = criteria.from(Item.class);
+Join<Item, Bid> b = i.join("bids");
+criteria.select(i).where(
+    cb.gt(b.<BigDecimal>get("amount"), new BigDecimal(100))
+);
+
+Truy vấn này gán bí danh "b" cho tập hợp bids và giới hạn các trường hợp Item trả về 
+cho những trường hợp có Bid#amount lớn hơn 100.
+
+Cho đến nay, bạn chỉ đã viết các phép join inner. Outer joins thường được sử dụng chủ yếu cho việc truy xuất động,
+mà chúng ta sẽ thảo luận trong thời gian tới. Đôi khi, bạn muốn viết một truy vấn đơn giản với một phép join outer mà
+không áp dụng một (chiến lược truy xuất động-dynamic fetching strategy). Ví dụ, truy vấn sau đây và lấy các item
+không có bid và các item có bids có số tiền đặt cược tối thiểu:
+
+select i, b from Item i
+ left join i.bids b on b.amount > 100
+-------------------------------------------------
+Root<Item> i = criteria.from(Item.class);
+Join<Item, Bid> b = i.join("bids", JoinType.LEFT);
+b.on(
+    cb.gt(b.<BigDecimal>get("amount"), new BigDecimal(100))
+);
+criteria.multiselect(i, b);
+
+Truy vấn này trả về các cặp Item và Bid đã được sắp xếp, trong một List<Object[]>.
+
+Thứ đầu tiên mới mẻ trong truy vấn này là từ khóa LEFT và JoinType.LEFT trong truy vấn tiêu chuẩn. Tùy chọn, bạn có thể 
+viết LEFT OUTER JOIN và RIGHT OUTER JOIN trong JPQL, nhưng thường chúng tôi ưa thích cách viết ngắn gọn.
+
+Thay đổi thứ hai là điều kiện join bổ sung theo sau từ khóa ON. Nếu bạn đặt biểu thức b.amount > 100 vào mệnh đề WHERE
+thay vì đặt nó trong mệnh đề FROM, bạn giới hạn kết quả cho các trường hợp Item có các lượt đấu giá. Điều này không phải
+là điều bạn muốn ở đây: bạn muốn lấy các mục và lượt đấu giá, thậm chí cả các mục không có lượt đấu giá. Nếu một mục có
+các lượt đấu giá, số tiền đặt cược phải lớn hơn 100. Bằng cách thêm một điều kiện join bổ sung trong mệnh đề FROM,
+bạn có thể giới hạn các trường hợp Bid và vẫn có thể lấy tất cả các trường hợp Item, cho dù chúng có lượt đấu giá hay không.
+
+Đây là cách điều kiện join bổ sung được chuyển đổi thành SQL:
+
+... from ITEM i
+    left outer join BID b
+    on i.ID = b.ITEM_ID and (b.AMOUNT > 100)
+
+Truy vấn SQL luôn chứa điều kiện join ẩn của mqh được ánh xạ, tức là i.ID = b.ITEM_ID. Bạn chỉ có thể thêm các biểu thức
+bổ sung vào điều kiện join. JPA và Hibernate không hỗ trợ các phép join outer tùy ý mà không có liên kết thực thể ánh xạ hoặc tập hợp.
+
+Hibernate có một từ khóa WITH riêng, nó tương đương với từ khóa ON trong JPQL. Bạn có thể thấy nó trong các ví dụ mã nguồn cũ,
+vì JPA chỉ gần đây mới chuẩn hóa từ khóa ON.
+
+Bạn có thể viết một truy vấn trả về cùng dữ liệu với một phép join outer bên phải, bằng cách đổi bảng điều khiển:
+
+select b, i from Bid b
+    right outer join b.item i
+    where b is null or b.amount > 100
+------------------------------------------------
+Root<Bid> b = criteria.from(Bid.class);
+Join<Bid, Item> i = b.join("item", JoinType.RIGHT);
+criteria.multiselect(b, i).where(
+    cb.or(
+        cb.isNull(b),
+        cb.gt(b.<BigDecimal>get("amount"), new BigDecimal(100))
+    )
+);
+
+Truy vấn right outer join này quan trọng hơn bạn có thể nghĩ. Trước đây trong cuốn sách này, chúng tôi đã khuyến nghị bạn
+tránh ánh xạ một collection thường trực mỗi khi có thể. Nếu bạn không có một tập hợp Item#bids one-to-many, bạn cần một 
+right outer join để lấy tất cả các Item và các trường hợp Bid của chúng. Bạn thực hiện truy vấn từ "phía bên kia": 
+many-to-one Bid#item.
+
+Các phép outer left join cũng đóng một vai trò quan trọng trong việc truy xuất động eager.
+
+15.4.5 Dynamic fetching with joins
+Tất cả các truy vấn bạn thấy trong các phần trước đều có một điểm chung: các phiên bản Item được trả về có một collection
+được đặt tên là "bids". Bộ sưu tập @OneToMany này, nếu được ánh xạ với FetchType.LAZY (mặc định cho các collection),
+không được khởi tạo và một câu lệnh SQL bổ sung được kích hoạt ngay khi bạn truy cập nó. Tương tự, điều này cũng đúng đối
+với tất cả các (mối quan hệ đơn giá trị-single-valued association), chẳng hạn như mối quan hệ @ManyToOne của `seller` của mỗi Item.
+Theo mặc định, Hibernate tạo một proxy và tải phiên bản User liên quan theo cách lười biếng và chỉ khi cần.
+
+Bạn có các tùy chọn nào để thay đổi hành vi này? Đầu tiên, bạn có thể thay đổi fetch plan trong dữ liệu ánh xạ của bạn
+và khai báo một collection hoặc mối quan hệ đơn giá trị là FetchType.EAGER. Hibernate sau đó thực thi các câu lệnh SQL
+cần thiết để đảm bảo rằng mạng lưới các phiên bản mong muốn được tải mọi lúc. Điều này cũng đồng nghĩa rằng một truy vấn
+JPA đơn có thể dẫn đến nhiều hoạt động SQL! Ví dụ, truy vấn đơn giản select i from Item i có thể kích hoạt các câu lệnh
+SQL bổ sung để tải bids của mỗi Item, seller của mỗi Item và cũng vậy.
+
+Trong chương 12, chúng tôi đã đề xuất lazy global fetch plan trong dữ liệu ánh xạ, nơi bạn
+không nên sử dụng FetchType.EAGER cho các ánh xạ và collection. Sau đó, đối với một trường hợp sử dụng cụ thể trong ứng dụng
+của bạn, bạn có thể dynamically override lên lazy fetch plan và viết một truy vấn để tải dữ liệu một cách hiệu quả
+nhất có thể. Ví dụ, không có lí do gì bạn cần nhiều câu lệnh SQL để tải tất cả các phiên bản Item và khởi tạo collection
+bids của chúng, hoặc để truy xuất người bán cho mỗi Item. Bạn có thể làm điều này cùng một lúc, trong một câu lệnh SQL
+duy nhất, với một phép nối (join operation).
+
+Eager fetching of associated data is possible with the FETCH keyword in JPQL and
+the fetch() method in the criteria query API:
+
+select i from Item i
+    left join fetch i.bids
+-----------------------------------------
+Root<Item> i = criteria.from(Item.class);
+i.fetch("bids", JoinType.LEFT);
+criteria.select(i);
+
+Bạn đã thấy câu truy vấn SQL mà điều này tạo ra và kết quả trong hình 15.3. Câu truy vấn này trả về một danh sách List<Item>;
+mỗi phiên bản Item có collection bids của nó được khởi tạo đầy đủ. Điều này khác biệt so với các cặp có thứ tự được trả
+về bởi các truy vấn trong phần trước!
+
+Tuy nhiên, hãy cẩn thận - bạn có thể không mong đợi kết quả trùng lặp từ câu truy vấn trước đó:
+
+List<Item> result = query.getResultList();
+assertEquals(result.size(), 5);         // 3 items, 4 bids, 5 “rows” in the result
+Set<Item> distinctResult = new LinkedHashSet<Item>(result);         // In-memory “distinct”
+assertEquals(distinctResult.size(), 3);         // Only three items all along
+
+Hãy đảm bảo bạn hiểu tại sao các bản ghi trùng lặp xuất hiện trong danh sách kết quả. Hãy xác minh số lượng "row" Item
+trong tập kết quả, như được hiển thị trong hình 15.3. Hibernate giữ nguyên các dòng như các phần tử danh sách;
+bạn có thể cần số lượng dòng chính xác để dễ dàng tạo bảng báo cáo trong giao diện người dùng.
+
+Bạn có thể lọc các phiên bản Item trùng lặp bằng cách đưa danh sách kết quả qua một LinkedHashSet, nơi không cho phép
+các phần tử trùng lặp nhưng giữ nguyên thứ tự của các phần tử. Ngoài ra, Hibernate loại bỏ các phần tử trùng lặp bằng
+phép toán DISTINCT và phương thức distinct() của tiêu chí (criteria method):
+
+select distinct i from Item i
+left join fetch i.bids
+------------------------
+Root<Item> i = criteria.from(Item.class);
+i.fetch("bids", JoinType.LEFT);
+criteria.select(i).distinct(true);
+
+Hãy hiểu rằng trong trường hợp này, phép toán DISTINCT không được thực thi trong cơ sở dữ liệu. Sẽ không có từ khóa DISTINCT
+trong câu lệnh SQL. Theo khái niệm, bạn không thể loại bỏ các hàng trùng lặp ở mức ResultSet SQL. Hibernate thực hiện
+việc loại bỏ các bản ghi trùng lặp trong bộ nhớ, giống như bạn sẽ làm thủ công bằng một LinkedHashSet.
+
+Bạn cũng có thể prefetch các mối quan hệ `many-to-one` hoặc `one-to-one` bằng cú pháp tương tự:
+
+select distinct i from Item i
+    left join fetch i.bids b
+    join fetch b.bidder
+    left join fetch i.seller
+------------------------------------
+Root<Item> i = criteria.from(Item.class);
+Fetch<Item, Bid> b = i.fetch("bids", JoinType.LEFT);
+b.fetch("bidder");
+i.fetch("seller", JoinType.LEFT);
+criteria.select(i).distinct(true);
+
+Câu truy vấn này trả về một danh sách List<Item>, và mỗi Item có collection bids của nó được khởi tạo. Seller của mỗi
+Item cũng được tải. Cuối cùng, bidder của mỗi phiên bản Bid cũng được tải. Bạn có thể thực hiện điều này trong một truy
+vấn SQL bằng cách join các hàng trong các bảng ITEM, BID và USERS.
+
+Nếu bạn viết `JOIN FETCH` mà không có `LEFT`, bạn sẽ có eager loading với một inner join (cũng như khi bạn sử dụng INNER JOIN FETCH).
+Một eager inner join fetch hợp lý nếu có một giá trị cần phải được tải: một Item phải có seller, và một Bid phải có bidder.
+
+Tuy nhiên, có giới hạn về số lượng mối quan hệ bạn nên tải một cách tức thì trong một truy vấn và về lượng dữ liệu bạn nên
+tải trong một lần truy cập. Hãy xem xét truy vấn sau đây, mà khởi tạo các collection Item#bids và Item#images:
+
+select distinct i from Item i
+    left join fetch i.bids
+    left join fetch i.images
+--------------------------------------------
+Root<Item> i = criteria.from(Item.class);
+i.fetch("bids", JoinType.LEFT);
+i.fetch("images", JoinType.LEFT);
+criteria.select(i).distinct(true);
+
+Đây là một truy vấn kém, vì nó tạo ra một tích của bids và images, với một tập kết quả có thể cực kỳ lớn.
+Chúng tôi đã đề cập vấn đề này ở phần 12.2.2.
+
+Tóm lại, việc tải tức thì động trong các truy vấn có các lưu ý sau đây:
+- Không bao giờ gán một bí danh cho bất kỳ mối quan hệ hoặc collection nào được tham gia vào việc join hoặc tham gia
+trong việc restriction hoặc projection. Truy vấn như "left join fetch i.bids b where b.amount ..." là không hợp lệ. 
+Bạn không thể nói, "Tải các phiên bản Item và khởi tạo collection bids của họ, nhưng chỉ với các phiên bản Bid có một 
+số lượng cụ thể." Bạn có thể gán một alias cho một mối quan hệ được kết hợp để tiếp tục tải thêm: ví dụ, lấy bidder 
+của mỗi Bid: "left join fetch i.bids b join fetch b.bidder."
+
+- Bạn không nên tải nhiều hơn một collection; nếu không, bạn sẽ tạo ra một tích. Bạn có thể tải bất kỳ mối quan hệ 
+single-valued nào mà bạn muốn mà không tạo ra tích.
+
+- Các truy vấn bỏ qua bất kỳ chiến lược fetching nào bạn đã xác định trong dữ liệu ánh xạ với @org.hibernate.annotations.Fetch.
+Ví dụ, ánh xạ collection bids với org.hibernate.annotations.FetchMode.JOIN không ảnh hưởng đến các truy vấn bạn viết.
+Chiến lược dynamic fetching của truy vấn của bạn bỏ qua chiến lược global fetching. Tuy nhiên, Hibernate không bỏ qua
+fetch plan được ánh xạ: Hibernate luôn xem xét FetchType.EAGER, và bạn có thể thấy một số câu lệnh SQL bổ sung khi bạn
+thực thi truy vấn của mình.
+
+- Nếu bạn eager-fetch một collection, the List được trả về bởi Hibernate duy trì số dòng trong kết quả SQL như các
+tham chiếu trùng lặp. Bạn có thể loại bỏ các bản ghi trùng lặp trong bộ nhớ bằng cách thủ công với một LinkedHashSet
+hoặc bằng cách sử dụng phép DISTINCT đặc biệt trong truy vấn.
+
+- Còn một vấn đề nữa mà bạn cần phải chú ý và đáng xem xét đặc biệt. Bạn không thể chia trang một tập kết quả ở mức cơ sở
+dữ liệu nếu bạn tải một collection một cách tức thì. Ví dụ, đối với truy vấn "select i from Item i fetch i.bids", làm thế
+nào bạn nên xử lý Query#setFirstResult(21) và Query#setMaxResults(10)?
+
+Rõ ràng, bạn mong đợi chỉ nhận được 10 mục, bắt đầu từ mục 21. Nhưng bạn cũng muốn tải tất cả bids của mỗi Item một cách tức thì.
+Do đó, cơ sở dữ liệu không thể thực hiện thao tác phân trang; bạn không thể giới hạn kết quả SQL chỉ có 10 dòng tùy ý.
+Hibernate sẽ thực hiện phân trang trong bộ nhớ nếu một collection được tải một cách tức thì trong một truy vấn. Điều này có
+nghĩa là tất cả các phiên bản Item sẽ được tải vào bộ nhớ, mỗi phiên bản có collection bids được khởi tạo đầy đủ. Sau đó,
+Hibernate sẽ cung cấp cho bạn trang bạn yêu cầu của các mục: ví dụ, chỉ có mục từ 21 đến 30.
+
+Không phải tất cả các mục có thể vừa với bộ nhớ, và bạn có thể mong đợi rằng phân trang sẽ xảy ra ở mức cơ sở dữ liệu trước
+khi nó truyền kết quả cho ứng dụng! Do đó, Hibernate sẽ ghi một thông báo cảnh báo nếu truy vấn của bạn chứa fetch [collectionPath]
+và bạn gọi setFirstResult() hoặc setMaxResults().
+
+Chúng tôi không khuyến nghị việc sử dụng fetch [collectionPath] với các tùy chọn setMaxResults() hoặc setFirstResult().
+Thông thường, có một truy vấn dễ dàng hơn mà bạn có thể viết để lấy dữ liệu bạn muốn hiển thị - và chúng tôi không mong đợi
+rằng bạn sẽ tải dữ liệu từng trang để chỉnh sửa nó. Ví dụ, nếu bạn muốn hiển thị một số trang của các mục và cho mỗi mục
+số lượng bids, hãy viết một truy vấn báo cáo:
+
+select i.id, i.name, count(b)
+    from Item i left join i.bids b
+    group by i.id, i.name
+
+Kết quả của truy vấn này có thể được phân trang bằng cơ sở dữ liệu bằng cách sử dụng setFirstResult() và setMaxResults().
+Điều này hiệu quả hơn rất nhiều so với việc lấy bất kỳ phiên bản Item hoặc Bid nào vào bộ nhớ, vì vậy hãy để cơ sở dữ liệu
+tạo báo cáo cho bạn.
+Lựa chọn join cuối cùng trong danh sách là join kiểu theta (theta-style join).
+
+
+15.4.6 Theta-style joins
+Trong SQL truyền thống, join kiểu theta (theta-style join) là tích của tất cả cặp phần tử (Cartesian product)
+cùng với một điều kiện join trong mệnh đề WHERE, điều kiện này được áp dụng lên tích để giới hạn kết quả. Trong các truy vấn
+JPA, cú pháp kiểu theta hữu ích khi điều kiện join của bạn không phải là một mối quan hệ khóa ngoại được ánh xạ thành một
+mối quan hệ trong một lớp.
+
+Ví dụ, giả sử bạn lưu trữ tên của Người dùng (User) trong bản ghi nhật ký (log records) thay vì ánh xạ một mối quan hệ từ
+LogRecord đến User. Các lớp này không biết gì về nhau, vì họ không được liên kết với nhau. Bạn có thể tìm tất cả các User
+và những bản ghi nhật ký của họ bằng cách sử dụng join kiểu theta như sau:
+
+select u, log from User u, LogRecord log
+    where u.username = log.username
+--------------------------------------------
+Root<User> u = criteria.from(User.class);
+Root<LogRecord> log = criteria.from(LogRecord.class);
+criteria.where(
+    cb.equal(u.get("username"), log.get("username")));
+criteria.multiselect(u, log);
+
+Điều kiện join ở đây là một phép so sánh giữa tên người dùng (username), có mặt dưới dạng một thuộc tính trong cả hai lớp.
+Nếu cả hai hàng có cùng tên người dùng, chúng được join (bằng một inner join) trong kết quả.
+The query result consists of ordered pairs:
+
+List<Object[]> result = query.getResultList();
+for (Object[] row : result) {
+    assertTrue(row[0] instanceof User);
+    assertTrue(row[1] instanceof LogRecord);
+}
+
+Bạn có thể không cần sử dụng join kiểu theta thường xuyên. Lưu ý rằng hiện tại trong JPA không có khả năng thực hiện
+outer join giữa hai bảng mà không có mối quan hệ được ánh xạ - join kiểu theta thường là inner join.
+
+Trường hợp phổ biến hơn để sử dụng join kiểu theta là so sánh các giá trị khóa chính hoặc khóa ngoại với tham số truy vấn
+hoặc các giá trị khóa chính hoặc khóa ngoại khác trong mệnh đề WHERE.
+
+select i, b from Item i, Bid b
+    where b.item = i and i.seller = b.bidder
+-------------------------------------------
+Root<Item> i = criteria.from(Item.class);
+Root<Bid> b = criteria.from(Bid.class);
+criteria.where(
+    cb.equal(b.get("item"), i),
+    cb.equal(i.get("seller"), b.get("bidder"))
+);
+criteria.multiselect(i, b);
+
+Truy vấn này trả về các cặp phiên bản Item và Bid, trong đó bidder cũng là seller. Đây là một truy vấn quan trọng trong
+CaveatEmptor vì nó cho phép bạn phát hiện người tham gia đấu giá trên các mặt hàng của họ. Có lẽ bạn nên chuyển truy vấn
+này thành một ràng buộc cơ sở dữ liệu và không cho phép một phiên bản Bid như vậy được lưu trữ.
+
+Truy vấn trước đó cũng có một biểu thức so sánh thú vị: i.seller = b.bidder. Đây là một so sánh các định danh,
+chủ đề tiếp theo của chúng ta.
+
+
+15.4.7 Comparing identifiers
+JPA hỗ trợ cú pháp so sánh định danh ngầm định sau đây trong các truy vấn:
+
+select i, u from Item i, User u
+    where i.seller = u and u.username like 'j%'
+-----------------------------------------------------------
+Root<Item> i = criteria.from(Item.class);
+Root<User> u = criteria.from(User.class);
+criteria.where(
+    cb.equal(i.get("seller"), u),
+    cb.like(u.<String>get("username"), "j%")
+);
+criteria.multiselect(i, u);
+
+Trong truy vấn này, `i.seller` đề cập đến cột khóa ngoại `SELLER_ID` của bảng `ITEM`, liên kết đến bảng `USERS`.
+Bí danh `u` đề cập đến khóa chính của bảng `USERS` (trên cột `ID`). Do đó, truy vấn này có một join kiểu theta và
+tương đương với cách viết đơn giản, dễ đọc hơn:
+
+select i, u from Item i, User u
+    where i.seller.id = u.id and u.username like 'j%'
+--------------------------------------------------------------
+Root<Item> i = criteria.from(Item.class);
+Root<User> u = criteria.from(User.class);
+criteria.where(
+    cb.equal(i.get("seller").get("id"), u.get("id")),
+    cb.like(u.<String>get("username"), "j%")
+);
+criteria.multiselect(i, u);
+
+
+[Hibernate Feature]
+
+Một biểu thức đường dẫn kết thúc bằng "id" là đặc biệt trong Hibernate: tên "id" luôn đề cập đến thuộc tính định danh
+của một thực thể. Không quan trọng tên thực tế của thuộc tính được đánh dấu bằng @Id là gì; bạn luôn có thể truy cập nó
+bằng entityAlias.id. Đó là lý do tại sao chúng tôi khuyên bạn luôn đặt tên thuộc tính định danh của các lớp thực thể của
+bạn là "id", để tránh nhầm lẫn trong các truy vấn. Lưu ý rằng điều này không phải là một yêu cầu hoặc được tiêu chuẩn hóa
+trong JPA; chỉ có Hibernate xem xét một phần tử đường dẫn "id" một cách đặc biệt.
+
+Bạn cũng có thể muốn so sánh một giá trị khóa với một tham số truy vấn, có thể để tìm tất cả các mục cho một người bán cụ thể (một User):
+
+select i from Item i where i.seller = :seller
+---------------------------------------------------
+Root<Item> i = criteria.from(Item.class);
+criteria.where(
+    cb.equal(
+        i.get("seller"),
+        cb.parameter(User.class, "seller")
+    )
+);
+criteria.select(i);
+query.setParameter("seller", someUser);
+List<Item> result = query.getResultList();
+
+Hoặc bạn có thể muốn thể hiện các loại truy vấn này dưới dạng giá trị định danh thay vì tham chiếu đối tượng.
+Các truy vấn này tương đương với các truy vấn trước đó:
+
+select i from Item i where i.seller.id = :sellerId
+----------------------------------------------------
+Root<Item> i = criteria.from(Item.class);
+criteria.where(
+    cb.equal(
+        i.get("seller").get("id"),
+        cb.parameter(Long.class, "sellerId")
+    )
+);
+criteria.select(i);
+query.setParameter("sellerId", USER_ID);
+List<Item> result = query.getResultList();
+
+
+Xem xét các thuộc tính định danh, có sự khác biệt lớn giữa cặp truy vấn này.
+
+select b from Bid b where b.item.name like 'Fo%'
+------------------------------------------------
+Root<Bid> b = criteria.from(Bid.class);
+criteria.select(b).where(
+    cb.like(
+        b.get("item").<String>get("name"),
+        "Fo%"
+    )
+);
+
+và cặp truy vấn trông tương tự này:
+select b from Bid b where b.item.id = :itemId
+------------------------------------------------------------
+CriteriaQuery<Bid> criteria = cb.createQuery(Bid.class);
+Root<Bid> b = criteria.from(Bid.class);
+criteria.where(
+    cb.equal(
+        b.get("item").get("id"),
+        cb.parameter(Long.class, "itemId")
+    )
+);
+criteria.select(b);
+
+Cặp truy vấn đầu tiên sử dụng join bảng ngầm định; trong khi cặp thứ hai không có join nào cả!
+
+Điều này kết thúc cuộc thảo luận về các truy vấn liên quan đến việc join. Chủ đề cuối cùng của chúng ta là nhúng các
+truy vấn trong các truy vấn: subselects.
+

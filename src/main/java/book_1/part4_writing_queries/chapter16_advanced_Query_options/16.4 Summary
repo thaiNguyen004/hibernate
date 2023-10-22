@@ -1,0 +1,10 @@
+- Bạn đã sử dụng API ResultTransformer để viết mã tùy chỉnh để xử lý kết quả truy vấn, trả về một List các List
+và một List các Map, và ánh xạ các alias thành các thuộc tính của đối tượng.
+
+- Chúng ta đã trình bày các giao diện filter collections của Hibernate cũng như cách tận dụng tốt hơn các
+collection được ánh xạ.
+
+- Bạn đã khám phá interface query Hibernate Criteria cũ và khi nào bạn nên sử dụng nó thay vì các truy vấn tiêu chuẩn
+về tiêu chí trong JPA. Chúng ta đã bao phủ tất cả các tính năng liên quan đến cơ sở dữ liệu và Hibernate bằng cách sử dụng API
+này: selection và ordering, restriction, projection và aggregation, joins, subselect, và example queries.
+

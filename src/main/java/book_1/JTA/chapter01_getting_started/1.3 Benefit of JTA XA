@@ -1,0 +1,12 @@
+Lợi ích chính của JTA/XA là nó tự động hóa quá trình xử lý lỗi cho bạn, đảm bảo rằng các giao dịch thất bại không để
+lại bất kỳ hiệu ứng nào.
+
+Điều này càng thú vị hơn bởi vì thực tế là rất khó để bạn kiểm tra tất cả các kịch bản thất bại có thể xảy ra.
+Thay vào đó, chúng ta thay thế ngữ nghĩa về sự thất bại bằng một nguyên tắc đơn giản: hoặc mọi thứ hoạt động và
+được lưu trữ ("commit") hoặc có sự cố và toàn bộ hiệu ứng của giao dịch của bạn bị xóa bỏ ("rollback").
+
+Liệu đó có phải là việc thay đổi vấn đề sang một nơi khác không? Ở một khía cạnh, đúng vậy - nhưng chúng ta
+sử dụng các API tiêu chuẩn để làm việc này (XA), cùng với một giao thức có thể được chứng minh là đúng (two-phase commit).
+Điều này làm cho việc kiểm tra tất cả các kết quả thất bại có thể xảy ra dễ dàng hơn, từ đó tăng cường tính tin cậy.
+Và vì phần mềm của chúng tôi là một thành phần có thể nhúng, bạn có thể dễ dàng tái sử dụng tính tin cậy đã được kiểm tra
+này trong ứng dụng của bạn.

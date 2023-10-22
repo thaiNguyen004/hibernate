@@ -1,0 +1,19 @@
+Trong phần 4, bạn sẽ kết nối Java Persistence với framework Java
+phổ biến nhất hiện nay: Spring.
+
+Trong chương 14, bạn sẽ tìm hiểu về các chiến lược quan trọng nhất
+để tạo một ứng dụng JPA hoặc Hibernate và tích hợp nó với Spring.
+Bạn sẽ thấy nhiều phương án khác nhau để thực hiện tích hợp này,
+bạn sẽ làm việc sâu hơn với mẫu đối tượng truy cập dữ liệu (DAO),
+và bạn sẽ xây dựng các ứng dụng persistence chung.
+
+Tiếp theo, chương 15 giới thiệu và phân tích các khả năng trong
+việc phát triển ứng dụng persistence bằng một phần khác của framework
+lớn Spring Data: Spring Data JDBC.
+
+Trong chương 16, chúng ta sẽ làm việc với Spring Data REST để xây dựng
+các ứng dụng theo (kiến trúc trạng thái biểu diễn-representational state transfer) (REST).
+
+Sau khi đọc phần này của cuốn sách, bạn sẽ biết cách làm việc một
+cách hiệu quả với JPA, Hibernate và Spring, và cách quyết định giữa
+các phương án để tích hợp ứng dụng persistence của bạn với Spring.

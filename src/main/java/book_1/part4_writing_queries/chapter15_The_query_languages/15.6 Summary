@@ -1,0 +1,15 @@
+15.6 Tóm tắt
+- Nếu bạn đã biết SQL trước khi đọc chương này, bạn hiện có khả năng viết nhiều loại truy vấn trong JPQL và với
+API truy vấn tiêu chuẩn. Nếu bạn không quen thuộc với SQL, hãy tham khảo phần tham khảo của chúng tôi.
+
+- Với lựa chọn (selection), bạn chọn nguồn (source) của truy vấn của bạn: các "bảng" mà bạn muốn truy vấn.
+Sau đó, bạn áp dụng các biểu thức ràng buộc để giới hạn các "hàng" mà truy vấn sẽ truy vấn đến tập con tương ứng.
+Phần chiếu (projection) của truy vấn xác định các "cột" trả về: dữ liệu được truy vấn của bạn. Bạn cũng có thể chỉ đạo
+cơ sở dữ liệu tổng hợp và nhóm dữ liệu một cách hiệu quả trước khi trả về nó.
+
+- Chúng tôi đã thảo luận về các kết nối (joins): cách bạn chọn, ràng buộc và kết hợp dữ liệu từ nhiều bảng.
+Một ứng dụng JPA phụ thuộc vào các join để truy xuất các phiên bản thực thể liên quan và bộ sưu tập trong một vòng chuyến
+cơ sở dữ liệu duy nhất. Đây là một tính năng quan trọng khi bạn cố gắng giảm tải cơ sở dữ liệu, và chúng tôi khuyên bạn
+lặp lại các ví dụ này để hiểu rõ hơn về việc kết nối dữ liệu và truy xuất nhanh.
+
+- Bạn có thể lồng các truy vấn bên trong nhau dưới dạng truy vấn con (subselects).

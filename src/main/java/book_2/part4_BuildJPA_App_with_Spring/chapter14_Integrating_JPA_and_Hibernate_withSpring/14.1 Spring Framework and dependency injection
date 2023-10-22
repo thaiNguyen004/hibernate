@@ -1,0 +1,36 @@
+Spring Framework cung cấp một cơ sở hạ tầng toàn diện để phát triển ứng dụng Java. 
+Nó xử lý cơ sở hạ tầng để bạn có thể tập trung vào ứng dụng của mình và cho phép 
+bạn xây dựng ứng dụng từ các đối tượng Java thông thường (POJOs).
+
+Rod Johnson đã tạo ra Spring vào năm 2002, bắt đầu từ cuốn sách của ông 
+"Expert One-on-One J2EE Design and Development" (Johnson, 2002). 
+Ý tưởng cơ bản đằng sau Spring là nó đơn giản hóa cách tiếp cận truyền thống 
+trong việc thiết kế ứng dụng doanh nghiệp. Để có một giới thiệu nhanh về khả năng 
+của Spring Framework, cuốn sách "Spring Start Here" của Laurenţiu Spilcă (Spilcă, 2021) 
+là một nguồn tốt.
+
+Một ứng dụng Java thường bao gồm các đối tượng hợp tác để giải quyết một vấn đề. 
+Các đối tượng trong một chương trình phụ thuộc vào nhau. Bạn có thể sử dụng các
+design pattern (factory, builder, proxy, decorator, và nhiều mẫu khác) để tổng hợp
+các lớp và đối tượng, nhưng công việc này nằm ở phía của người phát triển.
+
+Spring thực hiện các design pattern khác nhau. Mẫu dependency injection (hay còn
+được gọi là inversion of control, hoặc IoC) của Spring Framework hỗ trợ việc tạo
+ra một ứng dụng bao gồm các thành phần và đối tượng khác nhau.
+
+Đặc điểm quan trọng của một framework chính là mẫu dependency injection hoặc IoC này.
+Khi bạn gọi một phương thức từ JDK hoặc một thư viện, bạn có quyền kiểm soát.
+Ngược lại, với một framework, quyền kiểm soát bị đảo ngược: framework gọi bạn (xem hình 14.1).
+Bạn phải tuân theo mô hình được cung cấp bởi framework và điền mã của bạn.
+Framework xác định một bộ xương, và bạn điền các tính năng để hoàn thiện bộ xương đó.
+Mã của bạn nằm dưới sự kiểm soát của framework, và framework gọi nó. Như vậy, bạn có
+thể tập trung vào việc triển khai logic kinh doanh thay vì thiết kế.
+
+The create, dependency injection, và general lifecycle của các đối tượng dưới sự
+kiểm soát của Spring Framework được quản lý bởi một container. Container sẽ kết hợp
+các lớp ứng dụng và thông tin cấu hình (metadata) để có một ứng dụng sẵn sàng để chạy
+(xem hình 14.2). Vì vậy, container nằm ở trung tâm của nguyên tắc IoC.
+
+Các đối tượng được quản lý bởi container IoC được gọi là "beans". Các beans tạo nên
+nền tảng của ứng dụng Spring.
+

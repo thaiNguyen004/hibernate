@@ -1,0 +1,50 @@
+6.7 Choosing a strategy
+
+Lựa chọn inheritance-mapping strategy (chiến lược ánh xạ kế thừa) phù hợp phụ thuộc vào việc sử dụng các lớp cha trong
+entity hierarchy (cấu trúc đối tượng) của bạn. Bạn phải xem xét tần suất bạn truy vấn các trường hợp của các lớp cha
+và xem liệu bạn có các associations targeting (quan hệ mục tiêu) đến các lớp cha hay không. Một khía cạnh quan trọng
+khác là các thuộc tính của các loại cha và con: liệu các loại con có nhiều thuộc tính bổ sung hoặc chỉ có hành vi
+khác biệt so với loại cha của họ. Dưới đây là một số quy tắc nhanh:
+
+- Nếu bạn không cần các quan hệ hoặc truy vấn đa hình, hãy nghiêng về chiến lược bảng cho mỗi lớp cụ thể (table-per-concrete class) -
+tức là, nếu bạn không bao giờ hoặc hiếm khi truy vấn `bd from BillingDetails bd` và bạn không có lớp nào có mối quan hệ với
+BillingDetails. Một ánh xạ cơ bản dựa trên UNION với InheritanceType.TABLE_PER_CLASS nên được ưu tiên, bởi vì sau này
+có thể thực hiện các truy vấn và mối quan hệ đa hình (được tối ưu hóa).
+
+- Nếu bạn cần các quan hệ hoặc truy vấn đa hình (một quan hệ đến một lớp cha, vì vậy đến tất cả các lớp trong cấu trúc
+với việc xác định lớp cụ thể động vào thời gian chạy) hoặc các lớp con khai báo số lượng thuộc tính tương đối ít
+(đặc biệt nếu sự khác biệt chính giữa các lớp con nằm ở hành vi của chúng), bạn nên nghiêng về InheritanceType.SINGLE_TABLE.
+Mục tiêu của bạn là giảm thiểu số lượng cột có thể là null và thuyết phục bản thân (và DBA của bạn) rằng một cấu trúc
+schema phi bình thường (denormalized) sẽ không gây ra vấn đề trong tương lai.
+
+- Nếu bạn cần các quan hệ hoặc truy vấn đa hình và các lớp con khai báo nhiều thuộc tính (không tùy chọn)
+(các lớp con chủ yếu khác nhau bởi dữ liệu chúng chứa), bạn nên nghiêng về InheritanceType.JOINED. Hoặc tùy thuộc vào
+chiều rộng và độ sâu của cấu trúc kế thừa của bạn và chi phí có thể phát sinh từ các join so với union, bạn có thể sử dụng
+InheritanceType.TABLE_PER_CLASS. Quyết định này có thể đòi hỏi đánh giá các kế hoạch thực thi SQL với dữ liệu thực tế.
+
+Mặc định, chọn InheritanceType.SINGLE_TABLE chỉ cho các vấn đề đơn giản. Trong các trường hợp phức tạp hơn, hoặc khi một
+người thiết kế dữ liệu nhấn mạnh về sự quan trọng của các ràng buộc NOT NULL và chuẩn hóa hơn bạn, bạn nên xem xét chiến lược
+InheritanceType.JOINED. Tại thời điểm đó, hãy tự hỏi liệu có thể không tốt hơn nếu mô hình kế thừa được thiết kế lại dưới
+dạng sự ủy quyền trong mô hình lớp. Kế thừa phức tạp thường nên tránh trong nhiều trường hợp không liên quan đến tính
+liên quan hay ORM. Hibernate hoạt động như một bộ đệm giữa mô hình miền và mô hình quan hệ, nhưng điều này không có nghĩa
+là bạn có thể hoàn toàn bỏ qua các vấn đề về tính liên quan khi thiết kế các lớp của mình.
+
+Khi bạn bắt đầu nghĩ về việc kết hợp các chiến lược kế thừa, hãy nhớ rằng đa hình ngầm định trong Hibernate thông minh
+đủ để xử lý các trường hợp kỳ lạ. Hãy cân nhắc rằng bạn không thể đặt các chú thích kế thừa trên các interface;
+điều này không được chuẩn hóa trong JPA.
+
+Ví dụ, hãy xem xét một giao diện bổ sung trong ứng dụng ví dụ: ElectronicPaymentOption. Đây là một interface
+kinh doanh không có khía cạnh về lưu trữ dữ liệu - ngoại trừ việc trong ứng dụng, một lớp có tính liên tục như CreditCard
+có thể sẽ thực hiện giao diện này. Bất kể bạn ánh xạ cấu trúc BillingDetails như thế nào, Hibernate có thể trả lời truy vấn
+select o from ElectronicPaymentOption o một cách chính xác. Điều này hoạt động ngay cả khi các lớp khác, không thuộc cấu
+trúc BillingDetails, được ánh xạ như là các lớp có tính liên tục và thực hiện giao diện này
+
+Hibernate luôn biết bảng nào để truy vấn, trường hợp nào để tạo ra và cách trả về một kết quả đa hình.
+
+Bạn có thể áp dụng tất cả các chiến lược ánh xạ cho các lớp trừu tượng. Hibernate sẽ không cố gắng khởi tạo một lớp
+trừu tượng, ngay cả khi bạn truy vấn hoặc nạp nó.
+
+Chúng tôi đã đề cập đến mối quan hệ giữa User và BillingDetails nhiều lần và cách nó ảnh hưởng đến việc lựa chọn chiến
+lược ánh xạ kế thừa. Trong phần tiếp theo và cuối cùng của chương này, chúng tôi sẽ khám phá chủ đề nâng cao hơn này
+chi tiết hơn: quan hệ đa hình. Nếu bạn không có mối quan hệ như vậy trong mô hình của bạn ngay bây giờ, bạn có thể muốn
+đọc nội dung này sau, khi bạn gặp vấn đề tương tự trong ứng dụng của bạn.

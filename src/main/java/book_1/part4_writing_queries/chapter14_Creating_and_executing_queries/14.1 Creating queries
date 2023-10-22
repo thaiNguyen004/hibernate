@@ -1,0 +1,183 @@
+14.1 Creating queries
+
+JPA đại diện cho một truy vấn bằng một thể hiện của javax.persistence.Query hoặc javax.persistence.TypedQuery.
+Bạn tạo truy vấn bằng phương thức EntityManager#createQuery() và các biến thể của nó. Bạn có thể viết truy vấn bằng
+Java Persistence Query Language (JPQL), xây dựng nó với các API CriteriaBuilder và CriteriaQuery, hoặc sử dụng SQL
+thuần túy. (Cũng có javax.persistence.StoredProcedureQuery, được bàn về trong phần 17.4.)
+
+Hibernate có API riêng của riêng mình để đại diện cho truy vấn: org.hibernate.Query và org.hibernate.SQLQuery.
+Chúng ta sẽ nói nhiều hơn về chúng trong một ít thời gian.
+Bắt đầu bằng các giao diện tiêu chuẩn JPA và ngôn ngữ truy vấn.
+
+14.1.1 The JPA query interface
+Nếu bạn muốn truy xuất tất cả các thể hiện (instances) của thực thể Item từ cơ sở dữ liệu, thì với JPQL, truy vấn đơn giản
+này sẽ trông khá giống SQL mà bạn biết:
+
+Query query = em.createQuery("select i from Item i");
+
+Nhà cung cấp JPA trả về một đối tượng Query mới; cho đến nay, Hibernate chưa gửi bất kỳ SQL nào đến cơ sở dữ liệu.
+Hãy nhớ rằng việc chuẩn bị và thực thi truy vấn là hai bước riêng biệt.
+
+JPQL là ngôn ngữ truy vấn gọn gàng và sẽ quen thuộc với bất kỳ ai có kinh nghiệm với SQL. Thay vì sử dụng tên bảng và tên cột,
+JPQL dựa vào tên lớp thực thể và tên thuộc tính. Ngoại trừ các tên lớp và thuộc tính này, JPQL không phân biệt chữ hoa chữ thường,
+vì vậy việc viết SeLEct hoặc select đều không quan trọng.
+
+Các chuỗi truy vấn JPQL (và SQL) có thể đơn giản là các giá trị literal Java trong mã code của bạn, như bạn thấy trong ví dụ trước.
+Tuy nhiên, đặc biệt trong các ứng dụng lớn, bạn có thể di chuyển các chuỗi truy vấn ra khỏi mã truy cập dữ liệu của bạn
+và đặt chúng trong các chú thích (annotations) hoặc tệp XML. Sau đó, một truy vấn được truy cập bằng tên với
+EntityManager#createNamedQuery(). Chúng ta sẽ thảo luận về việc sử dụng các truy vấn bên ngoài riêng trong chương sau
+của cuốn sách; có nhiều tùy chọn để xem xét.
+
+Một điểm yếu lớn của JPQL là khi bạn thực hiện việc tái cấu trúc mô hình miền: nếu bạn đổi tên lớp Item, truy vấn JPQL
+của bạn sẽ bị lỗi. (Tuy nhiên, một số IDE có thể phát hiện và tái cấu trúc các chuỗi JPQL.)
+
+JPA và ngôn ngữ truy vấn: HQL so với JPQL
+Trước khi JPA xuất hiện (và ngay cả ngày hôm nay, trong một số tài liệu), ngôn ngữ truy vấn trong Hibernate được gọi là HQL.
+Sự khác biệt giữa JPQL và HQL không đáng kể hiện nay. Khi bạn cung cấp một chuỗi truy vấn cho bất kỳ giao diện truy vấn
+nào trong Hibernate, dù là qua EntityManager hoặc Session, đó là một chuỗi JPQL/HQL. Cùng một cơ chế phân tích truy vấn
+được sử dụng bên trong. Cú pháp và ngữ nghĩa cơ bản giống nhau, mặc dù Hibernate, như thường lệ, hỗ trợ một số cấu trúc đặc biệt
+không được chuẩn hóa trong JPA. Chúng tôi sẽ thông báo cho bạn khi một từ khóa hoặc mệnh đề cụ thể trong một ví dụ chỉ
+hoạt động trong Hibernate. Để đơn giản hóa cuộc sống của bạn, hãy nghĩ về JPQL mỗi khi bạn thấy HQL.
+
+Bạn có thể xây dựng truy vấn một cách hoàn toàn an toàn kiểu bằng cách sử dụng API CriteriaBuilder và CriteriaQuery.
+JPA cũng gọi điều này là "truy vấn theo tiêu chí" (query by criteria).
+
+CriteriaBuilder cb = em.getCriteriaBuilder();
+// Also available on EntityManagerFactory:
+// CriteriaBuilder cb = entityManagerFactory.getCriteriaBuilder();
+CriteriaQuery criteria = cb.createQuery();
+criteria.select(criteria.from(Item.class));
+Query query = em.createQuery(criteria);
+
+
+Đầu tiên, bạn lấy một CriteriaBuilder từ EntityManager của bạn bằng cách gọi getCriteriaBuilder(). Nếu bạn không có 
+EntityManager sẵn sàng, có thể là do bạn muốn tạo truy vấn một cách độc lập với persistence context cụ thể nào đó,
+bạn có thể lấy CriteriaBuilder từ EntityManagerFactory mà thường là được chia sẻ toàn cầu.
+
+Sau đó, bạn sử dụng builder để tạo ra một hoặc nhiều thể hiện của CriteriaQuery. Mỗi CriteriaQuery ít nhất phải có
+một lớp gốc được chỉ định với from(); trong ví dụ cuối cùng, đó là Item.class. Điều này được gọi là lựa chọn (selection);
+chúng ta sẽ bàn thêm về nó trong chương tiếp theo. Truy vấn được hiển thị trả về tất cả các thể hiện của Item từ cơ sở dữ liệu.
+
+API CriteriaQuery sẽ xuất hiện một cách mượt mà trong ứng dụng của bạn, mà không cần xử lý chuỗi. Đây là sự lựa chọn tốt nhất
+khi bạn không thể xác định hoàn toàn truy vấn vào thời gian phát triển và ứng dụng phải tạo nó một cách động trong thời gian chạy.
+Hãy tưởng tượng rằng bạn phải triển khai một mặt nạ tìm kiếm trong ứng dụng của bạn, với nhiều hộp kiểm tra,
+trường nhập dữ liệu và công tắc mà người dùng có thể kích hoạt. Bạn phải tạo một truy vấn cơ sở dữ liệu một cách động từ các
+tùy chọn tìm kiếm được chọn bởi người dùng. Với JPQL và ghép chuỗi, mã code như vậy sẽ khó viết và duy trì.
+
+Bạn có thể viết các cuộc gọi CriteriaQuery kiểu cứng, mà không cần dùng chuỗi, bằng cách sử dụng JPA metamodel tĩnh.
+Điều này có nghĩa rằng truy vấn của bạn sẽ an toàn và sẽ được bao gồm trong các hoạt động tái cấu trúc, như đã được hiển thị
+trong phần "Sử dụng metamodel tĩnh" trong chương 3.
+
+Luôn luôn cần có một EntityManager hoặc EntityManagerFactory để có được JPA CriteriaBuilder. Với API Criteria cũ hơn của Hibernate,
+org.hibernate.Criteria, bạn chỉ cần truy cập đến lớp thực thể gốc để tạo một truy vấn bị tách rời, như được
+hiển thị trong phần 16.3.
+
+Nếu bạn cần sử dụng các tính năng cụ thể cho sản phẩm cơ sở dữ liệu của mình, tùy chọn duy nhất của bạn là SQL nguyên gốc.
+Bạn có thể thực thi SQL trực tiếp trong JPA và để Hibernate xử lý kết quả, bằng cách sử dụng phương thức
+EntityManager#createNativeQuery() như sau:
+
+Query query = em.createNativeQuery(
+    "select * from ITEM", Item.class
+);
+
+Sau khi thực thi truy vấn SQL này, Hibernate đọc java.sql.ResultSet và tạo ra một danh sách (List) các thể hiện thực thể Item quản lý.
+Tất nhiên, tất cả các cột cần thiết để xây dựng một Item phải có trong kết quả, và một lỗi sẽ được ném ra nếu truy vấn SQL
+của bạn không trả về chúng một cách đúng cách.
+
+Trong thực tế, đa số truy vấn trong ứng dụng của bạn sẽ là truy vấn đơn giản - dễ dàng biểu đạt bằng JPQL hoặc bằng CriteriaQuery.
+Sau đó, có thể trong quá trình tối ưu hóa, bạn sẽ tìm thấy một số truy vấn phức tạp và quan trọng về hiệu suất.
+Bạn có thể phải sử dụng các từ khóa SQL đặc biệt và độc quyền để điều khiển trình tối ưu hóa của sản phẩm DBMS của bạn.
+Đa số các nhà phát triển sau đó viết SQL thay vì JPQL và di chuyển các truy vấn phức tạp như vậy vào một tệp XML,
+trong đó, với sự trợ giúp từ một DBA, bạn có thể thay đổi chúng độc lập với mã Java. Hibernate vẫn có thể xử lý kết quả
+truy vấn cho bạn; do đó, bạn tích hợp SQL vào ứng dụng JPA của bạn. Không có gì sai với việc sử dụng SQL trong Hibernate;
+hãy bỏ qua loại "tinh khiết" của ORM. Khi bạn gặp trường hợp đặc biệt, đừng cố gắng che giấu nó, mà hãy tiết lộ và
+tài liệu hóa nó đúng cách để người kỹ sư tiếp theo có thể hiểu được điều gì đang diễn ra.
+
+Trong một số trường hợp cụ thể, việc xác định loại dữ liệu được trả về từ một truy vấn có ích.
+
+
+
+14.1.2 Typed query results
+
+Hãy tưởng tượng bạn muốn truy xuất chỉ một thực thể Item duy nhất bằng một truy vấn,
+dựa trên giá trị định danh của nó:
+
+Query query = em.createQuery(
+    "select i from Item i where i.id = :id"
+).setParameter("id", ITEM_ID);
+Item result = (Item) query.getSingleResult();
+
+Nếu bạn cung cấp lớp của giá trị trả về của bạn khi tạo truy vấn, bạn có thể bỏ qua việc ép kiểu (cast).
+Điều này là công việc của giao diện javax.persistence.TypedQuery:
+
+TypedQuery<Item> query = em.createQuery(
+    "select i from Item i where i.id = :id", Item.class
+).setParameter("id", ITEM_ID);
+Item result = query.getSingleResult();
+
+Truy vấn theo tiêu chí (Query by criteria) cũng hỗ trợ giao diện TypedQuery:
+
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Item> criteria = cb.createQuery(Item.class);
+Root<Item> i = criteria.from(Item.class);
+criteria.select(i).where(cb.equal(i.get("id"), ITEM_ID));
+TypedQuery<Item> query = em.createQuery(criteria);
+Item result = query.getSingleResult();
+
+Lưu ý rằng CriteriaQuery này không hoàn toàn an toàn kiểu: thuộc tính Item#id được truy cập bằng một chuỗi trong get("id").
+Trong phần "Sử dụng metamodel tĩnh" của chương 3, bạn đã thấy cách làm cho các truy vấn như vậy hoàn toàn an toàn kiểu bằng
+cách sử dụng các lớp metamodel tĩnh.
+
+Hibernate có tuổi đời lâu hơn cả phiên bản đầu tiên của JPA, nên nó cũng có các API truy vấn riêng của mình.
+
+[Hibernate Feature]
+14.1.3 Hibernate’s query interfaces
+
+Các biểu diễn truy vấn riêng của Hibernate là org.hibernate.Query và org.hibernate.SQLQuery.
+Như thường lệ, chúng cung cấp nhiều tính năng hơn so với JPA, nhưng điều này đôi khi ảnh hưởng đến tính di động (portability).
+Chúng cũng lớn tuổi hơn JPA nhiều, nên có một số tính năng trùng lặp.
+
+Điểm khởi đầu của bạn cho API truy vấn của Hibernate là Session:
+
+Session session = em.unwrap(Session.class);
+org.hibernate.Query query = session.createQuery("select i from Item i");
+// Proprietary API: query.setResultTransformer(...);
+
+Bạn viết chuỗi truy vấn bằng JPQL tiêu chuẩn. So sánh với javax.persistence.Query, API org.hibernate.Query có một số phương
+thức độc quyền bổ sung chỉ có sẵn trong Hibernate. Bạn sẽ thấy nhiều hơn về API này trong các chương sau của cuốn sách.
+
+Hibernate cũng có một cơ sở ánh xạ kết quả SQL riêng, với org.hibernate.SQLQuery.
+
+Session session = em.unwrap(Session.class);
+org.hibernate.SQLQuery query = session.createSQLQuery(
+    "select {i.*} from ITEM {i}"
+).addEntity("i", Item.class);
+
+Ví dụ này dựa trên các phần tử giữ chỗ (placeholders) trong chuỗi SQL để ánh xạ các cột của java.sql.ResultSet
+vào các thuộc tính của thực thể. Chúng tôi sẽ nói thêm về việc tích hợp truy vấn SQL với cơ chế ánh xạ kết quả
+cụ thể và chuẩn của JPA trong phần 17.2. Hibernate cũng có một API truy vấn cũ hơn và độc quyền là org.hibernate.Criteria:
+
+Session session = em.unwrap(Session.class);
+org.hibernate.Criteria query = session.createCriteria(Item.class);
+Item result = (Item) query.uniqueResult();
+
+Bạn cũng có thể truy cập API truy vấn độc quyền của Hibernate thông qua một javax.persistence.Query bằng cách trích xuất
+ra một org.hibernate.jpa.HibernateQuery đầu tiên:
+
+javax.persistence.Query query = em.createQuery(
+    // ...
+);
+org.hibernate.Query hibernateQuery =
+    query.unwrap(org.hibernate.jpa.HibernateQuery.class)
+        .getHibernateQuery();
+hibernateQuery.getQueryString();
+hibernateQuery.getReturnAliases();
+// ... other proprietary API calls
+
+Chúng tôi tập trung vào API tiêu chuẩn và sau đó sẽ chỉ cho bạn một số tùy chọn tiên tiến ít khi cần thiết chỉ có sẵn
+với API của Hibernate, như cuộn theo dõi với con trỏ và truy vấn bằng ví dụ.
+
+Sau khi viết truy vấn của bạn, và trước khi thực thi nó, bạn thường muốn chuẩn bị truy vấn thêm bằng cách thiết lập các
+tham số áp dụng cho một thực thi cụ thể.
+
+

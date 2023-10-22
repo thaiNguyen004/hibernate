@@ -1,0 +1,13 @@
+Create a Project Using Forge
+JBoss Forge là một command shell dành cho phát triển ứng dụng nhanh chóng trong môi trường dựa trên các tiêu chuẩn.
+Một cách khác để nghĩ về nó là như Maven Archetypes được tăng cường.
+
+Cài đặt Forge là một quá trình tương đối ngắn gọn, và hướng dẫn này sẽ đưa bạn qua các kiến thức cơ bản.
+Hãy làm theo các bước đơn giản sau để cài đặt Forge:
+
+1. Tải Forge url : http://downloads.jboss.org/forge/releases/3.4.0.Final/forge-distribution-3.4.0.Final-offline.zip
+
+2. Giải nén bản phân phối vào một thư mục trên ổ đĩa cứng của bạn, mà chúng ta sẽ gọi là $FORGE_HOME
+Chúng tôi sẽ giả định rằng bạn đã giải nén phân phối vào một thư mục có tên là forge trong thư mục chính của bạn
+
+3. Thêm $FORGE_HOME/bin vào biến PATH của bạn (Windows, Linux hoặc Mac OSX)

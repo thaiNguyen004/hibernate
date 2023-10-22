@@ -1,0 +1,56 @@
+In this chapter
+- Patterns for client/server architecture
+- Writing and testing a persistence layer
+- Integrating EJBs with JPA
+
+Hầu hết các nhà phát triển JPA xây dựng các ứng dụng client/server với một server Java-based truy cập vào 
+(tầng cơ sở dữ liệu-database tier) thông qua Hibernate. Biết cách EntityManager và system transaction hoạt động, 
+bạn có thể tự mình tạo kiến trúc server của riêng bạn. Bạn sẽ phải xác định nơi để tạo EntityManager, khi nào và cách 
+để đóng nó, và cách đặt ranh giới của giao dịch.
+
+Bạn có thể đang tự hỏi mối quan hệ giữa các request và response từ và đến client của bạn, và persistence context
+và transaction trên server.
+
+Liệu một system transaction duy nhất có thể xử lý mỗi request từ client?
+
+Có thể có một số request liên tiếp giữ persistence context mở?
+
+Trạng thái thực thể detach làm thế nào phù hợp trong bức tranh này?
+
+Bạn có thể và nên phải serialize dữ liệu thực thể giữa client và server không?
+
+Các quyết định này sẽ làm ảnh hưởng đến thiết kế client của bạn như thế nào?
+
+------------
+
+Trước khi chúng tôi bắt đầu trả lời những câu hỏi này, chúng tôi muốn đề cập rằng chúng tôi sẽ không nói về bất kỳ 
+framework cụ thể nào ngoài JPA và EJB trong chương này. Có một số lý do mà ví dụ mã nguồn sử dụng EJBs bên cạnh JPA:
+- Mục tiêu của chúng tôi là tập trung vào các design pattern client/server với JPA. Nhiều cross-cutting concern, 
+chẳng hạn như việc serialization dữ liệu giữa client và server, đã được chuẩn hóa trong EJB, vì vậy chúng tôi không
+phải giải quyết mọi vấn đề ngay lập tức. Chúng tôi biết rằng bạn có lẽ sẽ không viết một ứng dụng client EJB.
+Tuy nhiên, với mã nguồn ví dụ về client EJB trong chương này, bạn sẽ có nền tảng để ra quyết định thông minh khi chọn
+và làm việc với một framework khác. Chúng tôi sẽ thảo luận về quy trình custom serialization trong chương tiếp theo và
+giải thích cách trao đổi dữ liệu do JPA quản lý với bất kỳ client nào.
+
+- Chúng tôi không thể bao phủ tất cả các sự kết hợp của các framework client/server trong không gian Java. Lưu ý rằng
+chúng tôi thậm chí chưa thu hẹp phạm vi của mình đến các ứng dụng server web. Tất nhiên, ứng dụng web rất quan trọng,
+vì vậy chúng tôi sẽ dành chương tiếp theo để nói về JPA với JSF và JAX-RS. Trong chương này, chúng tôi quan tâm đến bất kỳ
+hệ thống client/server nào dựa vào JPA cho tính bền vững và các trừu tượng như mẫu DAO, mà hữu ích bất kể bạn sử dụng
+các framework nào.
+
+- EJBs là hiệu quả ngay cả khi bạn chỉ sử dụng chúng ở phía server. Chúng cung cấp quản lý giao dịch, và bạn có thể kết nối
+persistence context vào các bean session stateful. Chúng tôi sẽ thảo luận về các chi tiết này, vì vậy nếu kiến trúc
+ứng dụng của bạn yêu cầu EJB ở phía server, bạn sẽ biết cách xây dựng chúng.
+
+Trong suốt chương này, bạn sẽ triển khai hai usecase đơn giản với các luồng công việc dễ dàng như một
+ứng dụng thực tế: chỉnh sửa một (mặt hàng đấu giá-auction item) và đặt giá đấu cho một item. Trước tiên, chúng ta sẽ 
+xem xét persistence layer và cách bạn có thể đóng gói các hoạt động JPA vào các thành phần có thể tái sử dụng: 
+đặc biệt là sử dụng mẫu DAO. Điều này sẽ mang lại cho bạn một nền tảng vững chắc để xây dựng thêm chức năng ứng dụng.
+
+Sau đó, bạn sẽ triển khai các usecase như các (cuộc trò chuyện-conversations): unit of work từ góc nhìn của người dùng
+ứng dụng của bạn. Bạn sẽ thấy mã nguồn cho các server-side component stateless & stateful, cũng như tác động của nó đối
+với thiết kế client và kiến trúc ứng dụng tổng thể. Điều này ảnh hưởng không chỉ đến hành vi của ứng dụng của bạn mà còn
+đến tính khả dụng và độ bền của nó. Chúng tôi lặp lại tất cả các ví dụ với cả hai chiến lược và nhấn mạnh sự khác biệt.
+Hãy bắt đầu bằng việc hoàn thiện một persistence layer và DAO pattern.
+
+

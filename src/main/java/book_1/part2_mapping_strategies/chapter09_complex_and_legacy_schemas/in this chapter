@@ -1,0 +1,40 @@
+In this chapter
+- Improving the SQL schema with custom DDL - Cải thiện lược đồ SQL bằng DDL tùy chỉnh
+- Integrating with a legacy database - Tích hợp với cơ sở dữ liệu (kế thừa) legacy
+- Mapping composite keys - Ánh xạ các khóa tổng hợp
+
+Trong chương này, chúng ta tập trung vào phần quan trọng nhất của hệ thống của bạn: `cơ sở dữ liệu`,
+nơi chứa bộ quy tắc tích hợp của bạn - mô hình của thế giới thực mà bạn đã tạo ra. Nếu ứng dụng của bạn chỉ có thể
+đấu giá (auction) một item một lần trong thế giới thực, thì cơ sở dữ liệu của bạn nên đảm bảo điều đó. Nếu một phiên đấu giá
+luôn có một giá khởi điểm, mô hình cơ sở dữ liệu của bạn nên bao gồm một ràng buộc phù hợp. Nếu dữ liệu đáp ứng tất cả
+các quy tắc tích hợp, dữ liệu đó là nhất quán (consistent), một thuật ngữ bạn sẽ gặp lại trong phần 11.1.
+
+Chúng ta cũng giả định rằng dữ liệu nhất quán là đúng: mọi thứ mà cơ sở dữ liệu nêu ra, một cách rõ ràng hoặc ngầm, là đúng;
+mọi thứ khác là sai. Nếu bạn muốn tìm hiểu thêm về lý thuyết đằng sau cách tiếp cận này, hãy tra cứu (CWA - closed-world assumption).
+
+Các tính năng chính mới trong JPA 2 bao gồm:
+
+1. Tạo schema và execute các tập lệnh SQL tùy chỉnh trong quá trình khởi động bây giờ đã được chuẩn hóa standardized và
+có thể được cấu hình trên một đơn vị duy trì (persistence unit).
+
+2. Bạn có thể ánh xạ và tùy chỉnh schema artifact như các chỉ mục (indexes) và tên foreign key bằng cách sử dụng
+các chú thích tiêu chuẩn.
+
+3. Bạn có thể ánh xạ các khóa ngoại hoặc các mối quan hệ many-to-one trong các composite primary key bằng cách sử dụng
+chú thích `@MapsId` như "derived identity"
+
+Đôi khi, bạn có thể bắt đầu một dự án từ trên xuống. Không có schema cơ sở dữ liệu tồn tại và có thể thậm chí không có
+dữ liệu nào - ứng dụng của bạn là hoàn toàn mới. Nhiều nhà phát triển thích để Hibernate tự động tạo ra các tập lệnh cho
+schema cơ sở dữ liệu. Bạn có thể để Hibernate triển khai (deploy) schema trên test database trên máy phát triển hoặc
+hệ thống tích hợp liên tục của bạn để thực hiện kiểm tra tích hợp. Sau đó, một DBA sẽ sử dụng các tập lệnh được tạo ra
+để viết một schema cải tiến và cuối cùng cho triển khai sản xuất. Phần đầu tiên của chương này sẽ hướng dẫn bạn cách
+cải tiến schema từ bên trong JPA và Hibernate, để làm hài lòng DBA của bạn.
+
+Ở phía đầu thứ hai của phổ là các hệ thống với schema có sẵn, có thể phức tạp, với dữ liệu tích lũy trong nhiều năm.
+Ứng dụng mới của bạn chỉ là một bánh răng nhỏ trong một cỗ máy lớn, và DBA của bạn sẽ không cho phép bất kỳ sự thay đổi nào
+(thậm chí cả những thay đổi không gây rối) vào cơ sở dữ liệu. Bạn cần một phương pháp ánh xạ đối tượng/relational linh hoạt
+để bạn không phải nắn và uốn các lớp Java quá nhiều khi mọi thứ không khớp ngay từ đầu. Điều này sẽ là đề tài của nửa sau
+của chương này, bao gồm cuộc thảo luận về các khóa chính và khóa ngoại hỗn hợp.
+
+Hãy bắt đầu với một triển khai "clean-room" và các schema được tạo ra bởi Hibernate.
+
