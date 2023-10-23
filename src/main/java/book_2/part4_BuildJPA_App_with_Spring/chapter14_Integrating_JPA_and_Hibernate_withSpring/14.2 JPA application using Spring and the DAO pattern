@@ -312,3 +312,204 @@ Chúng ta sẽ tạo tệp cấu hình sau cho ứng dụng.
 
 Listing 14.6 The SpringConfiguration class
 
+@EnableTransactionManagement            [A]
+public class SpringConfiguration {
+
+    @Bean
+    public DataSource dataSource() {        [B]
+        DriverManagerDataSource dataSource = new DriverManagerDataSource();     [B]
+ [C]    dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        dataSource.setUrl("jdbc:mysql://localhost:3306/CH14_SPRING_HIBERNATE?serverTimezone=UTC");
+        dataSource.setUsername("root");     [D]
+        dataSource.setUsername("123456");   [E]
+        return dataSource;  [B]
+    }
+
+    @Bean
+    public DatabaseService databaseService() {      [G]
+        return new DatabaseService();
+    }
+
+    @Bean
+    public JpaTransactionManager transactionManager(EntityManagerFactory emf) {     [H]
+        return new JpaTransactionManager(emf);
+    }
+
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory() {                          [I]
+        LocalContainerEntityManagerFactoryBean localContainerEntityManagerFactoryBean =             [I]
+                new LocalContainerEntityManagerFactoryBean();                                       [I]
+        localContainerEntityManagerFactoryBean.setPersistenceUnitName("ch14");                      [J]
+        localContainerEntityManagerFactoryBean.setDataSource(dataSource());                         [K]
+        localContainerEntityManagerFactoryBean.setPackagesToScan("org.manning.javapersistence");    [L]
+        return localContainerEntityManagerFactoryBean;          [I]
+    }
+
+    @Bean
+    public ItemDAO itemDao() {          [M]
+        return new ItemDAOImpl();
+    }
+
+    @Bean
+    public BidDAO bidDao() {            [N]
+        return new BidDAOImpl();
+    }
+}
+
+[A] The @EnableTransactionManagement chú thích cho phép khả năng quản lý
+giao dịch dựa trên chú thích của Spring.
+
+[B] Tạo một data source bean.
+
+[C] Chỉ ra các thuộc tính JDBC - driver.
+
+[D] URL của cơ sở dữ liệu.
+
+[E] Tên người dùng.
+
+[F] Không có mật khẩu trong cấu hình này. Sửa đổi thông tin đăng nhập để
+phù hợp với máy của bạn và sử dụng mật khẩu trong thực tế.
+
+[G] Bean DatabaseService mà Spring sẽ sử dụng để điền và xóa cơ sở dữ liệu.
+
+[H] Tạo một transaction manager bean dựa trên một entity manager factory.
+
+[I] LocalContainerEntityManagerFactoryBean là một bean factory tạo ra
+EntityManagerFactory theo hợp đồng khởi động tiêu chuẩn của JPA.
+
+[J] Thiết lập tên persistence unit, được định nghĩa trong persistence.xml.
+
+[K] Thiết lập data source.
+
+[L] Thiết lập các package để quét các entity class. Các bean được đặt trong
+com.manning.javapersistence.ch14, vì vậy chúng ta thiết lập gói này để quét.
+
+[M] Tạo một bean ItemDao.
+
+[N] Tạo một bean BidDao.
+
+Thông tin cấu hình này được Spring sử dụng để tạo và tiêm các bean tạo nên
+nền tảng của ứng dụng. Chúng ta có thể sử dụng cấu hình XML thay thế và tệp
+application-context.xml phản ánh công việc đã thực hiện trong SpringConfiguration.java.
+Chúng tôi chỉ muốn nhấn mạnh một điều chúng tôi đã đề cập trước đó: trong XML,
+chúng tôi kích hoạt khả năng quản lý giao dịch dựa trên chú thích của Spring
+với sự giúp đỡ của phần tử tx:annotation-driven, trỏ đến một bean quản lý giao dịch:
+
+PATH: Ch14/spring-jpa-dao/src/test/resources/application-context.xml
+
+<tx:annotation-driven transaction-manager="txManager"/>
+
+Tiện ích mở rộng SpringExtension được sử dụng để tích hợp Spring test context với
+JUnit 5 Jupiter bằng cách implementing một số phương thức model callback tiện ích
+Jupiter của JUnit.
+
+Quan trọng là sử dụng loại PersistenceContextType.EXTENDED cho tất cả các bean
+EntityManager được tiêm. Nếu chúng ta sử dụng loại PersistenceContextType.TRANSACTION
+mặc định, đối tượng trả về sẽ trở thành detached vào cuối thực hiện giao dịch.
+Truyền nó vào phương thức delete sẽ dẫn đến một ngoại lệ "IllegalArgumentException:
+Removeing a detached instance".
+
+Bây giờ là thời điểm để kiểm tra tính năng chúng tôi đã phát triển để lưu trữ các
+thực thể Item và Bid.
+
+Listing 14.7 The SpringJpaTest class
+
+Path: Ch14/spring-jpa-dao/src/test/java/com/manning/javapersistence/ch14
+➥ /SpringJpaTest.java
+
+@ExtendWith(SpringExtension.class)      [A]
+@ContextConfiguration(classes = {SpringConfiguration.class})    [B]
+//@ContextConfiguration("classpath:application-context.xml")  [C]
+public class SpringJpaTest {
+
+    @Autowired
+    private DatabaseService databaseService;        [D]
+
+    @Autowired
+    private ItemDAO itemDao;                        [D]
+
+    @Autowired
+    private BidDAO bidDao;                          [D]
+
+    @BeforeEach                         [E]
+    public void setUp() {
+        databaseService.init();
+    }
+
+    @Test
+    public void testInsertItems() { [F]
+        final List<Item> itemsList = itemDao.getAll();
+        final List<Bid> bidsList = bidDao.getAll();
+        assertAll(
+                () -> assertNotNull(itemsList),
+                () -> assertEquals(10, itemsList.size()),
+                () -> assertNotNull(itemDao.findByName("Item 1")),
+                () -> assertNotNull(bidsList),
+                () -> assertEquals(20, bidsList.size()),
+                () -> assertEquals(10, bidDao.findByAmount("1000.00").size())
+        );
+    }
+
+    @Test
+    public void testDeleteItem() {          [G]
+        itemDao.delete(itemDao.findByName("Item 2"));   [G]
+        assertThrows(NoResultException.class, () -> itemDao.findByName("Item 2"));   [H]
+
+    @AfterEach
+    public void dropDown() {                [I]
+        databaseService.clear();
+    }
+
+}
+
+[A] Extend the test bằng cách sử dụng SpringExtension. Như đã đề cập trước đây,
+điều này sẽ tích hợp Spring TestContext Framework vào JUnit 5 bằng cách thực hiện
+một số phương thức model callback tiện ích Jupiter của JUnit.
+
+[B] Spring test context được cấu hình bằng cách sử dụng các bean được định nghĩa
+trong lớp SpringConfiguration đã được giới thiệu trước đó.
+
+[C] Một cách thay thế, chúng ta có thể cấu hình bộ test context bằng XML.
+Chỉ có một trong các dòng sau đây nên được kích hoạt trong mã.
+
+[D] Tự động tiêm một bean DatabaseService, một bean ItemDao và một bean BidDao.
+
+[E] Trước khi thực hiện mỗi bài test, nội dung của cơ sở dữ liệu được khởi tạo bằng
+phương thức init từ DatabaseService được tiêm vào.
+
+[F] Truy xuất tất cả các Item và tất cả các Bid và thực hiện các kiểm tra.
+
+[G] Tìm một Item theo trường tên của nó và xóa nó khỏi cơ sở dữ liệu.
+Chúng ta sẽ sử dụng PersistenceContextType.EXTENDED cho tất cả các bean EntityManager
+được tiêm vào. Nếu không, việc truyền nó vào phương thức xóa sẽ dẫn đến một ngoại lệ
+"IllegalArgumentException: Removing a detach instance".
+
+[H] Sau khi xóa thành công Item khỏi cơ sở dữ liệu, thử tìm nó lại sẽ gây ra một
+ngoại lệ NoResultException. Các bài test còn lại có thể dễ dàng được kiểm tra trong mã nguồn.
+
+[I] Sau khi thực hiện mỗi bài test, nội dung của cơ sở dữ liệu được xóa bỏ bằng phương thức
+`clear` từ DatabaseService được tiêm vào.
+
+
+Khi nào thì nên áp dụng giải pháp sử dụng Spring Framework và mô hình thiết kế DAO?
+Dưới đây là một số tình huống mà chúng tôi đề xuất:
+
+1. **Bạn muốn giao nhiệm vụ kiểm soát trình quản lý thực thể và giao dịch cho
+Spring Framework** (hãy nhớ rằng điều này được thực hiện thông qua kỹ thuật IoC).
+Tuy nhiên, hãy lưu ý rằng điều này đồng nghĩa với việc bạn sẽ mất đi khả năng gỡ lỗi
+trong quá trình giao dịch. Hãy nhớ điều đó.
+
+2. **Bạn muốn tạo ra API riêng của bạn để quản lý persistence và bạn không thể
+hoặc không muốn sử dụng Spring Data**. Trường hợp này có thể xảy ra khi bạn
+có các hoạt động cụ thể mà bạn cần kiểm soát, hoặc bạn muốn loại bỏ
+(sự tải kỹ thuật của Spring Data-Spring Data overhead) (bao gồm thời gian khởi động
+cho nhóm làm việc để sử dụng nó, giới thiệu các dependencies mới vào một dự án đã tồn tại
+và độ trễ trong việc thực thi Spring Data, như đã thảo luận trong phần 2.7).
+
+3. **Trong một số tình huống cụ thể, bạn có thể muốn sử dụng Spring Framework
+để xử lý trình quản lý thực thể và giao dịch mà không cần triển khai các lớp DAO riêng của bạn**.
+
+Chúng tôi muốn cải thiện thiết kế của ứng dụng JPA Spring của chúng tôi. Các phần tiếp
+theo sẽ tập trung vào làm cho nó trở nên chung chung hơn và sử dụng API Hibernate thay vì JPA.
+Chúng tôi sẽ tập trung vào sự khác biệt giữa giải pháp đầu tiên này và các phiên bản mới
+của chúng tôi, và chúng tôi sẽ thảo luận về cách giới thiệu các thay đổi.
