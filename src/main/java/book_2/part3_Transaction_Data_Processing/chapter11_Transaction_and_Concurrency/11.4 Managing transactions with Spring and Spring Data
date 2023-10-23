@@ -1,4 +1,4 @@
-Chúng ta sẽ tiếp tục và hướng dẫn cách triển khai giao dịch với Spring và Spring Data.
+Chúng ta sẽ tiếp tục và hướng dẫn cách implementation giao dịch với Spring và Spring Data.
 Mô hình giao dịch được sử dụng bởi Spring có thể áp dụng cho các API khác nhau như
 Hibernate, JPA và Spring Data JPA. Quản lý các giao dịch có thể được thực hiện theo
 cách lập trình (như đã được giới thiệu) hoặc bằng cách khai báo, với sự hỗ trợ của
@@ -149,3 +149,246 @@ Do đó, để đạt được hành vi chi tiết, nên áp dụng chú thích 
 
 
 11.4.4 Programmatic transaction definition - định nghĩa giao diện lập trình
+Declarative transaction management thường là lựa chọn ưa thích khi sử dụng Spring trong một ứng dụng.
+Nó đòi hỏi ít mã code hơn để viết và hành vi của giao dịch được xác định thông qua thông tin siêu
+(meta-information) được cung cấp bằng các chú thích (annotations). Tuy nhiên, quản lý giao dịch theo
+cách lập trình (programmatic transaction management) vẫn có thể thực hiện được, bằng cách sử dụng
+lớp TransactionTemplate.
+Khi một đối tượng TransactionTemplate được tạo, hành vi của giao dịch có thể được định nghĩa theo
+cách lập trình, như sau:
+
+TransactionTemplate transactionTemplate;
+// . . .
+transactionTemplate.setIsolationLevel(
+    TransactionDefinition.ISOLATION_REPEATABLE_READ);
+transactionTemplate.setPropagationBehavior(
+    TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+transactionTemplate.setTimeout(5);
+transactionTemplate.setReadOnly(false);
+
+Một khi đã được xác định, một đối tượng TransactionTemplate hỗ trợ phương pháp callback thông qua phương thức
+execute, mà nhận một TransactionCallback làm đối số, như trong đoạn mã sau.
+Các hoạt động được thực hiện trong giao dịch được xác định trong phương thức doInTransaction.
+
+transactionTemplate.execute(new TransactionCallback() {
+    public Object doInTransaction(TransactionStatus status) {
+        //operations to be executed in transaction
+    }
+});
+
+Vì TransactionCallback là một giao diện chức năng (functional interface)
+(nó thậm chí còn được ghi chú bằng @FunctionalInterface), đoạn mã trước
+đó có thể được rút gọn như sau:
+transactionTemplate.execute(status -> {
+    // các hoạt động cần thực hiện trong giao dịch
+});
+
+11.4.5 Transactional development with Spring and Spring Data
+
+Chúng tôi đã làm việc trên ứng dụng CaveatEmptor, và bây giờ chúng tôi sẽ thực hiện một tính năng ghi log kết quả
+của các hành động khi làm việc với các Item. Chúng tôi sẽ bắt đầu việc implementation bằng Spring Data JPA,
+và trước tiên, chúng tôi sẽ tạo interface ItemRepositoryCustom và các phương thức của nó, như được hiển thị
+trong mã nguồn 11.8. Interface như vậy được gọi là một fragment interface, và mục đích của nó là extend một
+repository với chức năng tùy chỉnh, chức năng này sẽ được cung cấp thông qua một implementation sau này.
+
+Listing 11.8 The ItemRepositoryCustom interface
+
+Path: Ch11/transactions5-springdata/src/main/java/com/manning
+➥ /javapersistence/ch11/repositories/ItemRepositoryCustom.java
+
+public interface ItemRepositoryCustom {
+    void addItem(String name, LocalDate creationDate);
+    void checkNameDuplicate(String name);
+    void addLogs();
+    void showLogs();
+    void addItemNoRollback(String name, LocalDate creationDate);
+}
+
+Tiếp theo, chúng tôi sẽ tạo một giao diện ItemRepository, mở rộng cả JpaRepository và giao diện
+ItemRepositoryCustom đã được khai báo trước đó. Ngoài ra, chúng tôi sẽ khai báo phương thức findByName,
+tuân theo quy tắc đặt tên của Spring Data JPA.
+
+Listing 11.9 The ItemRepository interface
+
+Path: Ch11/transactions5-springdata/src/main/java/com/manning
+➥ /javapersistence/ch11/repositories/ItemRepository.java
+
+public interface ItemRepository extends JpaRepository<Item, Long>,
+            ItemRepositoryCustom {
+
+    Optional<Item> findByName(String name);
+
+}
+
+Sau đó, chúng tôi sẽ tạo giao diện LogRepositoryCustom và các phương thức của nó, như được hiển thị
+trong mã nguồn 11.10. Một lần nữa, đây là một giao diện fragment, và mục đích của nó là mở rộng một
+repository với chức năng tùy chỉnh, chức năng này sẽ được cung cấp thông qua một implementation sau này.
+
+Path: Ch11/transactions5-springdata/src/main/java/com/manning
+➥ /javapersistence/ch11/repositories/LogRepositoryCustom.java
+
+public interface LogRepositoryCustom {
+    void log(String message);
+    void showLogs();
+    void addSeparateLogsNotSupported();
+    void addSeparateLogsSupports();
+}
+
+Bây giờ, chúng tôi sẽ tạo giao diện LogRepository,
+extend cả JpaRepository và giao diện LogRepositoryCustom đã được khai báo trước đó.
+
+Listing 11.11 The LogRepository interface
+
+Path: Ch11/transactions5-springdata/src/main/java/com/manning
+➥ /javapersistence/ch11/repositories/LogRepository.java
+
+public interface LogRepository extends JpaRepository<Log, Integer>,
+        LogRepositoryCustom
+        {
+
+}
+
+Chúng tôi sẽ cung cấp một lớp implementation cho ItemRepository tiếp theo. Phần quan trọng của
+tên lớp này là đuôi "Impl". Đây không liên quan đến Spring Data và chỉ implementation giao diện
+ItemRepositoryCustom.
+
+Khi chúng ta inject một bean ItemRepository, Spring Data sẽ tạo một lớp proxy; nó sẽ phát hiện rằng ItemRepository
+implementation ItemRepositoryCustom và sẽ tìm một lớp có tên ItemRepositoryImpl để đóng vai trò là một
+implementation repository tùy chỉnh. Do đó, các phương thức của bean ItemRepository được inject sẽ có cùng
+hành vi như các phương thức của lớp ItemRepositoryImpl.
+
+Listing 11.12 The ItemRepositoryImpl class
+
+Path: Ch11/transactions5-springdata/src/main/java/com/manning
+➥ /javapersistence/ch11/repositories/ItemRepositoryImpl.java
+
+public class ItemRepositoryImpl implements ItemRepositoryCustom {
+
+    @Autowired
+    private ItemRepository itemRepository;      [A]
+
+    @Autowired                                  [A]
+    private LogRepository logRepository;
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)         [B]
+    public void checkNameDuplicate(String name) {
+        if (itemRepository.findAll().stream().map(item ->                           [C]
+            item.getName()).filter(n -> n.equals(name)).count() > 0) {
+                throw new DuplicateItemNameException("Item with name " + name +
+                    " already exists");
+        }
+    }
+
+    @Override
+    @Transactional          [D]
+    public void addItem(String name, LocalDate creationDate) {
+        logRepository.log("adding item with name " + name);
+        checkNameDuplicate(name);
+        itemRepository.save(new Item(name, creationDate));
+    }
+
+    @Override
+    @Transactional(noRollbackFor = DuplicateItemNameException.class)        [E]
+    public void addItemNoRollback(String name, LocalDate creationDate) {
+        logRepository.save(new Log(
+            "adding log in method with no rollback for item " + name));
+        checkNameDuplicate(name);
+        itemRepository.save(new Item(name, creationDate));
+    }
+
+    @Override
+    @Transactional          [D]
+    public void addLogs() {
+        logRepository.addSeparateLogsNotSupported();
+    }
+
+    @Override
+    @Transactional      [D]
+    public void showLogs() {
+        logRepository.showLogs();
+    }
+}
+
+[A] Tự động nạp (autowire) một bean ItemRepository và một bean LogRepository.
+
+[B] Propagation MANDATORY: Spring Data sẽ kiểm tra xem một giao dịch đã đang tiến hành chưa và sẽ tiếp tục với nó.
+Nếu không có giao dịch nào đang tiến hành, một ngoại lệ sẽ được ném ra.
+
+[C] Nếu một Item có tên đã cho tồn tại, sẽ ném ra một ngoại lệ DuplicateItemNameException.
+
+[D] Default propagation là REQUIRED.
+
+[E] Không có rollback của giao dịch trong trường hợp xảy ra ngoại lệ DuplicateItemNameException.
+
+Tiếp theo, chúng tôi sẽ cung cấp một lớp implementation cho LogRepository. Giống như ItemRepositoryImpl,
+phần quan trọng của tên lớp này là đuôi "Impl". Nó chỉ implementation LogRepositoryCustom.
+Khi chúng tôi inject một bean LogRepository, Spring Data sẽ phát hiện rằng LogRepository implementation
+LogRepositoryCustom và sẽ tìm kiếm một lớp có tên LogRepositoryImpl để đóng vai trò là một implementation
+repository tùy chỉnh. Do đó, các phương thức của bean LogRepository được inject sẽ có cùng hành vi như các
+phương thức của lớp LogRepositoryImpl.
+
+
+Listing 11.13 The LogRepositoryImpl class
+Path: Ch11/transactions5-springdata/src/main/java/com/manning
+➥ /javapersistence/ch11/repositories/LogRepositoryImpl.java
+
+public class LogRepositoryImpl implements LogRepositoryCustom {
+
+    @Autowired                                          [A]
+    private LogRepository logRepository;
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)      [B]
+    public void log(String message) {
+        logRepository.save(new Log(message));           [C]
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)     [D]
+    public void addSeparateLogsNotSupported() {
+        logRepository.save(new Log("check from not supported 1"));
+        if (true) throw new RuntimeException();
+        logRepository.save(new Log("check from not supported 2"));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.SUPPORTS)          [E]
+    public void addSeparateLogsSupports() {
+        logRepository.save(new Log("check from supports 1"));
+        if (true) throw new RuntimeException();
+        logRepository.save(new Log("check from supports 2"));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NEVER)             [F]
+    public void showLogs() {
+        System.out.println("Current log:");
+        logRepository.findAll().forEach(System.out::println);
+    }
+}
+
+[A] Tự động nạp (autowire) một bean `LogRepository`.
+
+[B] Propagation REQUIRES_NEW: Spring Data sẽ thực hiện ghi log trong một giao dịch riêng biệt, hoàn toàn độc lập
+với giao dịch cuối cùng của phương thức gọi `log`.
+
+[C] Phương thức `log` sẽ lưu một message vào kho lưu trữ.
+
+[D] Propagation NOT_SUPPORTED: Nếu có một giao dịch đang diễn ra, nó sẽ bị tạm dừng và thực thi không thuộc giao dịch
+sẽ tiếp tục. Nếu không có giao dịch nào đang diễn ra, thực thi sẽ tiếp tục mà không sử dụng giao dịch.
+
+[E] Propagation SUPPORTS: Nếu một giao dịch đang diễn ra, thực thi sẽ tiếp tục bên trong giao dịch đó. Nếu không có giao
+dịch nào đang diễn ra, thì không có giao dịch nào sẽ được tạo ra.
+
+[F] Propagation NEVER: Nếu một giao dịch đang diễn ra, sẽ ném ra một ngoại lệ IllegalTransactionStateException.
+Nếu không có giao dịch nào đang diễn ra, thì thực thi sẽ tiếp tục mà không sử dụng giao dịch.
+
+Chúng ta sẽ bắt đầu viết một loạt các bài kiểm tra (tests) để xác minh hành vi của các phương thức có giao dịch
+mà chúng ta vừa mới viết.
+
+Listing 11.14 The TransactionPropagationTest class
+
+Path: Ch11/transactions5-springdata/src/test/java/com/manning
+➥ /javapersistence/ch11/concurrency/TransactionPropagationTest.java
+
