@@ -1,0 +1,151 @@
+Chúng ta sẽ tiếp tục và hướng dẫn cách triển khai giao dịch với Spring và Spring Data.
+Mô hình giao dịch được sử dụng bởi Spring có thể áp dụng cho các API khác nhau như
+Hibernate, JPA và Spring Data JPA. Quản lý các giao dịch có thể được thực hiện theo
+cách lập trình (như đã được giới thiệu) hoặc bằng cách khai báo, với sự hỗ trợ của
+các chú thích (đó là những gì chúng ta chủ yếu sử dụng cho phần này của chương).
+
+Abstraction transaction quan trọng trong Spring được định nghĩa bởi interface
+org.springframework.transaction.PlatformTransactionManager.
+
+public interface PlatformTransactionManager extends TransactionManager {
+    TransactionStatus getTransaction(
+        ➥ @Nullable TransactionDefinition definition)
+                                    throws TransactionException;
+
+    void commit(TransactionStatus status) throws TransactionException;
+
+    void rollback(TransactionStatus status) throws TransactionException;
+
+}
+
+Thường thì, interface này không được sử dụng trực tiếp. Thay vào đó, bạn sẽ đánh dấu các giao dịch
+theo cách khai báo, thông qua các annotations, hoặc cuối cùng bạn có thể sử dụng TransactionTemplate
+để định nghĩa giao dịch theo cách lập trình.
+
+Spring sử dụng các mức độ cách ly ANSI đã được thảo luận trước đó. Để làm mới kiến thức, hãy xem lại
+phần 11.2.1 và đặc biệt là bảng 11.1, mà tóm tắt các mức độ cách ly và các vấn đề mà chúng giải quyết.
+
+
+11.4.1 Transaction propagation - Lan truyền transaction
+
+Spring xử lý vấn đề liên quan đến việc truyền tải giao dịch (transaction propagation).
+Để tóm gọn, nếu `method-A` là một phương thức có giao dịch và nó gọi `method-B`, thì `method-B` sẽ hoạt động
+ra sao từ góc độ giao dịch? Hãy xem vào hình 11.5:
+
+1. `bean-1` chứa `method-A`, một phương thức có giao dịch, được thực thi trong giao dịch `TX1`.
+2. `method-A` gọi `bean-2.method-B()`, cũng là một phương thức có giao dịch.
+
+`method-B` sẽ được thực thi trong giao dịch nào sẽ phụ thuộc vào cách propagation (truyền tải giao dịch)
+được định nghĩa. Spring định nghĩa danh sách các propagation có thể thông qua enum
+`org.springframework.transaction.annotation.Propagation`:
+
+- `REQUIRED`: Nếu đã có một giao dịch đang diễn ra, thực thi sẽ tiếp tục trong giao dịch đó.
+Nếu không có giao dịch nào đang tồn tại, một giao dịch mới sẽ được tạo ra. `REQUIRED` là propagation
+mặc định cho các giao dịch trong Spring.
+
+- `SUPPORTS`: Nếu đã có một giao dịch đang diễn ra, thực thi sẽ tiếp tục trong giao dịch đó.
+Nếu không có giao dịch nào, không có giao dịch nào sẽ được tạo ra.
+
+- `MANDATORY`: Nếu đã có một giao dịch đang diễn ra, thực thi sẽ tiếp tục trong giao dịch đó.
+Nếu không có giao dịch nào, một ngoại lệ `TransactionRequiredException` sẽ được ném ra.
+
+- `REQUIRES_NEW`: Nếu đã có một giao dịch đang diễn ra, giao dịch hiện tại sẽ bị tạm ngưng và
+một giao dịch mới sẽ được bắt đầu. Nếu không có giao dịch nào, một giao dịch mới sẽ được tạo ra bất kể.
+
+- `NOT_SUPPORTED`: Nếu đã có một giao dịch đang diễn ra, giao dịch hiện tại sẽ bị tạm ngưng và
+thực thi không có giao dịch. Nếu không có giao dịch nào, thực thi sẽ tiếp tục bình thường.
+
+- `NEVER`: Nếu đã có một giao dịch đang diễn ra, một ngoại lệ `IllegalTransactionStateException`
+sẽ được ném ra. Nếu không có giao dịch nào, thực thi sẽ tiếp tục bình thường.
+
+- `NESTED`: Nếu đã có một giao dịch đang diễn ra, một giao dịch con sẽ được tạo ra và đồng thời
+một điểm lưu (savepoint) sẽ được tạo. Nếu giao dịch con thất bại, thực thi sẽ quay trở lại điểm
+lưu đó. Nếu ban đầu không có giao dịch nào đang tồn tại, một giao dịch mới sẽ được tạo ra.
+
+
+Bảng 11.2 giải thích cách giao dịch trong phương thức gọi và phương thức được gọi ứng xử khi sử dụng
+các mức truyền tải giao dịch khác nhau. Hãy giải thích cụ thể:
+
+- REQUIRED: Nếu có một giao dịch T1 trong phương thức gọi, phương thức được gọi sẽ tiếp tục trong giao dịch T1.
+Nếu không có giao dịch nào trong phương thức gọi, một giao dịch mới (T1) sẽ được tạo.
+
+- SUPPORTS: Nếu có một giao dịch T1 trong phương thức gọi, phương thức được gọi sẽ tiếp tục trong giao dịch T1.
+Nếu không có giao dịch nào trong phương thức gọi, phương thức được gọi không tạo giao dịch mới.
+
+- MANDATORY: Nếu có một giao dịch T1 trong phương thức gọi, phương thức được gọi sẽ tiếp tục trong giao dịch T1.
+Nếu không có giao dịch nào trong phương thức gọi, một ngoại lệ sẽ được ném ra.
+
+- REQUIRES_NEW: Nếu có một giao dịch T1 trong phương thức gọi, giao dịch T1 sẽ tạm dừng và phương thức được gọi
+sẽ tạo một giao dịch mới (T2). Nếu không có giao dịch nào trong phương thức gọi,
+một giao dịch mới (T1) sẽ được tạo.
+
+- NOT_SUPPORTED: Nếu có một giao dịch T1 trong phương thức gọi, giao dịch T1 sẽ bị tạm dừng và phương thức
+được gọi sẽ không sử dụng giao dịch. Nếu không có giao dịch nào trong phương thức gọi,
+phương thức được gọi không tạo giao dịch mới.
+
+- NEVER: Nếu có một giao dịch T1 trong phương thức gọi, một ngoại lệ sẽ được ném ra. Nếu không có giao dịch nào
+trong phương thức gọi, phương thức được gọi sẽ tiếp tục mà không tạo giao dịch mới.
+
+- NESTED: Nếu có một giao dịch T1 trong phương thức gọi, giao dịch con T2 sẽ được tạo, và đồng thời một điểm lưu
+(savepoint) cũng được tạo. Nếu giao dịch con T2 thất bại, thực thi sẽ quay trở lại điểm lưu đó.
+Nếu ban đầu không có giao dịch nào trong phương thức gọi, một giao dịch mới T1 sẽ được tạo.
+
+
+11.4.2 Transaction rollback
+
+Giao dịch Spring định nghĩa các quy tắc mặc định cho việc rollback: một giao dịch sẽ bị rollback cho RuntimeException.
+Hành vi này có thể được ghi đè và chúng ta có thể chỉ định những ngoại lệ nào tự động rollback giao dịch và những
+ngoại lệ nào không. Điều này được thực hiện thông qua các thuộc tính của chú thích
+@Transactional như rollbackFor, rollbackForClassName, noRollbackFor và noRollbackForClassName. Hành vi được xác định
+bởi các thuộc tính này được tóm tắt trong bảng 11.3.
+
+Property: rollbackFor
+Type: Mảng các đối tượng lớp (Class) mở rộng từ Throwable
+Behavior: Xác định các lớp ngoại lệ mà buộc phải gây ra việc hoàn trả (rollback).
+
+Property: rollbackForClassName
+Type: Mảng các tên lớp mở rộng từ Throwable
+Behavior: Xác định tên lớp ngoại lệ phải gây ra rollback.
+
+Property: noRollbackFor
+Type: Mảng các đối tượng lớp (Class) mở rộng từ Throwable
+Behavior: Xác định các lớp ngoại lệ mà không được gây ra việc hoàn trả (rollback).
+
+Property: noRollbackForClassName
+Type: Mảng các tên lớp mở rộng từ Throwable
+Behavior: Xác định tên lớp ngoại lệ không được gây ra rollback.
+
+
+11.4.3 Transaction properties
+
+Chú thích @Transactional định nghĩa các thuộc tính trong bảng 11.4. Chúng ta sẽ xem xét ở đây về cách cách ly
+và truyền tải đã được xem xét trước đó và về các thuộc tính khác.
+Tất cả thông tin meta này sẽ được chuyển thành cấp độ thực thi thao tác giao dịch.
+
+Property: isolation
+Type: Isolation enum
+Behavior: Công bố các mức cách ly theo tiêu chuẩn ANSI.
+
+Property: propagation
+Type: Propagation enum
+Behavior: Cài đặt propagation theo các giá trị từ bảng 11.2.
+
+Property: timeout
+Type: int (seconds)
+Behavior: Hết thời gian chờ sau đó giao dịch sẽ tự động rollback.
+
+Property: readOnly
+Type: boolean
+Behavior: Declare nếu giao dịch là read-only hoặc read-write.
+Giao dịch read-only cho phép tối ưu hóa để làm cho chúng nhanh hơn.
+
+Chú thích @Transactional có thể được áp dụng cho các interfaces, cho các phương thức trong interface,
+cho các lớp (classes), hoặc cho các phương thức trong lớp. Khi đã được áp dụng cho một interface hoặc một lớp,
+chú thích này áp dụng cho tất cả các phương thức từ lớp hoặc interface đó. Bạn có thể thay đổi hành vi
+bằng cách chú thích cách riêng lẻ cho các phương thức cụ thể. Ngoài ra, khi đã áp dụng chú thích cho một
+interface hoặc một phương thức trong interface, chú thích này được kế thừa bởi các lớp thực hiện interface
+đó hoặc bởi các phương thức tương ứng trong các lớp thực hiện interface đó. Hành vi có thể được ghi đè.
+Do đó, để đạt được hành vi chi tiết, nên áp dụng chú thích @Transactional cho các phương thức trong các lớp.
+
+
+11.4.4 Programmatic transaction definition - định nghĩa giao diện lập trình
