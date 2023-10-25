@@ -1,11 +1,11 @@
 Trong phần này, chúng ta sẽ tìm hiểu cách xây dựng một ứng dụng JPA bằng
 cách sử dụng Spring và data access object design pattern (DAO).
-Mẫu thiết kế DAO tạo ra một giao diện trừu tượng đối với cơ sở dữ liệu,
+design pattern DAO tạo ra một giao diện trừu tượng đối với cơ sở dữ liệu,
 hỗ trợ các hoạt động truy cập mà không tiết lộ bất kỳ chi tiết nào
 về cơ sở dữ liệu.
 
 Bạn có thể sử dụng lý luận rằng các Spring Data JPA repositories mà chúng
-ta đã tạo và làm việc với đã làm điều này, và đó là đúng. Trong chương này,
+ta đã tạo và làm việc đã làm điều này, và đó là đúng. Trong chương này,
 chúng ta sẽ thể hiện cách xây dựng một lớp DAO và chúng ta sẽ thảo luận về
 khi nào chúng ta nên ưa thích cách tiếp cận này thay vì sử dụng Spring Data JPA.
 
@@ -73,7 +73,7 @@ Trường amount không được null.
 Mỗi Bid có một tham chiếu non-optional đến Item của nó. Việc truy xuất sẽ được
 thực hiện một cách lazy, và tên của cột kết nối là ITEM_ID.
 
-Để triển khai mẫu thiết kế DAO, chúng ta sẽ bắt đầu bằng việc tạo hai interface, ItemDao và BidDao,
+Để triển khai design pattern DAO, chúng ta sẽ bắt đầu bằng việc tạo hai interface, `ItemDao` và `BidDao`,
 và chúng ta sẽ khai báo các hoạt động truy cập sẽ được triển khai:
 
 Path: Ch14/spring-jpa-dao/src/main/java/com/manning/javapersistence/ch14
@@ -123,7 +123,7 @@ và dịch chúng thành các ngoại lệ unchecked của Spring.
 thảo luận ở phần 11.4.3.
 
 Một EntityManager không an toàn với luồng làm việc mặc định. Chúng ta sẽ sử dụng @PersistenceContext
-để container inject một đối tượng proxy an toàn với luồng. Ngoài việc tiêm sự phụ thuộc vào một quản lý
+để container inject một đối tượng proxy an toàn với luồng. Ngoài việc dependency inject vào một
 EntityManager do container, chú thích @PersistenceContext còn có các tham số. Thiết lập persistence type 
 thành EXTENDED giữ persistence context trong suốt vòng đời của một bean.
 

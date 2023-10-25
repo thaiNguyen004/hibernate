@@ -1,0 +1,141 @@
+Bây giờ chúng tôi sẽ hướng dẫn cách sử dụng Spring và mô hình DAO với Hibernate API.
+Như chúng tôi đã đề cập trước đó, chúng tôi sẽ tập trung chỉ vào các thay đổi giữa
+phương pháp này và các ứng dụng trước đó.
+
+Gọi `sessionFactory.getCurrentSession()` sẽ tạo một phiên mới nếu không tồn tại phiên nào.
+Nếu đã tồn tại một phiên, nó sẽ sử dụng phiên hiện tại từ ngữ cảnh Hibernate.
+
+Phiên sẽ tự động được đẩy (flush) và đóng khi một giao dịch kết thúc.
+Sử dụng `sessionFactory.getCurrentSession()` rất lý tưởng trong các ứng dụng đơn luồng,
+vì việc sử dụng một phiên duy nhất sẽ tăng hiệu suất.
+Trong ứng dụng đa luồng, phiên không an toàn đối với luồng, vì vậy bạn nên sử dụng
+`sessionFactory.openSession()` và đóng phiên đã mở một cách rõ ràng. Hoặc, vì Session
+triển khai AutoCloseable, nó có thể được sử dụng trong khối try-with-resources.
+
+Vì các lớp Item và Bid cùng với các giao diện ItemDao và BidDao vẫn không thay đổi,
+chúng tôi sẽ tiếp tục với ItemDaoImpl và BidDaoImpl và xem chúng đã thay đổi như thế
+nào bây giờ.
+
+// Lớp ItemDaoImpl được đánh dấu bằng @Repository và @Transactional.
+@Repository
+@Transactional
+public class ItemDaoImpl extends AbstractGenericDao<Item>{
+
+    // Trường sessionFactory kiểu SessionFactory được tiêm vào ứng dụng,
+    // và nó được đánh dấu bằng @Autowired.
+    @Autowired
+    private SessionFactory sessionFactory;
+
+    @Override
+    public Item getById(long id) {
+        return sessionFactory.getCurrentSession().get(Item.class, id);
+    }
+
+    @Override
+    public List<Item> getAll() {
+        return sessionFactory.getCurrentSession()
+            .createQuery("from Item", Item.class).list();
+    }
+
+    @Override
+    public void insert(Item item) {
+        sessionFactory.getCurrentSession().persist(item);
+        for (Bid bid : item.getBids()) {
+            sessionFactory.getCurrentSession().persist(bid);
+        }
+    }
+
+    @Override
+    public void update(long id, String name) {
+        Item item = sessionFactory.getCurrentSession().get(Item.class, id);
+        item.setName(name);
+        sessionFactory.getCurrentSession().update(item);
+    }
+
+    @Override
+    public void delete(Item item) {
+        sessionFactory.getCurrentSession()
+            .createQuery("delete from Bid b where b.item.id = :id")
+            .setParameter("id", item.getId()).executeUpdate();
+        sessionFactory.getCurrentSession()
+            .createQuery("delete from Item i where i.id = :id")
+            .setParameter("id", item.getId()).executeUpdate();
+    }
+
+    @Override
+    public Item findByName(String name) {
+        return sessionFactory.getCurrentSession()
+            .createQuery("from Item where name=:name", Item.class)
+            .setParameter("name", name).uniqueResult();
+    }
+}
+
+Lớp BidDaoImpl cũng sẽ phản ánh chức năng đã được triển khai trước đây sử dụng JPA và EntityManager,
+nhưng nó sẽ sử dụng Hibernate API và SessionFactory. Có những thay đổi quan trọng trong lớp SpringConfiguration.
+Chuyển từ JPA sang Hibernate, bean EntityManagerFactory sẽ được thay thế bằng SessionFactory.
+Tương tự, bean JpaTransactionManager sẽ được thay thế bằng HibernateTransactionManager.
+
+Listing 14.13 The SpringConfiguration class using the Hibernate API
+Path: Ch14/spring-hibernate-dao/src/test/java/com/manning/javapersistence
+➥ /ch14/configuration/SpringConfiguration.java
+
+// Annotation @EnableTransactionManagement sẽ kích hoạt khả năng quản lý giao dịch dựa trên chú thích của Spring.
+@EnableTransactionManagement
+public class SpringConfiguration {
+
+    // Một `LocalSessionFactoryBean` là đối tượng `sessionFactory` sẽ được inject vào.
+    @Bean
+    public LocalSessionFactoryBean sessionFactory() {
+        LocalSessionFactoryBean sessionFactory =
+                    new LocalSessionFactoryBean();
+
+        // Đặt data source và các packages to scan.
+        sessionFactory.setDataSource(dataSource());
+        sessionFactory.setPackagesToScan(new String[]{"com.manning.javapersistence.ch14"});
+        sessionFactory.setHibernateProperties(hibernateProperties());
+        return sessionFactory;
+    }
+
+    // Đặt các thuộc tính Hibernate sẽ được cung cấp từ một phương thức riêng lẻ.
+    private Properties hibernateProperties() {
+        Properties hibernateProperties = new Properties();
+        hibernateProperties.setProperty(AvailableSettings.HBM2DDL_AUTO, "create");
+        hibernateProperties.setProperty(AvailableSettings.SHOW_SQL, "true");
+        hibernateProperties.setProperty(AvailableSettings.DIALECT, "org.hibernate.dialect.MySQL8Dialect");
+        return hibernateProperties;
+    }
+
+    @Bean
+    public DataSource dataSource() {
+    DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        dataSource.setUrl("jdbc:mysql://localhost:3306/CH14_SPRING_HIBERNATE?serverTimezone=UTC");
+        dataSource.setUsername("root");
+        dataSource.setPassword("");
+        return dataSource;
+    }
+
+    @Bean
+    public DatabaseService databaseService() {
+        return new DatabaseService();
+    }
+
+    @Bean
+    public HibernateTransactionManager transactionManager(SessionFactory sessionFactory) {
+        HibernateTransactionManager transactionManager
+                    = new HibernateTransactionManager();
+        transactionManager.setSessionFactory(sessionFactory);
+        return transactionManager;
+    }
+
+    @Bean
+    public ItemDao itemDao() {
+        return new ItemDaoImpl();
+    }
+
+    @Bean
+    public BidDao bidDao() {
+        return new BidDaoImpl();
+    }
+}
+

@@ -1,0 +1,175 @@
+14.3 Tạo tính tổng quát cho một ứng dụng JPA sử dụng Spring và DAO
+
+Nếu chúng ta xem xét kỹ hơn các giao diện ItemDao và BidDao cùng các lớp ItemDaoImpl và BidDaoImpl
+mà chúng ta đã tạo, chúng ta sẽ thấy một số hạn chế như sau:
+
+- Có các thao tác tương tự như getById, getAll, insert và delete, chúng khác biệt chủ yếu
+ở loại đối số mà chúng nhận hoặc kết quả trả về.
+
+- Phương thức update nhận giá trị của một thuộc tính cụ thể như đối số thứ hai. Chúng ta
+có thể cần viết nhiều phương thức nếu cần cập nhật các thuộc tính khác nhau của một đối tượng.
+
+- Các phương thức như findByName hoặc findByAmount liên quan đến các thuộc tính cụ thể.
+Chúng ta có thể cần viết các phương thức khác nhau để tìm kiếm một đối tượng bằng cách sử dụng
+các thuộc tính khác nhau.
+
+Do đó, chúng ta sẽ giới thiệu một giao diện GenericDao.
+
+Listing 14.8 The GenericDao interface
+Path: Ch14/spring-jpa-dao-gen/src/main/java/com/manning/javapersistence
+➥ /ch14/dao/GenericDao.java
+
+public interface GenericDao <T> {
+    T getById(long id);         [A]
+
+    List<T> getAll();           [A]
+
+    void insert(T entity);      [B]
+
+    void delete(T entity);      [B]
+
+    void update(long id, String propertyName, Object propertyValue);    [C]
+
+    List<T> findByProperty(String property, Object propertyValue);      [C]
+}
+
+[A] Các phương thức getById và getAll có kiểu trả về tổng quát.
+[B] Các phương thức insert và update có đối số tổng quát, T entity.
+[C] Các phương thức update và findByProperty sẽ nhận các đối số là tên thuộc tính và
+giá trị thuộc tính mới.
+
+Chúng ta sẽ tạo một phiên bản trừu tượng của giao diện GenericDao,
+được gọi là AbstractGenericDao, như được hiển thị trong mã nguồn 14.9.
+Ở đây, chúng ta sẽ viết các chức năng chung cho tất cả các lớp DAO,
+và chúng ta sẽ để các lớp cụ thể triển khai riêng của họ.
+
+Chúng ta sẽ tiêm (inject) một trường EntityManager gọi là "em" vào ứng dụng,
+và chúng ta sẽ đánh dấu nó bằng @PersistenceContext. Đặt persistence type
+thành EXTENDED giữ persistence context cho toàn bộ vòng đời của một bean.
+
+Listing 14.9 The AbstractGenericDao class
+Path: Ch14/spring-jpa-dao-gen/src/main/java/com/manning/javapersistence
+➥ /ch14/dao/AbstractGenericDao.java
+
+
+// Lớp AbstractGenericDao được đánh dấu bằng @Repository và @Transactional.
+@Transactional
+@Repository
+public abstract class AbstractGenericDao <T> implements GenericDao<T>{
+
+    // EXTENDED persistence type của EntityManager sẽ giữ cho persistence context
+    // cho toàn bộ vòng đời của một bean. Trường "em" được đánh dấu là protected,
+    // để cuối cùng có thể được kế thừa và sử dụng bởi các lớp con.
+    @PersistenceContext(type = PersistenceContextType.EXTENDED)
+    protected EntityManager em;
+    // Biến "clazz" là một trường của kiểu Class thực tế mà DAO sẽ làm việc với.
+    private Class<T> clazz;
+
+    public void setClazz(Class<T> clazz) {
+        this.clazz = clazz;
+    }
+
+    // Thực hiện truy vấn SELECT bằng cách sử dụng đối tượng "clazz" và thiết lập id làm tham số.
+    @Override
+    public T getById(long id) {         [D]
+        return em.createQuery(
+                "select e from " + clazz.getName() + " e where e.id = :id",
+                clazz
+        ).setParameter("id", id).getSingleResult();
+    }
+
+    @Override
+    public List<T> getAll() {           [E]
+        return em.createQuery(
+                "from " + clazz.getName(),
+                clazz
+        ).getResultList();
+    }
+
+    @Override
+    public void insert(T entity) {          [F]
+        em.persist(entity);
+    }
+
+    @Override
+    public void delete(T entity) {          [G]
+        em.remove(entity);
+    }
+
+    @Override                               [H]
+    public void update(long id, String propertyName, Object propertyValue) {
+        em.createQuery(
+                "update " + clazz.getName() + " e " +
+                        "set e." + propertyName + " = :propertyValue where e.id = :id"
+        ).setParameter("propertyValue", propertyValue)
+                .setParameter("id", id);
+    }
+
+    @Override                               [I]
+    public List<T> findByProperty(String property, Object propertyValue) {
+        return em.createQuery(
+                "select e from " + clazz.getName() + " e " +
+                        "where e." + property + " = :propertyValue", clazz
+        ).setParameter("propertyValue", propertyValue)
+                .getResultList();
+    }
+}
+
+Lớp `AbstractGenericDao` cung cấp hầu hết chức năng DAO chung. Chỉ cần tùy chỉnh một chút
+cho các lớp DAO cụ thể. Lớp `ItemDaoImpl` sẽ mở rộng lớp `AbstractGenericDao` và sẽ ghi đè
+(override) một số phương thức.
+
+Điều này có nghĩa là lớp `ItemDaoImpl` sẽ sử dụng các phương thức chung được cung cấp bởi
+`AbstractGenericDao`, nhưng cũng có thể thực hiện các phương thức cụ thể cho lớp DAO `ItemDao`.
+Điều này giúp tái sử dụng mã và giảm sự lặp lại trong việc triển khai các phương thức DAO cho
+các loại đối tượng cụ thể.
+
+Listing 14.10 The ItemDaoImpl class extending AbstractGenericDao
+Path: Ch14/spring-jpa-dao-gen/src/main/java/com/manning/javapersistence
+➥ /ch14/dao/ItemDaoImpl.java
+
+Lớp ItemDaoImpl mở rộng từ AbstractGenericDao và được xác định kiểu thông qua `Item`.
+public class ItemDaoImpl extends AbstractGenericDao<Item>{
+
+    // Trong hàm tạo, chúng ta đặt Item.class là lớp entity mà nó quản lý.
+    public ItemDaoImpl() {
+        setClazz(Item.class);
+    }
+
+    // Lưu trữ đối tượng Item cùng với tất cả các đối tượng Bid của nó.
+    // Trường EntityManager em được thừa kế từ lớp AbstractGenericDao.
+    @Override
+    public void insert(Item item) {
+        em.persist(item);
+        for (Bid bid : item.getBids()) {
+            em.persist(bid);
+        }
+    }
+
+    // Xóa tất cả bids liên quan đến một món hàng Item và chính món hàng đó.
+    @Override
+    public void delete(Item item) {
+        em.createQuery(
+                "delete from Bid b where b.item.id = :id"
+        ).setParameter("id", item.getId()).executeUpdate();
+        em.createQuery(
+                "delete from Item i where i.id = :id"
+        ).setParameter("id", item.getId()).executeUpdate();
+    }
+}
+
+Lớp `BidDaoImpl` sẽ đơn giản là mở rộng từ lớp AbstractGenericDao và thiết lập lớp entity mà nó quản lý.
+
+Listing 14.11 The BidDaoImpl class extending AbstractGenericDao
+Path: Ch14/spring-jpa-dao-gen/src/main/java/com/manning/javapersistence
+➥ /ch14/dao/BidDaoImpl.java
+
+public class BidDaoImpl extends AbstractGenericDao<Bid> {
+    public BidDaoImpl() {
+        setClazz(Bid.class);
+    }
+}
+
+Một số thay đổi nhỏ cần được thực hiện cho các lớp cấu hình và kiểm thử.
+Lớp SpringConfiguration sẽ khai báo hai bean DAO như là GenericDao:
+
