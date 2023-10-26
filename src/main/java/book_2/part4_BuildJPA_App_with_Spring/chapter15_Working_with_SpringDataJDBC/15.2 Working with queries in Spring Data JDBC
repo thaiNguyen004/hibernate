@@ -8,11 +8,11 @@ sử dụng các truy vấn sửa đổi, và tạo truy vấn tùy chỉnh.
 
 Chúng ta sẽ mở rộng lớp User bằng cách thêm các trường email, level và active.
 Một user có thể có các level khác nhau, cho phép họ thực hiện các hành động cụ thể,
-chẳng hạn như đặt giá trên một số mức cụ thể. Người dùng có thể hoạt động hoặc đã
+chẳng hạn như đặt giá trên một số mức cụ thể. user có thể hoạt động hoặc đã
 nghỉ hưu (nghĩa là họ không còn hoạt động trong hệ thống đấu giá CaveatEmptor nữa).
 
 Mục tiêu của chúng ta là viết một chương trình có thể giải quyết các trường hợp
-sử dụng liên quan đến việc tìm kiếm người dùng với một số level cụ thể, user
+sử dụng liên quan đến việc tìm kiếm user với một số level cụ thể, user
 đang hoạt động hoặc không, user với username hoặc email cụ thể, hoặc user
 có ngày đăng ký trong khoảng thời gian cụ thể.
 
@@ -243,4 +243,224 @@ public class FindUsersUsingQueriesTest extends SpringDataJdbc2ApplicationTests {
 
 
 15.2.2 Limiting query results, sorting, and paging
+
+Như trong Spring Data JPA, các từ khóa "first" và "top" (sử dụng tương đương) có thể giới hạn kết quả
+của các phương thức truy vấn. Các từ khóa "top" và "first" có thể được theo sau bởi một giá trị số
+tùy chọn để chỉ định kích thước tối đa của kết quả cần trả về. Nếu giá trị số học này không có,
+kích thước kết quả sẽ là 1.
+
+Pageable là một interface cho thông tin phân trang. Trong thực tế, chúng ta sử dụng lớp
+PageRequest để triển khai giao diện này. Lớp này có thể xác định số trang, kích thước trang và
+tiêu chí sắp xếp.
+
+Các trường hợp sử dụng mà chúng ta muốn giải quyết ở đây là lấy một số user hạn chế 
+(ví dụ: user đầu tiên theo username hoặc theo registration_date) hoặc lấy các user 
+đầu tiên với một cấp độ cụ thể, được sắp xếp theo registration_date, hoặc một số lượng
+lớn user chia thành các trang, để chúng ta có thể dễ dàng thao tác với họ.
+
+Chúng tôi sẽ thêm các phương thức sau vào giao diện UserRepository.
+
+Optional<User> findFirstByOrderByUsernameAsc();
+Optional<User> findTopByOrderByRegistrationDateDesc();
+Page<User> findAll(Pageable pageable);
+List<User> findFirst2ByLevel(int level, Sort sort);
+List<User> findByLevel(int level, Sort sort);
+List<User> findByActive(boolean active, Pageable pageable);
+
+Các phương thức này tuân theo mẫu được yêu cầu bởi cơ chế trình tạo truy vấn (tóm tắt trong bảng 15.1),
+nhưng lần này mục đích của chúng là giới hạn kết quả của truy vấn, để chúng ta có thể thực hiện sắp xếp
+và phân trang. Ví dụ, phương thức Optional<User> findFirstByUsernameAsc() sẽ lấy user đầu tiên
+theo username (kết quả là một Optional, vì cuối cùng có thể không tồn tại).
+Phương thức Page<User> findAll(Pageable pageable) sẽ lấy tất cả user nhưng theo từng trang.
+Chúng tôi sẽ viết các bài test sau để xác minh cách hoạt động của những phương thức mới được thêm vào.
+
+Listing 15.14 Testing limiting query results, sorting, and paging
+Path: Ch15/spring-data-jdbc2/src/test/java/com/manning/javapersistence/ch15
+➥ /FindUsersSortingAndPagingTest.java
+
+@Test
+    void testOrder() {
+        User user1 = userRepository.findFirstByOrderByUsernameAsc().get();
+        User user2 =
+                userRepository.findTopByOrderByRegistrationDateDesc().get();
+        Page<User> userPage = userRepository.findAll(PageRequest.of(1, 3));
+        List<User> users = userRepository.findFirst2ByLevel(2, Sort.by("registrationDate"));
+
+        assertAll(
+                () -> assertEquals("beth", user1.getUsername()),
+                () -> assertEquals("julius", user2.getUsername()),
+                () -> assertEquals(2, users.size()),
+                () -> assertEquals(3, userPage.getSize()),
+                () -> assertEquals("beth", users.get(0).getUsername())
+        );
+    }
+
+Bài kiểm thử đầu tiên tìm user đầu tiên theo thứ tự tăng dần của username
+và user đầu tiên theo thứ tự giảm dần của ngày đăng ký.
+
+Tìm tất cả user, chia thành các trang, và trả về trang số 1 có kích thước 3
+(số trang bắt đầu từ 0).
+
+Tìm 2 user đầu tiên có level 2, được sắp xếp tăng dần theo ngày đăng ký.
+
+@Test
+    void testFindByLevel () {
+        Sort.TypedSort<User> user = Sort.sort(User.class);
+
+        List<User> users = userRepository
+                .findByLevel(3,
+                        user.by(User::getRegistrationDate)
+                                .descending()
+                );
+        assertAll(
+                () -> assertEquals(2, users.size()),
+                () -> assertEquals("james", users.get(0).getUsername())
+        );
+    }
+
+Bài test thứ hai xác định một tiêu chí sắp xếp trên lớp User. `Sort.TypedSort` mở rộng từ `Sort`
+và có thể sử dụng method handles để xác định các thuộc tính để sắp xếp theo.
+Tìm các người dùng có level 3 và sắp xếp theo ngày đăng ký, giảm dần-descending.
+
+
+15.2.3 Streaming results
+
+Các phương pháp truy vấn trả về nhiều kết quả có thể sử dụng các giao diện Java tiêu chuẩn như
+Iterable, List và Set. Giống như Spring Data JPA, Spring Data JDBC hỗ trợ `Streamable`, có thể
+được sử dụng như một tùy chọn thay thế cho Iterable hoặc bất kỳ loại tập hợp nào.
+Nó cho phép chúng ta kết hợp các đối tượng Streamable và thực hiện trực tiếp việc filter và
+map trên các phần tử.
+
+Trường hợp sử dụng mà chúng tôi sẽ giải quyết ở đây là lấy kết quả dưới dạng một dòng dữ liệu (stream),
+mà không cần phải chờ cho toàn bộ tập hợp user hoặc một trang user.
+Như vậy, chúng ta có thể nhanh chóng bắt đầu xử lý các kết quả đầu tiên khi chúng đến. Khác với
+các tập hợp, một dòng dữ liệu chỉ có thể được tiêu thụ một lần và không thay đổi.
+
+Chúng tôi sẽ thêm các phương thức sau vào giao diện UserRepository.
+
+Listing 15.15 Adding methods that return Streamable in UserRepository
+Path: Ch15/spring-data-jdbc2/src/main/java/com/manning/javapersistence/ch15
+➥ /repositories/UserRepository.java
+
+Streamable<User> findByEmailContaining(String text);
+Streamable<User> findByLevel(int level);
+
+Chúng ta sẽ viết các bài test sau để xác minh cách các phương thức mới được thêm vào tương tác
+với cơ sở dữ liệu và cung cấp kết quả dưới dạng dòng dữ liệu (stream). Một dòng dữ liệu được cung cấp
+như một resource trong khối try, vì vậy nó sẽ tự động đóng khi hoàn tất. Một cách khác là gọi một
+cách tường minh phương thức close(). Nếu không, dòng dữ liệu sẽ giữ kết nối cơ sở dữ liệu gốc
+không được đóng lại.
+
+Listing 15.16 Testing methods that return Streamable
+Path: Ch15/spring-data-jdbc2/src/test/java/com/manning/javapersistence/ch15
+➥ /QueryResultsTest.java
+
+@Test
+void testStreamable() {
+    try(Stream<User> result =
+        userRepository.findByEmailContaining("someother")
+            .and(userRepository.findByLevel(2))
+            .stream().distinct()) {
+        assertEquals(6, result.count());
+    }
+}
+
+Bài kiểm thử sẽ gọi phương thức findByEmailContaining để tìm kiếm các email chứa từ khóa "someother".
+Bài kiểm thử sẽ nối dòng dữ liệu kết quả với dòng dữ liệu cung cấp user level 2.
+
+Sau đó, nó sẽ chuyển đổi dòng dữ liệu này thành một dòng dữ liệu (stream) và giữ lại các người dùng duy nhất.
+
+kiểm thử xem dòng dữ liệu kết quả có chứa 6 người dùng hay không.
+
+15.2.4 The @Query annotation
+
+Chúng ta có thể sử dụng chú thích @Query để tạo các phương thức mà cho phép chỉ định một
+câu truy vấn tùy chỉnh. Với chú thích @Query, tên của phương thức không cần phải tuân theo
+bất kỳ quy tắc đặt tên nào. Câu truy vấn tùy chỉnh có thể được tham số hóa, nhưng khác với
+Spring Data JPA, các tham số chỉ có thể được xác định bằng tên và chúng phải được liên kết
+trong câu truy vấn bằng chú thích @Param. Không giống với Spring Data JPA, chúng ta
+không sử dụng JPQL mà sử dụng SQL. Do đó, không có tính di động - nếu bạn thay đổi nhà cung cấp
+cơ sở dữ liệu, bạn sẽ phải viết lại các câu truy vấn.
+
+Listing 15.17 Methods annotated with @Query in the UserRepository interface
+Path: Ch15/spring-data-jdbc2/src/main/java/com/manning/javapersistence/ch15
+➥ /repositories/UserRepository.java
+
+@Query("SELECT COUNT(*) FROM USERS WHERE ACTIVE = :ACTIVE")
+int findNumberOfUsersByActivity(@Param("ACTIVE") boolean active);
+
+@Query("SELECT * FROM USERS WHERE LEVEL = :LEVEL AND ACTIVE = :ACTIVE")
+List<User> findByLevelAndActive(@Param("LEVEL") int level, @Param("ACTIVE")
+boolean active);
+
+Phương thức findNumberOfUsersByActivity sẽ trả về số lượng người dùng hoạt động.
+
+Phương thức findByLevelAndActive sẽ trả về các người dùng với cấp độ và trạng thái hoạt
+động được chỉ định dưới dạng tham số tên.
+
+Chú thích @Param sẽ khớp tham số :LEVEL của câu truy vấn với đối số level của phương thức
+và tham số :ACTIVE của câu truy vấn với đối số active của phương thức.
+
+Viết bài test cho các phương thức truy vấn này khá đơn giản và tương tự như các ví dụ trước đó.
+Chúng có thể được tìm thấy trong mã nguồn của cuốn sách.
+
+@Test
+    void testNumberOfUserByActivity() {
+        int active = userRepository.findNumberOfUsersByActivity(true);
+        int inactive = userRepository.findNumberOfUsersByActivity(false);
+
+        Assertions.assertAll(
+                () -> Assertions.assertEquals(8, active),
+                () -> Assertions.assertEquals(2, inactive)
+        );
+    }
+
+    @Test
+    void testUserByLevelAndActivity() {
+        List<User> userList1 = userRepository.findByLevelAndActive(1, true);
+        List<User> userList2 = userRepository.findByLevelAndActive(2, true);
+        List<User> userList3 = userRepository.findByLevelAndActive(2, false);
+
+        Assertions.assertAll(
+                () -> Assertions.assertEquals(2, userList1.size()),
+                () -> Assertions.assertEquals(2, userList2.size()),
+                () -> Assertions.assertEquals(1, userList3.size())
+        );
+    }
+
+15.2.5 Modifying queries
+
+Chúng ta có thể định nghĩa các phương thức sửa đổi dữ liệu bằng chú thích @Modifying.
+Ví dụ, các truy vấn INSERT, UPDATE và DELETE và các câu lệnh DDL (Data Definition Language)
+sẽ thay đổi nội dung của cơ sở dữ liệu.
+Chú thích @Query có thể chứa một truy vấn sửa đổi và có thể cần ràng buộc tham số.
+Tính đến thời điểm viết, Spring Data JDBC không hỗ trợ việc tạo truy vấn tự động
+cho các phương thức xóa (không giống với Spring Data JPA).
+
+Chúng tôi sẽ thêm các phương thức mới, được gán chú thích @Query, vào giao diện UserRepository,
+nhưng lần này các truy vấn sẽ cập nhật hoặc xóa bản ghi từ bảng USERS.
+
+Listing 15.18 Adding modifying methods to the UserRepository interface
+Path: Ch15/spring-data-jdbc2/src/main/java/com/manning/javapersistence/ch15
+➥ /repositories/UserRepository.java
+
+@Modifying
+@Query("UPDATE USERS SET LEVEL = :NEW_LEVEL WHERE LEVEL = :OLD_LEVEL")
+int updateLevel(@Param("OLD_LEVEL") int oldLevel,@Param("NEW_LEVEL")int newLevel);
+
+@Modifying
+@Query("DELETE FROM USERS WHERE LEVEL = :LEVEL")
+int deleteByLevel(@Param("LEVEL") int level);
+
+Phương thức updateLevel sẽ thay đổi cấp độ của các người dùng
+có cấp độ cũ (oldLevel) và đặt nó thành cấp độ mới (newLevel).
+Phương thức cũng được chú thích bằng @Modifying.
+
+Phương thức deleteByLevel sẽ xóa tất cả người dùng có cấp độ được
+chỉ định làm tham số, như đối số của chú thích @Query.
+Phương thức cũng được chú thích bằng @Modifying.
+
+
+
+
 

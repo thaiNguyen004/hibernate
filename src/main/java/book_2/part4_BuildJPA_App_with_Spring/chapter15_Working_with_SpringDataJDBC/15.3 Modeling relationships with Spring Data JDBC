@@ -1,0 +1,59 @@
+Quản lý các mối quan hệ giữa các lớp và các mối quan hệ giữa các bảng là trọng tâm của
+các vấn đề liên quan đến ORM (Object-Relational Mapping). Chúng ta đã xem xét các giải pháp
+có thể trong các vấn đề này bằng cách sử dụng JPA và Spring Data JPA trong chương 8,
+và bây giờ chúng ta sẽ xem xét các phương pháp được cung cấp bởi Spring Data JDBC.
+
+15.3.1 Modeling a one-to-one relationship with Spring Data JDBC
+
+Spring Data JPA có thể mô hình hóa các mối quan hệ giữa các thực thể bằng các chú thích JPA
+như @OneToOne, @OneToMany, @ManyToMany.
+
+Spring Data JDBC sử dụng một cơ chế khác với JPA.
+
+Chúng ta sẽ bắt đầu với việc mô hình hóa mối quan hệ one-to-one giữa các thực thể trong
+Spring Data JDBC bằng cách sử dụng các thực thể User và Address. Mỗi User sẽ chỉ có một
+Address và mỗi Address sẽ thuộc về một User.
+
+Như đã được đề cập trước đó, Spring Boot sẽ luôn thực thi tệp schema.sql nằm trên classpath
+khi khởi động. Như thể hiện trong ví dụ sau, nó sẽ xóa và tạo lại các bảng ADDRESSES và USERS.
+
+Listing 15.19 The schema.sql file for one-to-one relationships
+Path: Ch15/spring-data-jdbc3/src/main/resources/schema.sql
+
+drop table if exists ADDRESSES;
+drop table if exists USERS;
+
+create table USERS(
+    id integer auto_increment primary key,
+    active boolean,
+    username varchar(30),
+    email varchar(30),
+    level integer,
+    registration_date date
+);
+
+create table addresses(
+    user_id integer auto_increment primary key,
+    street varchar(30) not null,
+    city varchar(30) not null
+);
+
+Chú thích @MappedCollection (được giới thiệu trong Spring Data JDBC 1.1) có thể được sử dụng trên
+một kiểu tham chiếu cho mối quan hệ một một. Trường ID của bảng USERS sẽ là một khóa ngoại trong
+bảng ADDRESSES, trường tương ứng từ bảng ADDRESSES sẽ là USER_ID.
+Có một tham chiếu duy nhất đến Address bên trong User sẽ làm cho mối quan hệ là một một.
+Trong lớp User, tham chiếu đến trường Address sẽ được hiển thị như sau:
+
+Path: Ch15/spring-data-jdbc3/src/main/java/com/manning/javapersistence/ch15
+➥ /model/User.java
+
+@Table("USERS")
+public class User {
+    @Id
+    private Long id;
+    // . . .
+    @MappedCollection(idColumn = "USER_ID")
+    private Address address;
+
+
+

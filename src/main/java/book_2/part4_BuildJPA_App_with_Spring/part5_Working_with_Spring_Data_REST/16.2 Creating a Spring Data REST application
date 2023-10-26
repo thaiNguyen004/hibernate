@@ -1,0 +1,203 @@
+Mục tiêu đầu tiên của chúng ta là tạo một ứng dụng Spring Data REST sẽ cung cấp
+giao diện trình duyệt để tương tác với cơ sở dữ liệu và quản lý và lưu trữ User CaveatEmptor.
+Để làm điều này, chúng ta sẽ truy cập trang web Spring Initializr (https://start.spring.io/)
+và tạo một dự án Spring Boot mới (hình 16.1) với các đặc điểm sau:
+
+- Nhóm (Group): com.manning.javapersistence
+- Tích hợp (Artifact): spring-data-rest
+- Mô tả (Description): Spring Data REST
+
+Chúng ta cũng sẽ thêm các phụ thuộc sau:
+
+- Spring Web (điều này sẽ thêm spring-boot-starter-web vào tệp Maven pom.xml)
+- Spring Data JPA (điều này sẽ thêm spring-boot-starter-data-jpa vào tệp Maven pom.xml)
+- REST Repositories (điều này sẽ thêm spring-boot-starter-data-rest vào tệp Maven pom.xml)
+- MySQL Driver (điều này sẽ thêm mysql-connector-java vào tệp Maven pom.xml)
+
+LƯU Ý: Để chạy ví dụ từ mã nguồn, bạn cần chạy trước tập lệnh Ch16.sql.
+
+Tệp pom.xml trong đoạn mã dưới đây bao gồm các phụ thuộc mà chúng ta đã thêm để bắt đầu dự án Spring Data REST.
+Ứng dụng Spring Data REST này sẽ truy cập cơ sở dữ liệu MySQL, vì vậy chúng ta cần driver cho MySQL.
+
+Listing 16.1 The pom.xml Maven file
+Path: Ch16/spring-data-rest/pom.xml
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-rest</artifactId>
+</dependency>
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+    <scope>runtime</scope>
+</dependency>
+
+Bước tiếp theo là điền thông tin vào tệp ứng dụng Spring Boot application.properties,
+tệp này có thể chứa các thuộc tính khác nhau sẽ được sử dụng bởi ứng dụng.
+Spring Boot sẽ tự động tìm và tải tệp application.properties từ classpath -
+thư mục src/main/resources được thêm vào classpath bởi Maven.
+
+Có nhiều cách để cung cấp tham số-parameter trong ứng dụng Spring Boot, và tệp .properties
+chỉ là một trong số chúng. Tham số cũng có thể đến từ mã nguồn hoặc dưới dạng
+command-line arguments - xem tài liệu của Spring Boot để biết chi tiết.
+
+Đối với ứng dụng của chúng ta, tệp cấu hình application.properties sẽ trông giống
+như trong đoạn mã dưới đây.
+
+Listing 16.2 The application.properties file
+Path: Ch16/spring-data-rest/src/main/resources/application.properties
+
+server.port=8081        <-- The application will start on port 8081
+spring.datasource.url=jdbc:mysql://localhost:3306/CH16_SPRINGDATAREST
+?serverTimezone=UTC
+spring.datasource.username=root
+spring.datasource.password=123456
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
+spring.jpa.show-sql=true
+spring.jpa.hibernate.ddl-auto=create
+
+Lớp User bây giờ sẽ chứa một trường được chú thích bằng @Version.
+Như đã thảo luận trong phần 11.2.2, giá trị của trường này sẽ được tăng lên mỗi khi
+một instance User đã được sửa đổi được lưu trữ.
+
+Phần 16.3 sẽ minh họa cách trường này có thể được sử dụng cho các request REST
+có điều kiện bằng cách sử dụng ETags.
+
+Listing 16.3 The modified User class
+Path: Ch16/spring-data-rest/src/main/java/com/manning/javapersistence/ch16
+➥ /model/User.java
+
+@Entity
+public class User {
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    @Version
+    private Long version;
+
+    private String name;
+
+    private boolean isRegistered;
+
+    private boolean isCitizen;
+
+    //constructors, getters and setters
+}
+
+User sẽ tham gia vào một (phiên đấu giá-auction) được biểu diễn bằng lớp Auction.
+Một phiên đấu giá được mô tả bằng số phiên đấu giá (auctionNumber), số ghế và tập hợp
+các user.
+
+Listing 16.4 The Auction class
+Path: Ch16/ spring-data-rest/src/main/java/com/manning/javapersistence/ch16
+➥ /model/Auction.java
+
+public class Auction {
+    private String auctionNumber;
+
+    private int seats;
+
+    private Set<User> users = new HashSet<>();
+
+    //constructors, getters and methods
+}
+
+Những user tham gia đấu giá sẽ được đọc từ một tệp CSV, trong lớp CsvDataLoader.
+Chúng ta sẽ sử dụng chú thích @Bean để tạo một bean sẽ được quản lý và tiêm vào
+ứng dụng bởi Spring.
+
+public class CsvDataLoader {
+
+    @Bean               [A]
+    public Auction buildAuctionFromCsv() throws IOException {
+        Auction auction = new Auction("1234", 20);      [B]
+        try (BufferedReader reader = new BufferedReader(        [C]
+                new FileReader("src/main/resources/users_information.csv")
+        )) {
+            String line = null;
+            do {
+                line = reader.readLine();       [D]
+                if (line != null) {
+                    User user = new User(line);
+                    user.setRegistered(false);      [E]
+                    auction.addUser(user);
+                }
+            } while(line != null);
+        }
+        return auction;         [F]
+    }
+}
+
+[A] Kết quả của phương thức sẽ là một bean do Spring quản lý.
+[B] Tạo đối tượng Auction.
+[C] Sử dụng thông tin từ tệp CSV.
+[D] Đọc từng dòng một.
+[E] Tạo user từ thông tin đã đọc, cấu hình nó và thêm vào auction.
+[F] Trả về bean Auction.
+
+Giao diện UserRepository mở rộng JpaRepository<User, Long>, kế thừa các phương thức liên quan đến JPA
+và quản lý thực thể User, với các ID có kiểu Long.
+
+Listing 16.6 The UserRepository interface
+
+Path: Ch16/spring-data-rest/src/main/java/com/manning/javapersistence/ch16
+➥ /repositories/UserRepository.java
+
+public interface UserRepository extends JpaRepository<User, Long> {
+}
+
+Ứng dụng Spring Boot sẽ import bean được tạo trong lớp CsvDataLoader và tự động
+kết nối nó. Nó cũng sẽ tạo một bean có kiểu ApplicationRunner. Đây là một giao diện
+chức năng của Spring Boot (một giao diện với một phương thức trừu tượng duy nhất)
+cho phép truy cập vào các application arguments. Giao diện ApplicationRunner này
+được tạo và phương thức duy nhất của nó được thực thi ngay trước khi phương thức run()
+của SpringApplication hoàn thành.
+
+Listing 16.7 The Application class
+Path: Ch16/spring-data-rest/src/main/java/com/manning/javapersistence/ch16
+➥ /Application.java
+
+@SpringBootApplication
+@Import(CsvDataLoader.class)        [A]
+public class Application {
+
+	@Autowired
+	private Auction auction;        [B]
+
+
+	public static void main(String[] args) {
+		SpringApplication.run(Application.class, args);
+	}
+
+	@Bean               [C]
+	ApplicationRunner configureRepository(UserRepository userRepository) {
+		return args -> {
+			for (User user : auction.getUsers()) {
+				userRepository.save(user);
+			}
+		};
+	}
+}
+
+[A] Import lớp CsvDataLoader và bean Auction mà nó tạo ra.
+[B] Tự động kết nối bean Auction đã nhập.
+[C] Duyệt qua tất cả người dùng từ phiên đấu giá và lưu chúng vào kho lưu trữ.
+
+
+Chúng ta có thể truy cập ứng dụng Spring Data REST trong trình duyệt (http://localhost:8081/users)
+như được hiển thị trong hình 16.2. Chúng ta nhận được thông tin về user và tùy chọn để dễ dàng điều hướng
+giữa các bản ghi. Spring Data REST sẽ tiết lộ thông tin về API cần được truy cập, cung cấp
+các liên kết đến từng bản ghi.
+
+Chúng ta có thể test REST API endpoint này bằng cách sử dụng một REST client. IntelliJ IDEA phiên bản Ultimate
+cung cấp một REST client như vậy, nhưng bạn có thể sử dụng một client khác (như cURL hoặc Postman).
+Chúng ta có thể thực hiện các lệnh như sau (xem hình 16.3):

@@ -1,0 +1,65 @@
+Trước hết, chúng ta sẽ định nghĩa các thuật ngữ "client" và "resource" để mô tả điều gì
+tạo nên một API RESTful. Một client là một người hoặc phần mềm sử dụng API RESTful.
+Ví dụ, một lập trình viên sử dụng API RESTful để thực hiện các hành động trên trang web
+LinkedIn là một client, nhưng client cũng có thể là một trình duyệt web.
+Khi chúng ta truy cập trang web LinkedIn, trình duyệt của chúng ta là client gọi API
+của trang web và hiển thị thông tin nhận được trên màn hình. Một resource có thể là
+bất kỳ đối tượng nào mà API có thể thu thập thông tin về. Trong API của LinkedIn,
+một resource có thể là một tin nhắn, một hình ảnh hoặc một người dùng.
+Mỗi resource có một định danh duy nhất.
+
+Kiến trúc REST định nghĩa sáu constaints
+(https://restfulapi.net/rest-architectural-constraints/):
+
+1. Client-server: client (client) và server (server) được tách biệt và mỗi bên
+có các mối quan tâm riêng. Thường thì client quan tâm đến việc biểu diễn user,
+trong khi server quan tâm đến lưu trữ dữ liệu và logic domain model - mô hình khái niệm-
+model-conceptual về domain bao gồm dữ liệu và hành vi.
+
+2. Stateless (Không lưu trạng thái): server không lưu trạng thái về bất kỳ client
+giữa các request. Mỗi request từ client chứa đủ thông tin để phản hồi yêu cầu đó.
+Trạng thái được giữ bởi client.
+
+3. Uniform interface (Giao diện thống nhất): client và server có thể phát triển
+độc lập với nhau. The uniform interface giữa họ làm cho họ kết nối lỏng lẻo.
+
+4. Layered systems (Hệ thống lớp): client không có cách nào để xác định liệu
+họ đang tương tác trực tiếp với server hay với một bộ trung gian. Các lớp có thể
+được thêm và xóa di động. Chúng có thể cung cấp security, (cân bằng tải-load balancing,)
+hoặc shared caching.
+
+5. Cacheable (Có thể lưu cache): client có khả năng lưu các phản hồi vào bộ đệm(cache).
+Các phản hồi xác định rằng chúng có thể lưu cache hoặc không.
+
+6. Code on demand (Lựa chọn): server có khả năng tạm thời tùy chỉnh hoặc mở rộng
+chức năng của client. server có thể chuyển một số logic cho client để
+client thực thi, chẳng hạn như các script phía client bằng JavaScript.
+
+Một ứng dụng web RESTful cung cấp thông tin về các tài nguyên của nó, được xác định bằng 
+cách sử dụng URL. Client có thể thực hiện các hành động đối với tài nguyên đó;
+nó có thể create, read, update, or delete a resource.
+
+Kiến trúc REST không cố định việc sử dụng (giao thức-protocol) nào cụ thể, nhưng giao thức
+phổ biến nhất là REST trên HTTP. HTTP là một (giao thức mạng-network protocol) ứng dụng đồng bộ dựa trên
+request và response.
+
+Để làm cho API của chúng ta trở thành RESTful, chúng ta phải tuân theo một tập hợp các quy tắc
+khi phát triển nó. Một API RESTful sẽ chuyển thông tin cho client, và client sử dụng
+thông tin đó như một biểu diễn về trạng thái của tài nguyên đã truy cập. Ví dụ, khi chúng ta
+gọi API LinkedIn để truy cập một người dùng cụ thể, API sẽ trả về trạng thái của người dùng đó
+(tên, tiểu sử, kinh nghiệm chuyên môn, bài viết).
+
+Các quy tắc REST giúp API dễ hiểu hơn và đơn giản hóa việc sử dụng nó đối với các lập trình viên
+mới khi họ tham gia vào một nhóm làm việc.
+
+Biểu diễn của trạng thái có thể ở định dạng JSON, XML hoặc HTML.
+Client sử dụng API để gửi thông tin sau đến máy chủ:
+
+1, Định danh (URL) của tài nguyên mà chúng ta muốn truy cập.
+2, Thao tác mà chúng ta muốn server thực hiện đối với tài nguyên đó. Đây là một phương thức HTTP,
+phổ biến nhất trong số chúng là GET, POST, PUT, PATCH và DELETE.
+
+Ví dụ, việc sử dụng API RESTful của LinkedIn để lấy thông tin của một người dùng cụ thể yêu cầu
+chúng ta có một URL xác định người dùng và sử dụng phương thức HTTP GET.
+
+

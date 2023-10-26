@@ -1,0 +1,20 @@
+This chapter covers
+- Introducing REST applications
+- Creating a Spring Data REST application
+- Using ETags for conditional requests
+- Limiting access to repositories, methods, and
+fields
+- Working with REST events
+- Using projections and excerpts
+
+Representational State Transfer (REST) là kiểu một kiến trúc phần mềm được sử dụng để tạo web service,
+nó cũng cung cấp một set các constaint. Người khoa học máy tính người Mỹ Roy Fielding, người cũng là
+một trong những tác giả của đặc tả HTTP, định nghĩa REST lần đầu và trình bày các nguyên tắc của REST
+trong luận án tiến sĩ của mình (Fielding, 2000).
+
+Các web service tuân theo kiến trúc REST được gọi là RESTful web services, và chúng cho phép tương tác
+giữa internet và các hệ thống máy tính. Các Requesting systems có thể truy cập và tương tác với tài nguyên web
+được biểu diễn dưới dạng văn bản bằng cách sử dụng một tập hợp đã biết của các hoạt động stateless  (
+GET, POST, PUT, PATCH, DELETE). Một hoạt động stateless không phụ thuộc vào bất kỳ hoạt động trước đó nào;
+nó phải chứa đủ thông tin để được hiểu bởi máy chủ.
+
