@@ -1,0 +1,87 @@
+16.4 Limiting access to repositories, methods, and fields
+
+Spring Data REST mặc định sẽ xuất tất cả các repository cấp cao nhất
+làm công khai. Tuy nhiên, trong các trường hợp sử dụng thực tế, chúng
+thường yêu cầu hạn chế quyền truy cập vào các phương thức cụ thể,
+trường dữ liệu hoặc thậm chí toàn bộ repository.
+Chúng ta có thể sử dụng chú thích @RepositoryRestResource để ngăn một
+giao diện không được xuất hoặc để tùy chỉnh quyền truy cập vào một điểm
+cuối (endpoint) cụ thể.
+
+Ví dụ, nếu thực thể quản lý là User, Spring Data REST sẽ xuất nó tới
+đường dẫn /users. Chúng ta có thể ngăn việc xuất khẩu toàn bộ repo
+bằng cách sử dụng tùy chọn exported = false trong chú thích
+@RepositoryRestResource. repository sẽ trông như sau:
+
+@RepositoryRestResource(path = "users", exported = false)
+public interface UserRepository extends JpaRepository<User, Long> {
+
+}
+Bất kỳ lệnh nào được thực thi trên repository này sẽ dẫn đến lỗi.
+Ví dụ, thực hiện: sẽ tạo ra mã phản hồi 404 (Not Found) từ máy chủ
+(xem hình 16.8):
+
+GET http://localhost:8081/users/1
+
+HTTP/1.1 404
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+Content-Type: application/json
+
+Để thuận tiện, chúng ta sẽ sử dụng chú thích @RepositoryRestResource với các
+tùy chọn mặc định cho giao diện UserRepository.
+
+Mặc định, Spring Data REST cũng sẽ xuất tất cả các phương thức từ một giao diện
+repository, nhưng chúng ta có thể ngăn truy cập vào các phương thức này bằng cách
+sử dụng chú thích @RestResource(exported = false). Đối với giao diện UserRepository,
+chúng ta sẽ không xuất các phương thức xóa.
+
+Listing 16.8 The UserRepository interface
+
+Path: Ch16/spring-data-rest/src/main/java/com/manning/javapersistence/ch16
+➥ /repositories/UserRepository.java
+
+@RepositoryRestResource(path = "users")
+public interface UserRepository extends JpaRepository<User, Long> {
+
+    @Override
+    @RestResource(exported = false)
+    void deleteById(Long id);
+
+    @Override
+    @RestResource(exported = false)
+    void delete(User entity);
+}
+
+Sử dụng chú thích @RepositoryRestResource để xuất repository
+đến đường dẫn /users. Đây là tùy chọn mặc định.
+
+Sử dụng chú thích @RestResource(exported = false) để không xuất
+các phương thức xóa của các repository.
+
+Nếu bây giờ chúng ta thực hiện lệnh DELETE,
+DELETE http://localhost:8081/users/1
+
+máy chủ sẽ đáp ứng bằng mã phản hồi 405 (Method Not Allowed) vì phương thức xóa
+không được xuất (xem hình 16.9). Các phương thức được cho phép là GET, HEAD, PUT, PATCH và OPTIONS:
+
+HTTP/1.1 405
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+Allow: GET,HEAD,PUT,PATCH,OPTIONS
+
+Chúng ta có thể hạn chế quyền truy cập vào các trường cụ thể và không tiết lộ chúng trong giao diện REST
+bằng cách sử dụng chú thích @JsonIgnore.
+Ví dụ, chúng ta có thể sử dụng chú thích này bên trong lớp User, trên phương thức isRegistered:
+
+@JsonIgnore
+public boolean isRegistered() {
+    return isRegistered;
+}
+
+Truy cập vào repository thông qua trình duyệt sẽ không cung cấp thông tin trường isRegistered nữa.
+Bạn có thể thấy điều này trong hình 16.10 và so sánh nó với hình 16.2.
+
+16.5 Working with REST events

@@ -1,0 +1,93 @@
+Bất kỳ sự trao đổi thông tin nào trên mạng đều yêu cầu thời gian.
+Thông tin càng nhỏ, chương trình của chúng ta sẽ hoạt động càng nhanh.
+Nhưng khi và làm thế nào chúng ta có thể giảm lượng thông tin được lấy
+từ server và truyền qua mạng?
+
+Giả sử chúng ta cần thực hiện một lệnh như sau nhiều lần:
+
+GET http://localhost:8081/users/1
+
+Chúng ta sẽ truy cập server mỗi lần và cùng một thông tin sẽ được gửi qua mạng. 
+Điều này không hiệu quả, và chúng ta muốn giới hạn lượng dữ liệu trao đổi 
+giữa client và server.
+
+`Chúng ta có thể sử dụng ETags để thực hiện các request có điều kiện` và tránh
+việc gửi thông tin không thay đổi. ETag là một response header HTTP được trả
+về bởi server web. Nó sẽ giúp chúng ta xác định xem nội dung tại một URL
+cụ thể đã được sửa đổi hay chưa, và do đó cho phép chúng ta thực hiện một
+request có điều kiện.
+
+Trong lớp User, có một trường được chú thích bằng chú thích @Version:
+
+@Version
+private Long version;
+
+Trường này cũng sẽ được sử dụng như một ETag. Khi chúng ta thực hiện request này đến máy chủ,
+GET http://localhost:8081/users/1
+
+Câu trả lời sẽ bao gồm, trong header, version của record (0), dưới dạng ETag (xem hình 16.4):
+
+HTTP/1.1 200
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+ETag: "0"
+
+Sử dụng thông tin này, chúng ta có thể thực hiện một request có điều kiện và lấy thông tin về
+user có ID 1 chỉ khi ETag khác 0.
+
+GET http://localhost:8081/users/1
+If-None-Match: "0"
+
+Phản hồi từ máy chủ sẽ là mã phản hồi 304 (Không được sửa đổi), cùng với một thân rỗng (xem hình 16.5).
+
+HTTP/1.1 304
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+ETag: "0"
+Date: Sat, 04 Dec 2021 13:19:11 GMT
+Keep-Alive: timeout=60
+Connection: keep-alive
+<Response body is empty>
+
+Bây giờ chúng ta có thể chỉnh sửa nội dung của người dùng có ID 1 bằng cách thực hiện một lệnh PATCH.
+Chúng ta sử dụng PATCH thay vì PUT, vì PATCH sẽ cập nhật chỉ các trường được bao gồm trong yêu cầu,
+trong khi PUT sẽ thay thế toàn bộ thực thể bằng một thực thể mới.
+
+PATCH http://localhost:8081/users/1
+Content-Type: application/json
+{
+    "name": "Amelia Jones",
+    "isRegistered": "true"
+}
+
+Câu trả lời từ máy chủ sẽ là mã phản hồi thành công 204 (Không có nội dung),
+và ETag sẽ là phiên bản tăng lên của bản ghi (1) (xem hình 16.6):
+
+HTTP/1.1 204
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+ETag: "1"
+Date: Sat, 04 Dec 2021 13:25:57 GMT
+Keep-Alive: timeout=60
+Connection: keep-alive
+<Response body is empty>
+
+Bây giờ, chúng ta có thể thực hiện lại request có điều kiện, để lấy thông tin về
+người dùng có ID 1 chỉ khi ETag khác 0:
+
+GET http://localhost:8081/users/1
+If-None-Match: "0"  
+
+Vì phiên bản của bản ghi đã thay đổi từ 0 thành 1, request có điều kiện sẽ nhận được một câu trả lời
+với mã phản hồi 200 (Thành công) và thông tin đầy đủ về người dùng (xem hình 16.7):
+
+HTTP/1.1 200
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+ETag: "1"
+
+

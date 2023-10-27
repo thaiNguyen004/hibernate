@@ -201,3 +201,5 @@ các liên kết đến từng bản ghi.
 Chúng ta có thể test REST API endpoint này bằng cách sử dụng một REST client. IntelliJ IDEA phiên bản Ultimate
 cung cấp một REST client như vậy, nhưng bạn có thể sử dụng một client khác (như cURL hoặc Postman).
 Chúng ta có thể thực hiện các lệnh như sau (xem hình 16.3):
+
+
